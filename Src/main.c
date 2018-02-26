@@ -19,7 +19,7 @@
 #include "syshal_gpio.h"
 
 // Private variables ---------------------------------------------------------
-static SPI_HandleTypeDef  hspi1;
+//static SPI_HandleTypeDef  hspi1;
 static UART_HandleTypeDef huart2;
 
 // Private function prototypes -----------------------------------------------
@@ -48,7 +48,7 @@ int main(void)
     while (1)
     {
         syshal_gpio_setOutputToggle(GPIO_LED3);
-        HAL_Delay(1000);
+        HAL_Delay(100);
         //HAL_SPI_Transmit(&hspi1, &dummyData, 1, 50);
     }
 
@@ -95,8 +95,10 @@ void SystemClock_Config(void)
 static void SPI1_Init(void)
 {
 
+    syshal_spi_init(SPI_1);
+
     // SPI1 parameter configuration
-    hspi1.Instance = SPI1;
+    /*hspi1.Instance = SPI1;
     hspi1.Init.Mode = SPI_MODE_MASTER;
     hspi1.Init.Direction = SPI_DIRECTION_2LINES;
     hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
@@ -113,7 +115,7 @@ static void SPI1_Init(void)
     if (HAL_SPI_Init(&hspi1) != HAL_OK)
     {
         _Error_Handler(__FILE__, __LINE__);
-    }
+    }*/
 
 }
 

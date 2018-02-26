@@ -18,6 +18,7 @@
 
 #include "stm32f0xx_hal.h"
 #include "stm32f0xx_hal_gpio.h"
+#include "stm32f0xx_hal_spi.h"
 
 #define MCO_Pin GPIO_PIN_0
 #define MCO_GPIO_Port GPIOF
@@ -48,6 +49,20 @@ typedef struct
 extern const GPIO_InitTypeDefAndPort_t GPIO_Inits[GPIO_TOTAL_NUMBER];
 
 // SPI definitions
+typedef enum
+{
+    SPI_1,
+    SPI_2,
+    SPI_TOTAL_NUMBER,
+} SPI_t;
+
+typedef struct
+{
+    SPI_TypeDef * Instance;
+    SPI_InitTypeDef Init;
+} GPIO_InitTypeDefAndInst_t;
+
+extern const GPIO_InitTypeDefAndInst_t SPI_Inits[SPI_TOTAL_NUMBER];
 
 // I2C definitions
 

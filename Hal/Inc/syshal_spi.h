@@ -36,9 +36,9 @@ typedef struct
 } stm32_spi_handle;
 */
 
-void syshal_spi_init(uint32_t instance); // Returns a handle to the device initilaised
-void syshal_spi_term(uint32_t instance);
-void syshal_spi_transfer(uint32_t instance, uint8_t * data, uint32_t length);
-uint32_t syshal_spi_receive(uint32_t instance, uint8_t * data); // returns length of data read
+void syshal_spi_init(SPI_t instance); // Returns a handle to the device initilaised
+void syshal_spi_term(SPI_t instance);
+void syshal_spi_transfer(SPI_t instance, uint8_t * data, uint32_t length);
+uint32_t syshal_spi_receive(SPI_t instance, uint8_t * data); // returns length of data read
 
 #endif /* _SYSHAL_SPI_H_ */
