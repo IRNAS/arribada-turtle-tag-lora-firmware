@@ -16,9 +16,11 @@
 #ifndef _SYSHAL_UART_H_
 #define _SYSHAL_UART_H_
 
-void syshal_uart_init(void * settings);
-void syshal_uart_term(void);
-void syshal_spi_transfer(uint8_t * data, uint32_t length);
-uint32_t syshal_uart_receive(uint8_t * data); // returns length of data read
+#include "bsp.h"
+
+void syshal_uart_init(UART_t instance);
+void syshal_uart_term(UART_t instance);
+void syshal_uart_transfer(UART_t instance, uint8_t * data, uint32_t length);
+uint32_t syshal_uart_receive(UART_t instance, uint8_t * data); // returns length of data read
 
 #endif /* _SYSHAL_UART_H_ */

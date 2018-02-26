@@ -33,7 +33,7 @@ typedef struct ( stm32_gpio_pin_dir_t      dir,
 */
 
 void syshal_gpio_init(GPIO_Pins_t pin);
-void syshal_gpio_term(void);
+void syshal_gpio_term(GPIO_Pins_t pin);
 void syshal_gpio_enableInterrupt(GPIO_Pins_t pin, void (*callbackFunc)(void));
 void syshal_gpio_disableInterrupt(GPIO_Pins_t pin);
 void syshal_gpio_setOutputLow(GPIO_Pins_t pin);

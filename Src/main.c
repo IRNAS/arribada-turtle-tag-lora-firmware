@@ -17,16 +17,14 @@
 #include "main.h"
 #include "bsp.h"
 #include "syshal_gpio.h"
+#include "syshal_spi.h"
+#include "syshal_uart.h"
+#include <string.h>
 
 // Private variables ---------------------------------------------------------
-//static SPI_HandleTypeDef  hspi1;
-static UART_HandleTypeDef huart2;
 
 // Private function prototypes -----------------------------------------------
 void SystemClock_Config(void);
-static void GPIO_Init(void);
-static void USART2_UART_Init(void);
-static void SPI1_Init(void);
 
 int main(void)
 {
@@ -38,18 +36,19 @@ int main(void)
     SystemClock_Config();
 
     // Initialize all configured peripherals
-    GPIO_Init();
-    USART2_UART_Init();
-    SPI1_Init();
-
-    uint8_t dummyData = 0xAA;
+    syshal_gpio_init(GPIO_LED3);
+    syshal_uart_init(UART_2);
+    syshal_spi_init(SPI_1);
 
     // Toggle IO in an infinite loop
     while (1)
     {
         syshal_gpio_setOutputToggle(GPIO_LED3);
         HAL_Delay(100);
-        //HAL_SPI_Transmit(&hspi1, &dummyData, 1, 50);
+
+        char * msg = "TESTSETS\n\r";
+        syshal_uart_transfer(UART_2, (uint8_t *)msg, strlen(msg));
+
     }
 
 }
@@ -89,62 +88,6 @@ void SystemClock_Config(void)
 
     // SysTick_IRQn interrupt configuration
     HAL_NVIC_SetPriority(SysTick_IRQn, 0, 0);
-}
-
-// SPI1 init function
-static void SPI1_Init(void)
-{
-
-    syshal_spi_init(SPI_1);
-
-    // SPI1 parameter configuration
-    /*hspi1.Instance = SPI1;
-    hspi1.Init.Mode = SPI_MODE_MASTER;
-    hspi1.Init.Direction = SPI_DIRECTION_2LINES;
-    hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
-    hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
-    hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
-    hspi1.Init.NSS = SPI_NSS_SOFT;
-    hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_4;
-    hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
-    hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
-    hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
-    hspi1.Init.CRCPolynomial = 7;
-    hspi1.Init.CRCLength = SPI_CRC_LENGTH_DATASIZE;
-    hspi1.Init.NSSPMode = SPI_NSS_PULSE_ENABLE;
-    if (HAL_SPI_Init(&hspi1) != HAL_OK)
-    {
-        _Error_Handler(__FILE__, __LINE__);
-    }*/
-
-}
-
-// USART2 init function
-static void USART2_UART_Init(void)
-{
-
-    huart2.Instance = USART2;
-    huart2.Init.BaudRate = 38400;
-    huart2.Init.StopBits = UART_STOPBITS_1;
-    huart2.Init.Parity = UART_PARITY_NONE;
-    huart2.Init.Mode = UART_MODE_TX_RX;
-    huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-    huart2.Init.OverSampling = UART_OVERSAMPLING_16;
-    huart2.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
-    huart2.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
-    if (HAL_UART_Init(&huart2) != HAL_OK)
-    {
-        _Error_Handler(__FILE__, __LINE__);
-    }
-
-}
-
-// Configure pins
-static void GPIO_Init(void)
-{
-
-    syshal_gpio_init(GPIO_LED3);
-
 }
 
 // @brief  This function is executed in case of error occurrence

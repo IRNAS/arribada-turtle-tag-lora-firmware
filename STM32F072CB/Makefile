@@ -69,6 +69,7 @@ C_SOURCES =  \
 ../Hal/STM32F072CB/Drivers/STM32F0xx_HAL_Driver/Src/stm32f0xx_hal_i2c_ex.c \
 ../Hal/STM32F072CB/Src/syshal_gpio.c \
 ../Hal/STM32F072CB/Src/syshal_spi.c \
+../Hal/STM32F072CB/Src/syshal_uart.c \
 Src/bsp.c \
 Src/stm32f0xx_hal_msp.c \
 Src/system_stm32f0xx.c \

@@ -41,8 +41,3 @@ void syshal_spi_init(SPI_t instance)
         HAL_SPI_Init(&hspi2);
     }
 }
-
-//void syshal_spi_init(SPI_t instance); // Returns a handle to the device initilaised
-//void syshal_spi_term(SPI_t instance);
-//void syshal_spi_transfer(SPI_t instance, uint8_t * data, uint32_t length);
-//uint32_t syshal_spi_receive(SPI_t instance, uint8_t * data); // returns length of data read
