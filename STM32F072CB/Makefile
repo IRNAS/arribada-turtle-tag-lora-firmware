@@ -69,8 +69,10 @@ C_SOURCES =  \
 ../Hal/STM32F072CB/Drivers/STM32F0xx_HAL_Driver/Src/stm32f0xx_hal_i2c_ex.c \
 ../Hal/STM32F072CB/Src/syshal_gpio.c \
 ../Hal/STM32F072CB/Src/syshal_spi.c \
+../Hal/STM32F072CB/Src/syshal_time.c \
 ../Hal/STM32F072CB/Src/syshal_uart.c \
 Src/bsp.c \
+Src/debug.c \
 Src/stm32f0xx_hal_msp.c \
 Src/system_stm32f0xx.c \
 Src/stm32f0xx_it.c \
@@ -101,6 +103,8 @@ AR = $(BINPATH)/$(PREFIX)ar
 SZ = $(BINPATH)/$(PREFIX)size
 HEX = $(CP) -O ihex
 BIN = $(CP) -O binary -S
+# Get GIT version
+G_VERSION := $(shell git describe --abbrev=4 --dirty --always --tags)
  
 #######################################
 # CFLAGS
@@ -113,7 +117,6 @@ CPU = -mcpu=cortex-m0
 
 # float-abi
 
-
 # mcu
 MCU = $(CPU) -mthumb $(FPU) $(FLOAT-ABI)
 
@@ -124,8 +127,9 @@ AS_DEFS =
 # C defines
 C_DEFS =  \
 -DUSE_HAL_DRIVER \
--DSTM32F042x6
-
+-DSTM32F042x6 \
+-DDEBUG_COLOR \
+-DGIT_VERSION=\"$(G_VERSION)\"
 
 # AS includes
 AS_INCLUDES = 

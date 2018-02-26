@@ -16,9 +16,11 @@
 // Includes ------------------------------------------------------------------
 #include "main.h"
 #include "bsp.h"
+#include "debug.h"
 #include "syshal_gpio.h"
 #include "syshal_spi.h"
 #include "syshal_uart.h"
+#include "version.h"
 #include <string.h>
 
 // Private variables ---------------------------------------------------------
@@ -40,13 +42,16 @@ int main(void)
     syshal_uart_init(UART_2);
     syshal_spi_init(SPI_1);
 
+    // Print General System Info
+    DEBUG_PR_SYS("Arribada Tracker Device");
+    DEBUG_PR_SYS("Version:  %s", GIT_VERSION);
+    DEBUG_PR_SYS("Compiled: %s %s With %s", COMPILE_DATE, COMPILE_TIME, COMPILER_NAME);
+
     // Toggle IO in an infinite loop
     while (1)
     {
         syshal_gpio_setOutputToggle(GPIO_LED3);
         HAL_Delay(100);
-
-        printf(__DATE__ " : " __TIME__ "\n\r");
     }
 
 }
