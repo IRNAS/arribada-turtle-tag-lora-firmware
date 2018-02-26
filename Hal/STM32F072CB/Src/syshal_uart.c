@@ -18,6 +18,7 @@
 #include "stm32f0xx_hal.h"
 #include "syshal_gpio.h"
 #include "syshal_uart.h"
+#include "debug.h"
 
 // Private variables
 static UART_HandleTypeDef huart1;
@@ -52,15 +53,37 @@ void syshal_uart_init(UART_t instance)
 
 void syshal_uart_transfer(UART_t instance, uint8_t * data, uint32_t length)
 {
+    HAL_StatusTypeDef status;
+
     if (UART_1 == instance)
-    {
-        HAL_UART_Transmit(&huart1, data, length, 0xFFFF); // 0xFFFF timeout
-    }
+        status = HAL_UART_Transmit(&huart1, data, length, UART_TIMEOUT);
 
     if (UART_2 == instance)
+        status = HAL_UART_Transmit(&huart2, data, length, UART_TIMEOUT);
+
+    if (HAL_OK != status)
     {
-        HAL_UART_Transmit(&huart2, data, length, 0xFFFF);
+    	DEBUG_PR_ERROR("%s failed with %d", __FUNCTION__, status);
     }
+}
+
+uint32_t syshal_uart_receive(UART_t instance, uint8_t * data, uint32_t length)
+{
+    HAL_StatusTypeDef status;
+
+    if (UART_1 == instance)
+        status = HAL_UART_Receive(&huart1, data, length, UART_TIMEOUT);
+
+    if (UART_2 == instance)
+        status = HAL_UART_Receive(&huart2, data, length, UART_TIMEOUT);
+
+    if (HAL_OK != status)
+    {
+    	DEBUG_PR_ERROR("%s failed with %d", __FUNCTION__, status);
+    	return 0;
+    }
+
+    return length;
 }
 
 // Implement MSP hooks that are called by stm32f0xx_hal_uart
@@ -104,7 +127,7 @@ int _write(int file, char * data, int len)
     }
 
     // arbitrary timeout 1000
-    HAL_StatusTypeDef status = HAL_UART_Transmit(&huart2, (uint8_t *)data, len, 1000);
+    HAL_StatusTypeDef status = HAL_UART_Transmit(&huart2, (uint8_t *)data, len, UART_TIMEOUT);
 
     // return # of bytes written - as best we can tell
     return (status == HAL_OK ? len : 0);
