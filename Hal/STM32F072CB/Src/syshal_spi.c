@@ -16,14 +16,14 @@
 #include "stm32f0xx_hal.h"
 #include "syshal_gpio.h"
 #include "syshal_spi.h"
+#include "debug.h"
 
 // Private variables
-static SPI_HandleTypeDef  hspi1;
-static SPI_HandleTypeDef  hspi2;
+static SPI_HandleTypeDef hspi1;
+static SPI_HandleTypeDef hspi2;
 
 void syshal_spi_init(SPI_t instance)
 {
-
     if (SPI_1 == instance)
     {
         // Populate internal handlers
@@ -41,6 +41,42 @@ void syshal_spi_init(SPI_t instance)
 
         HAL_SPI_Init(&hspi2);
     }
+}
+
+void syshal_spi_transfer(SPI_t instance, uint8_t * data, uint32_t length)
+{
+    HAL_StatusTypeDef status;
+
+    if (SPI_1 == instance)
+        status = HAL_SPI_Transmit(&hspi1, data, length, SPI_TIMEOUT);
+
+    if (SPI_2 == instance)
+        status = HAL_SPI_Transmit(&hspi2, data, length, SPI_TIMEOUT);
+
+    if (HAL_OK != status)
+    {
+        DEBUG_PR_ERROR("%s failed with %d", __FUNCTION__, status);
+    }
+}
+
+uint32_t syshal_spi_receive(SPI_t instance, uint8_t * data, uint32_t length)
+{
+    HAL_StatusTypeDef status;
+
+    if (SPI_1 == instance)
+        status = HAL_SPI_Receive(&hspi1, data, length, SPI_TIMEOUT);
+
+    if (SPI_2 == instance)
+        status = HAL_SPI_Receive(&hspi2, data, length, SPI_TIMEOUT);
+
+    // return number of bytes read as best we can tell
+    if (HAL_OK != status)
+    {
+        DEBUG_PR_ERROR("%s failed with %d", __FUNCTION__, status);
+        return 0;
+    }
+
+    return length;
 }
 
 // Implement MSP hooks that are called by stm32f0xx_hal_spi

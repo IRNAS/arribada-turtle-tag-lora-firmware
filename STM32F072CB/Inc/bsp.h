@@ -48,6 +48,8 @@ typedef struct
 extern const GPIO_InitTypeDefAndPort_t GPIO_Inits[GPIO_TOTAL_NUMBER];
 
 // SPI definitions
+#define SPI_TIMEOUT 1000
+
 typedef enum
 {
     SPI_1,
@@ -66,6 +68,8 @@ extern const SPI_InitTypeDefAndInst_t SPI_Inits[SPI_TOTAL_NUMBER];
 // I2C definitions
 
 // UART definitions
+#define UART_TIMEOUT 1000
+
 typedef enum
 {
     UART_1,

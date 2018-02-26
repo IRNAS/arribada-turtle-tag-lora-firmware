@@ -47,10 +47,13 @@ int main(void)
     DEBUG_PR_SYS("Version:  %s", GIT_VERSION);
     DEBUG_PR_SYS("Compiled: %s %s With %s", COMPILE_DATE, COMPILE_TIME, COMPILER_NAME);
 
+    uint8_t data[5];
+
     // Toggle IO in an infinite loop
     while (1)
     {
         syshal_gpio_setOutputToggle(GPIO_LED3);
+        syshal_spi_transfer(SPI_1, data, sizeof(data));
         HAL_Delay(100);
     }
 
