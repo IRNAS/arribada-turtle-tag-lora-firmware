@@ -13,6 +13,8 @@
  * limitations under the License.
  */
 
+#include <errno.h>
+#include <sys/unistd.h> // STDOUT_FILENO, STDERR_FILENO
 #include "stm32f0xx_hal.h"
 #include "syshal_gpio.h"
 #include "syshal_uart.h"
@@ -41,6 +43,11 @@ void syshal_uart_init(UART_t instance)
 
         HAL_UART_Init(&huart2);
     }
+
+    // Turn off buffers. This ensure printf prints immediately
+    setvbuf(stdin, NULL, _IONBF, 0);
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
 }
 
 void syshal_uart_transfer(UART_t instance, uint8_t * data, uint32_t length)
@@ -85,4 +92,20 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef * huart)
         syshal_gpio_init(GPIO_VCP_RX);
     }
 
+}
+
+// Override _write function to enable printf use
+int _write(int file, char * data, int len)
+{
+    if ((file != STDOUT_FILENO) && (file != STDERR_FILENO))
+    {
+        errno = EBADF;
+        return -1;
+    }
+
+    // arbitrary timeout 1000
+    HAL_StatusTypeDef status = HAL_UART_Transmit(&huart2, (uint8_t *)data, len, 1000);
+
+    // return # of bytes written - as best we can tell
+    return (status == HAL_OK ? len : 0);
 }
