@@ -1,16 +1,19 @@
-/* Copyright 2018 Arribada
+/* syshal_gpio.h - HAL for GPIO management
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Copyright (C) 2018 Arribada
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 #ifndef _SYSHAL_GPIO_H_
@@ -18,19 +21,6 @@
 
 #include <stdbool.h>
 #include "bsp.h"
-
-/*
-typedef struct ( uint32_t pin_number,
-                 uint32_t pin_port
-               ) stm32_gpio_pin;
-
-typedef struct ( stm32_gpio_pin_dir_t      dir,
-                 stm32_gpio_pin_input_t    input,
-                 stm32_gpio_pin_pull_t     pull,
-                 stm32_gpio_pin_drive_t    drive,
-                 stm32_gpio_pin_sense_t    sense
-               ) stm32_gpio_settings;
-*/
 
 void syshal_gpio_init(GPIO_Pins_t pin);
 void syshal_gpio_term(GPIO_Pins_t pin);
