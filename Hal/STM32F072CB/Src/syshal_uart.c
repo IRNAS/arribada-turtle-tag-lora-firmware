@@ -13,6 +13,8 @@
  * limitations under the License.
  */
 
+#include "stm32f0xx_hal.h"
+#include "syshal_gpio.h"
 #include "syshal_uart.h"
 
 // Private variables
@@ -52,4 +54,35 @@ void syshal_uart_transfer(UART_t instance, uint8_t * data, uint32_t length)
     {
         HAL_UART_Transmit(&huart2, data, length, 0xFFFF);
     }
+}
+
+// Implement MSP hooks that are called by stm32f0xx_hal_uart
+void HAL_UART_MspInit(UART_HandleTypeDef * huart)
+{
+
+    if (huart->Instance == USART2)
+    {
+        // Peripheral clock enable
+        __HAL_RCC_USART2_CLK_ENABLE();
+
+        // USART2 GPIO Configuration
+        syshal_gpio_init(GPIO_VCP_TX);
+        syshal_gpio_init(GPIO_VCP_RX);
+    }
+
+}
+
+void HAL_UART_MspDeInit(UART_HandleTypeDef * huart)
+{
+
+    if (huart->Instance == USART2)
+    {
+        // Peripheral clock disable
+        __HAL_RCC_USART2_CLK_DISABLE();
+
+        // USART2 GPIO Configuration
+        syshal_gpio_init(GPIO_VCP_TX);
+        syshal_gpio_init(GPIO_VCP_RX);
+    }
+
 }

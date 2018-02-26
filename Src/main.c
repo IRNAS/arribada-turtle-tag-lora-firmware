@@ -46,7 +46,7 @@ int main(void)
         syshal_gpio_setOutputToggle(GPIO_LED3);
         HAL_Delay(100);
 
-        char * msg = "TESTSETS\n\r";
+        char * msg = __TIME__"\n\r";
         syshal_uart_transfer(UART_2, (uint8_t *)msg, strlen(msg));
 
     }
