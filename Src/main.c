@@ -19,6 +19,7 @@
 #include "bsp.h"
 #include "debug.h"
 #include "syshal_gpio.h"
+#include "syshal_i2c.h"
 #include "syshal_spi.h"
 #include "syshal_uart.h"
 #include "version.h"
@@ -42,6 +43,7 @@ int main(void)
     syshal_gpio_init(GPIO_LED3);
     syshal_uart_init(UART_2);
     syshal_spi_init(SPI_1);
+    syshal_i2c_init(I2C_1);
 
     // Print General System Info
     DEBUG_PR_SYS("Arribada Tracker Device");
@@ -55,7 +57,8 @@ int main(void)
     {
         syshal_gpio_setOutputToggle(GPIO_LED3);
         syshal_spi_transfer(SPI_1, data, sizeof(data));
-        HAL_Delay(100);
+        syshal_i2c_transfer(I2C_1, data, sizeof(data), 0xAB);
+        syshal_time_delayMs(1000);
     }
 
 }
@@ -105,7 +108,7 @@ void _Error_Handler(char * file, int line)
     {
         // Toggle LED3 fast for error
         syshal_gpio_setOutputToggle(GPIO_LED3);
-        HAL_Delay(100);
+        syshal_time_delayMs(100);
     }
 }
 

@@ -19,6 +19,8 @@
 #ifndef _SYSHAL_SPI_H_
 #define _SYSHAL_SPI_H_
 
+#include "bsp.h"
+
 void syshal_spi_init(SPI_t instance);
 void syshal_spi_term(SPI_t instance);
 void syshal_spi_transfer(SPI_t instance, uint8_t * data, uint32_t length);

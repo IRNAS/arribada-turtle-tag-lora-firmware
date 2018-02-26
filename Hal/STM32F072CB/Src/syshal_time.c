@@ -17,7 +17,12 @@
 #include "stm32f0xx_hal.h"
 #include "syshal_time.h"
 
-uint32_t GetTicksMs(void)
+uint32_t syshal_time_getTicksMs(void)
 {
     return HAL_GetTick();
+}
+
+void syshal_time_delayMs(uint32_t ms)
+{
+	HAL_Delay(ms);
 }

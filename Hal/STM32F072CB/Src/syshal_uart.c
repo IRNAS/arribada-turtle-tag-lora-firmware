@@ -24,6 +24,8 @@
 static UART_HandleTypeDef huart1;
 static UART_HandleTypeDef huart2;
 
+#define PRINTF_UART_OUTPUT huart2
+
 void syshal_uart_init(UART_t instance)
 {
 
@@ -90,14 +92,24 @@ uint32_t syshal_uart_receive(UART_t instance, uint8_t * data, uint32_t length)
 void HAL_UART_MspInit(UART_HandleTypeDef * huart)
 {
 
+    if (huart->Instance == USART1)
+    {
+        // Peripheral clock disable
+        __HAL_RCC_USART1_CLK_ENABLE();
+
+        // USART1 GPIO Configuration
+        // syshal_gpio_init(GPIO_UART1_TX); // TODO needs implementing
+        // syshal_gpio_init(GPIO_UART1_RX); // TODO needs implementing
+    }
+
     if (huart->Instance == USART2)
     {
         // Peripheral clock enable
         __HAL_RCC_USART2_CLK_ENABLE();
 
         // USART2 GPIO Configuration
-        syshal_gpio_init(GPIO_VCP_TX);
-        syshal_gpio_init(GPIO_VCP_RX);
+        syshal_gpio_init(GPIO_UART2_TX);
+        syshal_gpio_init(GPIO_UART2_RX);
     }
 
 }
@@ -105,14 +117,24 @@ void HAL_UART_MspInit(UART_HandleTypeDef * huart)
 void HAL_UART_MspDeInit(UART_HandleTypeDef * huart)
 {
 
+    if (huart->Instance == USART1)
+    {
+        // Peripheral clock disable
+        __HAL_RCC_USART1_CLK_DISABLE();
+
+        // USART1 GPIO Configuration
+        // syshal_gpio_term(GPIO_UART1_TX); // TODO needs implementing
+        // syshal_gpio_term(GPIO_UART1_RX); // TODO needs implementing
+    }
+
     if (huart->Instance == USART2)
     {
         // Peripheral clock disable
         __HAL_RCC_USART2_CLK_DISABLE();
 
         // USART2 GPIO Configuration
-        syshal_gpio_init(GPIO_VCP_TX);
-        syshal_gpio_init(GPIO_VCP_RX);
+        syshal_gpio_term(GPIO_UART2_TX);
+        syshal_gpio_term(GPIO_UART2_RX);
     }
 
 }
@@ -127,7 +149,7 @@ int _write(int file, char * data, int len)
     }
 
     // arbitrary timeout 1000
-    HAL_StatusTypeDef status = HAL_UART_Transmit(&huart2, (uint8_t *)data, len, UART_TIMEOUT);
+    HAL_StatusTypeDef status = HAL_UART_Transmit(&PRINTF_UART_OUTPUT, (uint8_t *)data, len, UART_TIMEOUT);
 
     // return # of bytes written - as best we can tell
     return (status == HAL_OK ? len : 0);

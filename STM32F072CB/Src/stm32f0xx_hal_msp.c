@@ -15,7 +15,6 @@
  */
 
 #include "stm32f0xx_hal.h"
-#include "syshal_gpio.h"
 #include "bsp.h"
 
 // Initializes the Global MSP.

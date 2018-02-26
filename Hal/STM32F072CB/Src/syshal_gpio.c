@@ -35,7 +35,7 @@ void syshal_gpio_init(GPIO_Pins_t pin)
 // De-initialise the GPIOx peripheral registers to their default reset values
 void syshal_gpio_term(GPIO_Pins_t pin)
 {
-    HAL_GPIO_DeInit(GPIO_Inits[pin].Port, &GPIO_Inits[pin].Init);
+    HAL_GPIO_DeInit(GPIO_Inits[pin].Port, GPIO_Inits[pin].Init.Pin);
 }
 
 void syshal_gpio_setOutputToggle(GPIO_Pins_t pin)

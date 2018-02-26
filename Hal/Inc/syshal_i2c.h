@@ -19,20 +19,11 @@
 #ifndef _SYSHAL_I2C_H_
 #define _SYSHAL_I2C_H_
 
-void syshal_i2c_init(void * settings);
-void syshal_i2c_term(void);
-void syshal_i2c_transfer(uint8_t * data, uint32_t length);
-uint32_t syshal_i2c_receive(uint8_t * data); // returns length of data read
+#include "bsp.h"
 
-begin()
-requestFrom()
-beginTransmission()
-endTransmission()
-write()
-available()
-read()
-SetClock()
-onReceive()
-onRequest()
+void syshal_i2c_init(I2C_t instance);
+void syshal_i2c_term(I2C_t instance);
+void syshal_i2c_transfer(I2C_t instance, uint8_t * data, uint32_t length, uint8_t slaveAddress);
+uint32_t syshal_i2c_receive(I2C_t instance, uint8_t * data, uint32_t length, uint8_t slaveAddress); // returns length of data read
 
 #endif /* _SYSHAL_I2C_H_ */

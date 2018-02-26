@@ -21,6 +21,7 @@
 #include "stm32f0xx_hal_gpio.h"
 #include "stm32f0xx_hal_spi.h"
 #include "stm32f0xx_hal_uart.h"
+#include "stm32f0xx_hal_i2c.h"
 
 #define MCO_Pin GPIO_PIN_0
 #define MCO_GPIO_Port GPIOF
@@ -29,13 +30,18 @@
 #define SWCLK_Pin GPIO_PIN_14
 #define SWCLK_GPIO_Port GPIOA
 
-// GPIO definitions
+///////////////////////////////// GPIO definitions ////////////////////////////////
 typedef enum
 {
     GPIO_LED3,
-    GPIO_VCP_TX,
-    GPIO_VCP_RX,
-    GPIO_TOTAL_NUMBER,
+    GPIO_UART2_TX,
+    GPIO_UART2_RX,
+    GPIO_I2C1_SCL,
+    GPIO_I2C1_SDA,
+    GPIO_SPI1_SCK,
+    GPIO_SPI1_MISO,
+    GPIO_SPI1_MOSI,
+    GPIO_TOTAL_NUMBER
 } GPIO_Pins_t;
 
 // Merge port number and init structure
@@ -45,17 +51,16 @@ typedef struct
     GPIO_InitTypeDef Init;
 } GPIO_InitTypeDefAndPort_t;
 
-// Pin definitions
 extern const GPIO_InitTypeDefAndPort_t GPIO_Inits[GPIO_TOTAL_NUMBER];
 
-// SPI definitions
+///////////////////////////////// SPI definitions /////////////////////////////////
 #define SPI_TIMEOUT 1000
 
 typedef enum
 {
     SPI_1,
     SPI_2,
-    SPI_TOTAL_NUMBER,
+    SPI_TOTAL_NUMBER
 } SPI_t;
 
 typedef struct
@@ -66,16 +71,32 @@ typedef struct
 
 extern const SPI_InitTypeDefAndInst_t SPI_Inits[SPI_TOTAL_NUMBER];
 
-// I2C definitions
+///////////////////////////////// I2C definitions /////////////////////////////////
+#define I2C_TIMEOUT 1000
 
-// UART definitions
+typedef enum
+{
+    I2C_1,
+//    I2C_2,
+    I2C_TOTAL_NUMBER
+} I2C_t;
+
+typedef struct
+{
+    I2C_TypeDef * Instance;
+    I2C_InitTypeDef Init;
+} I2C_InitTypeDefAndInst_t;
+
+extern const I2C_InitTypeDefAndInst_t I2C_Inits[I2C_TOTAL_NUMBER];
+
+///////////////////////////////// UART definitions ////////////////////////////////
 #define UART_TIMEOUT 1000
 
 typedef enum
 {
     UART_1,
     UART_2,
-    UART_TOTAL_NUMBER,
+    UART_TOTAL_NUMBER
 } UART_t;
 
 typedef struct
