@@ -59,8 +59,8 @@ int main(void)
     {
         syshal_gpio_setOutputToggle(GPIO_LED3);
         syshal_spi_transfer(SPI_1, data, sizeof(data));
-        syshal_i2c_transfer(I2C_1, 0xAB, data, sizeof(data));
-        uint16_t temp = syshal_batt_temp();
+        //syshal_i2c_transfer(I2C_1, 0xAB, data, sizeof(data));
+        //uint16_t temp = syshal_batt_temp();
         syshal_time_delayMs(1000);
     }
 
