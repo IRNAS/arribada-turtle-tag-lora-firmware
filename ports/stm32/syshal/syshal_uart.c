@@ -53,15 +53,15 @@ void syshal_uart_init(UART_t instance)
     setvbuf(stderr, NULL, _IONBF, 0);
 }
 
-void syshal_uart_transfer(UART_t instance, uint8_t * data, uint32_t length)
+void syshal_uart_transfer(UART_t instance, uint8_t * data, uint32_t size)
 {
     HAL_StatusTypeDef status;
 
     if (UART_1 == instance)
-        status = HAL_UART_Transmit(&huart1, data, length, UART_TIMEOUT);
+        status = HAL_UART_Transmit(&huart1, data, size, UART_TIMEOUT);
 
     if (UART_2 == instance)
-        status = HAL_UART_Transmit(&huart2, data, length, UART_TIMEOUT);
+        status = HAL_UART_Transmit(&huart2, data, size, UART_TIMEOUT);
 
     if (HAL_OK != status)
     {
@@ -69,15 +69,15 @@ void syshal_uart_transfer(UART_t instance, uint8_t * data, uint32_t length)
     }
 }
 
-uint32_t syshal_uart_receive(UART_t instance, uint8_t * data, uint32_t length)
+uint32_t syshal_uart_receive(UART_t instance, uint8_t * data, uint32_t size)
 {
     HAL_StatusTypeDef status;
 
     if (UART_1 == instance)
-        status = HAL_UART_Receive(&huart1, data, length, UART_TIMEOUT);
+        status = HAL_UART_Receive(&huart1, data, size, UART_TIMEOUT);
 
     if (UART_2 == instance)
-        status = HAL_UART_Receive(&huart2, data, length, UART_TIMEOUT);
+        status = HAL_UART_Receive(&huart2, data, size, UART_TIMEOUT);
 
     if (HAL_OK != status)
     {
@@ -85,7 +85,7 @@ uint32_t syshal_uart_receive(UART_t instance, uint8_t * data, uint32_t length)
     	return 0;
     }
 
-    return length;
+    return size;
 }
 
 // Implement MSP hooks that are called by stm32f0xx_hal_uart

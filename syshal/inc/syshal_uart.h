@@ -1,4 +1,4 @@
-/* syshal_spi.h - HAL for SPI
+/* syshal_uart.h - HAL for UART
  *
  * Copyright (C) 2018 Arribada
  *
@@ -16,14 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef _SYSHAL_SPI_H_
-#define _SYSHAL_SPI_H_
+#ifndef _SYSHAL_UART_H_
+#define _SYSHAL_UART_H_
 
 #include "bsp.h"
 
-void syshal_spi_init(SPI_t instance);
-void syshal_spi_term(SPI_t instance);
-void syshal_spi_transfer(SPI_t instance, uint8_t * data, uint32_t length);
-uint32_t syshal_spi_receive(SPI_t instance, uint8_t * data, uint32_t length); // returns length of data read
+void syshal_uart_init(UART_t instance);
+void syshal_uart_term(UART_t instance);
+void syshal_uart_transfer(UART_t instance, uint8_t * data, uint32_t size);
+uint32_t syshal_uart_receive(UART_t instance, uint8_t * data, uint32_t size); // returns size of data read in bytes
 
-#endif /* _SYSHAL_SPI_H_ */
+#endif /* _SYSHAL_UART_H_ */

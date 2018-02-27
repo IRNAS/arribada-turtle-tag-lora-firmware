@@ -19,6 +19,10 @@
 #ifndef _SYSHAL_BATT_H_
 #define _SYSHAL_BATT_H_
 
+#include "syshal_i2c.h"
 
+void syshal_batt_init(I2C_t instance);
+uint16_t syshal_batt_temp(void);
+uint16_t syshal_batt_voltage(void);
 
 #endif /* _SYSHAL_BATT_H_ */

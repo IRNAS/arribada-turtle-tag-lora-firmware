@@ -24,65 +24,60 @@ DEBUG = 1
 # optimization
 OPT = -Og
 
+BOARD = arribada_v1
 
 #######################################
 # paths
 #######################################
 # source path
-SOURCES_DIR =  \
-Application/User \
-Middlewares \
-Drivers \
-Drivers/CMSIS \
-Drivers/STM32F0xx_HAL_Driver \
-Middlewares/USB_Device_Library \
-Application
-
-# firmware library path
-PERIFLIB_PATH = 
+STMHAL_DIR = drivers/STM32F0xx_HAL_Driver
+CMSIS_DIR = drivers/CMSIS
+CORE_DIR = ../../core
+DEVICE_DIR = ../../devices
 
 # Build path
-BUILD_DIR = Build
+BUILD_DIR = build
 
 ######################################
 # source
 ######################################
 # C sources
 C_SOURCES =  \
-../Hal/STM32F072CB/Drivers/STM32F0xx_HAL_Driver/Src/stm32f0xx_hal_pwr_ex.c \
-../Hal/STM32F072CB/Drivers/STM32F0xx_HAL_Driver/Src/stm32f0xx_hal_uart_ex.c \
-../Hal/STM32F072CB/Drivers/STM32F0xx_HAL_Driver/Src/stm32f0xx_hal_dma.c \
-../Hal/STM32F072CB/Drivers/STM32F0xx_HAL_Driver/Src/stm32f0xx_hal_tim_ex.c \
-../Hal/STM32F072CB/Drivers/STM32F0xx_HAL_Driver/Src/stm32f0xx_hal_cortex.c \
-../Hal/STM32F072CB/Drivers/STM32F0xx_HAL_Driver/Src/stm32f0xx_hal_spi.c \
-../Hal/STM32F072CB/Drivers/STM32F0xx_HAL_Driver/Src/stm32f0xx_hal_i2c.c \
-../Hal/STM32F072CB/Drivers/STM32F0xx_HAL_Driver/Src/stm32f0xx_hal_tim.c \
-../Hal/STM32F072CB/Drivers/STM32F0xx_HAL_Driver/Src/stm32f0xx_hal_flash_ex.c \
-../Hal/STM32F072CB/Drivers/STM32F0xx_HAL_Driver/Src/stm32f0xx_hal_rcc.c \
-../Hal/STM32F072CB/Drivers/STM32F0xx_HAL_Driver/Src/stm32f0xx_hal_gpio.c \
-../Hal/STM32F072CB/Drivers/STM32F0xx_HAL_Driver/Src/stm32f0xx_hal.c \
-../Hal/STM32F072CB/Drivers/STM32F0xx_HAL_Driver/Src/stm32f0xx_hal_flash.c \
-../Hal/STM32F072CB/Drivers/STM32F0xx_HAL_Driver/Src/stm32f0xx_hal_pwr.c \
-../Hal/STM32F072CB/Drivers/STM32F0xx_HAL_Driver/Src/stm32f0xx_hal_rcc_ex.c \
-../Hal/STM32F072CB/Drivers/STM32F0xx_HAL_Driver/Src/stm32f0xx_hal_spi_ex.c \
-../Hal/STM32F072CB/Drivers/STM32F0xx_HAL_Driver/Src/stm32f0xx_hal_uart.c \
-../Hal/STM32F072CB/Drivers/STM32F0xx_HAL_Driver/Src/stm32f0xx_hal_i2c_ex.c \
-../Hal/STM32F072CB/Src/syshal_gpio.c \
-../Hal/STM32F072CB/Src/syshal_i2c.c \
-../Hal/STM32F072CB/Src/syshal_pmu.c \
-../Hal/STM32F072CB/Src/syshal_spi.c \
-../Hal/STM32F072CB/Src/syshal_time.c \
-../Hal/STM32F072CB/Src/syshal_uart.c \
-Src/bsp.c \
-Src/debug.c \
-Src/stm32f0xx_hal_msp.c \
-Src/system_stm32f0xx.c \
-Src/stm32f0xx_it.c \
-../Src/main.c
+$(STMHAL_DIR)/Src/stm32f0xx_hal_pwr_ex.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_uart_ex.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_dma.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_tim_ex.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_cortex.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_spi.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_i2c.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_tim.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_flash_ex.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_rcc.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_gpio.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_flash.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_pwr.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_rcc_ex.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_spi_ex.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_uart.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_i2c_ex.c \
+$(CORE_DIR)/debug/debug.c \
+boards/$(BOARD)/bsp.c \
+$(DEVICE_DIR)/battery/BQ27621/BQ27621.c \
+syshal/syshal_gpio.c \
+syshal/syshal_i2c.c \
+syshal/syshal_pmu.c \
+syshal/syshal_spi.c \
+syshal/syshal_time.c \
+syshal/syshal_uart.c \
+stm32f0xx_hal_msp.c \
+system_stm32f0xx.c \
+stm32f0xx_it.c \
+main.c
 
 # ASM sources
 ASM_SOURCES =  \
-Src/startup_stm32f042x6.s
+startup_stm32f042x6.s
 
 
 ######################################
@@ -94,15 +89,15 @@ PERIFLIB_SOURCES =
 #######################################
 # binaries
 #######################################
-OPENOCD = "C:/Users/Joshua.Craig-PC/Desktop/Working Directory/Nordic/OpenOCD-20170821/bin/openocd"
-OPENOCDSCRIPTS = "C:/Users/Joshua.Craig-PC/Desktop/Working Directory/Nordic/OpenOCD-20170821/share/openocd/scripts"
-BINPATH = "C:/Users/Joshua.Craig-PC/Desktop/Working Directory/Nordic/gcc-arm-none-eabi-7-2017-q4-major/bin"
+OPENOCD = "../../../Toolchain/OpenOCD-20170821/bin/openocd"
+OPENOCDSCRIPTS = "../../../Toolchain/OpenOCD-20170821/share/openocd/scripts"
+BINPATH = "../../../Toolchain/gcc-arm-none-eabi-7-2017-q4-major/bin
 PREFIX = arm-none-eabi-
-CC = $(BINPATH)/$(PREFIX)gcc
-AS = $(BINPATH)/$(PREFIX)gcc -x assembler-with-cpp
-CP = $(BINPATH)/$(PREFIX)objcopy
-AR = $(BINPATH)/$(PREFIX)ar
-SZ = $(BINPATH)/$(PREFIX)size
+CC = $(BINPATH)/$(PREFIX)gcc"
+AS = $(BINPATH)/$(PREFIX)gcc" -x assembler-with-cpp
+CP = $(BINPATH)/$(PREFIX)objcopy"
+AR = $(BINPATH)/$(PREFIX)ar"
+SZ = $(BINPATH)/$(PREFIX)size"
 HEX = $(CP) -O ihex
 BIN = $(CP) -O binary -S
 # Get GIT version
@@ -113,11 +108,6 @@ G_VERSION := $(shell git describe --abbrev=4 --dirty --always --tags)
 #######################################
 # cpu
 CPU = -mcpu=cortex-m0
-
-# fpu
-# NONE for Cortex-M0/M0+/M3
-
-# float-abi
 
 # mcu
 MCU = $(CPU) -mthumb $(FPU) $(FLOAT-ABI)
@@ -138,14 +128,16 @@ AS_INCLUDES =
 
 # C includes
 C_INCLUDES =  \
--IInc \
--I../Inc \
--I../Hal/Inc \
--I../Hal/STM32F072CB/Drivers/STM32F0xx_HAL_Driver/Inc \
--I../Hal/STM32F072CB/Drivers/STM32F0xx_HAL_Driver/Inc/Legacy \
--I../Hal/STM32F072CB/Drivers/CMSIS/Device/ST/STM32F0xx/Include \
--I../Hal/STM32F072CB/Drivers/CMSIS/Include
-
+-I. \
+-Iboards/$(BOARD) \
+-I../../syshal/inc \
+-I$(CORE_DIR)/config \
+-I$(CORE_DIR)/debug \
+-I$(STMHAL_DIR)/Inc \
+-I$(STMHAL_DIR)/Inc/Legacy \
+-I$(CMSIS_DIR)/Device/ST/STM32F0xx/Include \
+-I$(CMSIS_DIR)/Include \
+-I$(DEVICE_DIR)/battery/BQ27621/
 
 # compile gcc flags
 ASFLAGS = $(MCU) $(AS_DEFS) $(AS_INCLUDES) $(OPT) -Wall -fdata-sections -ffunction-sections
@@ -165,7 +157,7 @@ CFLAGS += -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)"
 # LDFLAGS
 #######################################
 # link script
-LDSCRIPT = Linker/STM32F042K6Tx_FLASH.ld
+LDSCRIPT = STM32F042K6Tx_FLASH.ld
 
 # libraries
 LIBS = -lc -lm -lnosys 
@@ -211,7 +203,7 @@ $(BUILD_DIR):
 
 flash:
 	$(MAKE) all
-	$(OPENOCD) -s $(OPENOCDSCRIPTS) -f OpenOCD/STM32F042K6_OpenOCD.cfg -c "init" -c "reset halt" -c "flash write_image erase $(BUILD_DIR)/$(TARGET).elf" -c "verify_image $(BUILD_DIR)/$(TARGET).elf" -c "reset run" -c "shutdown"
+	$(OPENOCD) -s $(OPENOCDSCRIPTS) -f STM32F042K6_OpenOCD.cfg -c "init" -c "reset halt" -c "flash write_image erase $(BUILD_DIR)/$(TARGET).elf" -c "verify_image $(BUILD_DIR)/$(TARGET).elf" -c "reset run" -c "shutdown"
 
 #######################################
 # clean up

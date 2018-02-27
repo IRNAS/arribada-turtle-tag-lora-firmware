@@ -22,6 +22,7 @@
 #include "syshal_i2c.h"
 #include "syshal_spi.h"
 #include "syshal_uart.h"
+#include "syshal_batt.h"
 #include "version.h"
 #include <string.h>
 
@@ -44,6 +45,7 @@ int main(void)
     syshal_uart_init(UART_2);
     syshal_spi_init(SPI_1);
     syshal_i2c_init(I2C_1);
+    syshal_batt_init(I2C_1);
 
     // Print General System Info
     DEBUG_PR_SYS("Arribada Tracker Device");
@@ -57,7 +59,8 @@ int main(void)
     {
         syshal_gpio_setOutputToggle(GPIO_LED3);
         syshal_spi_transfer(SPI_1, data, sizeof(data));
-        syshal_i2c_transfer(I2C_1, data, sizeof(data), 0xAB);
+        syshal_i2c_transfer(I2C_1, 0xAB, data, sizeof(data));
+        uint16_t temp = syshal_batt_temp();
         syshal_time_delayMs(1000);
     }
 

@@ -23,7 +23,9 @@
 
 void syshal_i2c_init(I2C_t instance);
 void syshal_i2c_term(I2C_t instance);
-void syshal_i2c_transfer(I2C_t instance, uint8_t * data, uint32_t length, uint8_t slaveAddress);
-uint32_t syshal_i2c_receive(I2C_t instance, uint8_t * data, uint32_t length, uint8_t slaveAddress); // returns length of data read
+void syshal_i2c_transfer(I2C_t instance, uint8_t slaveAddress, uint8_t * data, uint32_t size);
+uint32_t syshal_i2c_receive(I2C_t instance, uint8_t slaveAddress, uint8_t * data, uint32_t size); // returns length of data read
+uint32_t syshal_i2c_read_reg(I2C_t instance, uint8_t slaveAddress, uint8_t regAddress, uint8_t * data, uint32_t size); // returns length of data read
+void syshal_i2c_write_reg(I2C_t instance, uint8_t slaveAddress, uint8_t regAddress, uint8_t * data, uint32_t size);
 
 #endif /* _SYSHAL_I2C_H_ */
