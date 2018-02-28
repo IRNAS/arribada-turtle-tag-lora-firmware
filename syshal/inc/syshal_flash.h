@@ -19,6 +19,20 @@
 #ifndef _SYSHAL_FLASH_H_
 #define _SYSHAL_FLASH_H_
 
+#include <stdint.h>
 
+/* Constants */
+
+/* Macros */
+
+/* Types */
+
+/* Functions */
+
+int syshal_flash_init(uint32_t device);
+int syshal_flash_term(uint32_t device);
+int syshal_flash_erase(uint32_t device, uint32_t address, uint32_t size);
+int syshal_flash_write(uint32_t device, const void *src, uint32_t address, uint32_t size);
+int syshal_flash_read(uint32_t device, void * const dest, uint32_t address, uint32_t size);
 
 #endif /* _SYSHAL_FLASH_H_ */
