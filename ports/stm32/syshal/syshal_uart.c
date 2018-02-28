@@ -58,14 +58,29 @@ void syshal_uart_transfer(UART_t instance, uint8_t * data, uint32_t size)
     HAL_StatusTypeDef status;
 
     if (UART_1 == instance)
-        status = HAL_UART_Transmit(&huart1, data, size, UART_TIMEOUT);
+    {
+        // Wait for UART to be free
+        while (HAL_UART_GetState(&huart1) != HAL_UART_STATE_READY)
+        {
+
+        }
+        status = HAL_UART_Transmit_IT(&huart1, data, size);
+    }
 
     if (UART_2 == instance)
-        status = HAL_UART_Transmit(&huart2, data, size, UART_TIMEOUT);
+    {
+        // Wait for UART to be free
+        while (HAL_UART_GetState(&huart2) != HAL_UART_STATE_READY)
+        {
+
+        }
+
+        status = HAL_UART_Transmit_IT(&huart2, data, size);
+    }
 
     if (HAL_OK != status)
     {
-    	DEBUG_PR_ERROR("%s failed with %d", __FUNCTION__, status);
+        DEBUG_PR_ERROR("%s failed with %d", __FUNCTION__, status);
     }
 }
 
@@ -74,15 +89,15 @@ uint32_t syshal_uart_receive(UART_t instance, uint8_t * data, uint32_t size)
     HAL_StatusTypeDef status;
 
     if (UART_1 == instance)
-        status = HAL_UART_Receive(&huart1, data, size, UART_TIMEOUT);
+        status = HAL_UART_Receive_IT(&huart1, data, size);
 
     if (UART_2 == instance)
-        status = HAL_UART_Receive(&huart2, data, size, UART_TIMEOUT);
+        status = HAL_UART_Receive_IT(&huart2, data, size);
 
     if (HAL_OK != status)
     {
-    	DEBUG_PR_ERROR("%s failed with %d", __FUNCTION__, status);
-    	return 0;
+        DEBUG_PR_ERROR("%s failed with %d", __FUNCTION__, status);
+        return 0;
     }
 
     return size;
@@ -98,8 +113,12 @@ void HAL_UART_MspInit(UART_HandleTypeDef * huart)
         __HAL_RCC_USART1_CLK_ENABLE();
 
         // USART1 GPIO Configuration
-        // syshal_gpio_init(GPIO_UART1_TX); // TODO needs implementing
-        // syshal_gpio_init(GPIO_UART1_RX); // TODO needs implementing
+        syshal_gpio_init(GPIO_UART1_TX);
+        syshal_gpio_init(GPIO_UART1_RX);
+
+        // USART1 interrupt Init
+        HAL_NVIC_SetPriority(USART1_IRQn, 0, 0);
+        HAL_NVIC_EnableIRQ(USART1_IRQn);
     }
 
     if (huart->Instance == USART2)
@@ -110,6 +129,10 @@ void HAL_UART_MspInit(UART_HandleTypeDef * huart)
         // USART2 GPIO Configuration
         syshal_gpio_init(GPIO_UART2_TX);
         syshal_gpio_init(GPIO_UART2_RX);
+
+        // USART2 interrupt Init
+        HAL_NVIC_SetPriority(USART2_IRQn, 0, 0);
+        HAL_NVIC_EnableIRQ(USART2_IRQn);
     }
 
 }
@@ -123,8 +146,11 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef * huart)
         __HAL_RCC_USART1_CLK_DISABLE();
 
         // USART1 GPIO Configuration
-        // syshal_gpio_term(GPIO_UART1_TX); // TODO needs implementing
-        // syshal_gpio_term(GPIO_UART1_RX); // TODO needs implementing
+        syshal_gpio_term(GPIO_UART1_TX);
+        syshal_gpio_term(GPIO_UART1_RX);
+
+        // USART1 interrupt DeInit
+        HAL_NVIC_DisableIRQ(USART1_IRQn);
     }
 
     if (huart->Instance == USART2)
@@ -135,8 +161,27 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef * huart)
         // USART2 GPIO Configuration
         syshal_gpio_term(GPIO_UART2_TX);
         syshal_gpio_term(GPIO_UART2_RX);
+
+        // USART2 interrupt DeInit
+        HAL_NVIC_DisableIRQ(USART2_IRQn);
     }
 
+}
+
+/**
+* @brief This function handles USART1 global interrupt / USART1 wake-up interrupt through EXTI line 25.
+*/
+void USART1_IRQHandler(void)
+{
+    HAL_UART_IRQHandler(&huart1);
+}
+
+/**
+* @brief This function handles USART2 global interrupt.
+*/
+void USART2_IRQHandler(void)
+{
+    HAL_UART_IRQHandler(&huart2);
 }
 
 // Override _write function to enable printf use
@@ -148,8 +193,13 @@ int _write(int file, char * data, int len)
         return -1;
     }
 
-    // arbitrary timeout 1000
-    HAL_StatusTypeDef status = HAL_UART_Transmit(&PRINTF_UART_OUTPUT, (uint8_t *)data, len, UART_TIMEOUT);
+    // Wait for UART to be free
+    while (HAL_UART_GetState(&PRINTF_UART_OUTPUT) != HAL_UART_STATE_READY)
+    {
+
+    }
+
+    HAL_StatusTypeDef status = HAL_UART_Transmit_IT(&PRINTF_UART_OUTPUT, (uint8_t *)data, len);
 
     // return # of bytes written - as best we can tell
     return (status == HAL_OK ? len : 0);

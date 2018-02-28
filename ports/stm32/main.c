@@ -42,6 +42,7 @@ int main(void)
 
     // Initialize all configured peripherals
     syshal_gpio_init(GPIO_LED3);
+    syshal_uart_init(UART_1);
     syshal_uart_init(UART_2);
     syshal_spi_init(SPI_1);
     syshal_i2c_init(I2C_1);
@@ -52,13 +53,19 @@ int main(void)
     DEBUG_PR_SYS("Version:  %s", GIT_VERSION);
     DEBUG_PR_SYS("Compiled: %s %s With %s", COMPILE_DATE, COMPILE_TIME, COMPILER_NAME);
 
-    uint8_t data[5];
+    uint8_t data[4];
 
     // Toggle IO in an infinite loop
     while (1)
     {
         syshal_gpio_setOutputToggle(GPIO_LED3);
         syshal_spi_transfer(SPI_1, data, sizeof(data));
+
+        //DEBUG_PR_INFO("TEST string");
+        uint8_t dataSize = syshal_uart_receive(UART_1, data, sizeof(data));
+        if (dataSize)
+            syshal_uart_transfer(UART_2, data, dataSize);
+
         //syshal_i2c_transfer(I2C_1, 0xAB, data, sizeof(data));
         //uint16_t temp = syshal_batt_temp();
         syshal_time_delayMs(1000);

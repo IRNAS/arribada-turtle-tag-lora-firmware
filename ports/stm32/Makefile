@@ -101,7 +101,7 @@ SZ = $(BINPATH)/$(PREFIX)size"
 HEX = $(CP) -O ihex
 BIN = $(CP) -O binary -S
 # Get GIT version
-G_VERSION := $(shell git describe --abbrev=4 --dirty --always --tags)
+G_VERSION := $(shell git describe --dirty --always --tags)
  
 #######################################
 # CFLAGS

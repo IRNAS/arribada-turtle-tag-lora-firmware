@@ -34,6 +34,8 @@
 typedef enum
 {
     GPIO_LED3,
+    GPIO_UART1_TX,
+    GPIO_UART1_RX,
     GPIO_UART2_TX,
     GPIO_UART2_RX,
     GPIO_I2C1_SCL,
@@ -90,7 +92,8 @@ typedef struct
 extern const I2C_InitTypeDefAndInst_t I2C_Inits[I2C_TOTAL_NUMBER];
 
 ///////////////////////////////// UART definitions ////////////////////////////////
-#define UART_TIMEOUT 1000
+#define USART_RX_BUF_SIZE 64
+#define USART_TX_BUF_SIZE 64
 
 typedef enum
 {
