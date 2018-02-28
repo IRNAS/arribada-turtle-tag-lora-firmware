@@ -133,6 +133,7 @@ C_INCLUDES =  \
 -I../../syshal/inc \
 -I$(CORE_DIR)/config \
 -I$(CORE_DIR)/debug \
+-I$(CORE_DIR)/ring_buffer \
 -I$(STMHAL_DIR)/Inc \
 -I$(STMHAL_DIR)/Inc/Legacy \
 -I$(CMSIS_DIR)/Device/ST/STM32F0xx/Include \

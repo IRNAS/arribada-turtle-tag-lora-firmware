@@ -92,8 +92,10 @@ typedef struct
 extern const I2C_InitTypeDefAndInst_t I2C_Inits[I2C_TOTAL_NUMBER];
 
 ///////////////////////////////// UART definitions ////////////////////////////////
+#define UART_TIMEOUT 1000
+#define UART_SAFE_INSERT // Don't overwrite values we've received if the buffer overflows
+
 #define USART_RX_BUF_SIZE 64
-#define USART_TX_BUF_SIZE 64
 
 typedef enum
 {

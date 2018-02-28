@@ -53,22 +53,17 @@ int main(void)
     DEBUG_PR_SYS("Version:  %s", GIT_VERSION);
     DEBUG_PR_SYS("Compiled: %s %s With %s", COMPILE_DATE, COMPILE_TIME, COMPILER_NAME);
 
-    uint8_t data[4];
-
     // Toggle IO in an infinite loop
     while (1)
     {
         syshal_gpio_setOutputToggle(GPIO_LED3);
-        syshal_spi_transfer(SPI_1, data, sizeof(data));
 
-        //DEBUG_PR_INFO("TEST string");
-        uint8_t dataSize = syshal_uart_receive(UART_1, data, sizeof(data));
-        if (dataSize)
-            syshal_uart_transfer(UART_2, data, dataSize);
+        // Echo uart
+        uint8_t readBuf[100];
+        uint32_t readBytes = syshal_uart_receive(UART_2, readBuf, sizeof(readBuf));
+        syshal_uart_transfer(UART_2, readBuf, readBytes);
 
-        //syshal_i2c_transfer(I2C_1, 0xAB, data, sizeof(data));
-        //uint16_t temp = syshal_batt_temp();
-        syshal_time_delayMs(1000);
+        //syshal_time_delayMs(1000);
     }
 
 }
