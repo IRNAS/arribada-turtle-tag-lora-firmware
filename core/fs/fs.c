@@ -48,7 +48,7 @@ static fs_priv_handle_t fs_priv_handle_list[FS_PRIV_MAX_HANDLES];
  * header into our local structure to prevent having to
  * read the flash device each time.
  *
- * \param device the device instance number
+ * \param device[in] the device instance number
  * \return \ref FS_ERROR_FLASH_MEDIA if a flash read failed
  * \return \ref FS_ERROR_BAD_DEVICE if the device number is bad
  * \return \ref FS_NO_ERROR on success
@@ -81,6 +81,21 @@ static int init_fs_priv(uint32_t device)
     return FS_NO_ERROR;
 }
 
+static inline uint8_t get_user_flags(fs_priv_t *fs_priv, uint8_t sector)
+{
+    return fs_priv->alloc_unit_list[sector].file_info.file_flags.user_flags;
+}
+
+static inline uint8_t get_mode_flags(fs_priv_t *fs_priv, uint8_t sector)
+{
+    return fs_priv->alloc_unit_list[sector].file_info.file_flags.mode_flags;
+}
+
+static inline uint8_t get_file_protect(fs_priv_t *fs_priv, uint8_t sector)
+{
+    return fs_priv->alloc_unit_list[sector].file_info.file_protect;
+}
+
 static inline uint8_t get_alloc_counter(fs_priv_t *fs_priv, uint8_t sector)
 {
     return fs_priv->alloc_unit_list[sector].alloc_counter;
@@ -108,7 +123,7 @@ static inline uint8_t next_allocation_unit(fs_priv_t *fs_priv, uint8_t sector)
  * sector is allocated or not, so check each sector until we find one whose
  * \ref fs_priv_file_info_t.file_id is set to \ref FS_PRIV_NOT_ALLOCATED.
  *
- * \param fs_priv a pointer to a file system device structure that
+ * \param fs_priv[in] a pointer to a file system device structure that
  *        we want to search
  * \return \ref FS_PRIV_NOT_ALLOCATED if no free sector found
  * \return sector number if a free sector was found
@@ -150,9 +165,9 @@ static uint8_t find_free_allocation_unit(const fs_priv_t *fs_priv)
  * The first free handle is found in \ref fs_priv_handle_list and
  * the \ref fs_priv_handle_t pointer shall be populated with it on success.
  *
- * \param fs_priv a pointer to a file system device that we want to associate
+ * \param fs_priv[in] a pointer to a file system device that we want to associate
  *        the file handle with
- * \param handle a pointer to a private file handle pointer.  This shall be
+ * \param handle[out] a pointer to a private file handle pointer.  This shall be
  *        set to point to the free handle found.
  * \return \ref FS_ERROR_NO_FREE_HANDLE if all handles are in use.
  * \return \ref FS_NO_ERROR on success.
@@ -178,7 +193,7 @@ static int allocate_handle(fs_priv_t *fs_priv, fs_priv_handle_t **handle)
  * The handle is freed by setting its \ref fs_priv_handle_t.fs_priv
  * member to NULL.
  *
- * \param handle a pointer to a private file handle to be freed.
+ * \param handle[in] a pointer to a private file handle to be freed.
  */
 static void free_handle(fs_priv_handle_t *handle)
 {
@@ -194,7 +209,7 @@ static void free_handle(fs_priv_handle_t *handle)
  * are zero or an even number of bits, the file is not protected.
  * If there are an odd number of bits, the file is protected.
  *
- * \param protection_bits taken from \ref
+ * \param protection_bits[in] taken from \ref
  *  fs_priv_file_info_t.file_protect
  * \return true if the file is protected, false otherwise
  */
@@ -219,10 +234,10 @@ static bool is_protected(uint8_t protection_bits)
  * permanently unprotected until erased in this
  * situation.
  *
- * \param protected_bits current file protection bits
- *        value as per \ref fs_priv_file_info_t.file_protect
- * \param protected the boolean state that we wish to apply
+ * \param protected[in] the boolean state that we wish to apply
  *        to the protected bits
+ * \param protected_bits[in] current file protection bits
+ *        value as per \ref fs_priv_file_info_t.file_protect
  * \return new value of the file's protection bits which
  *         shall only be different if the file's protection
  *         state changed
@@ -248,9 +263,9 @@ static uint8_t set_protected(bool protected, uint8_t protected_bits)
  * with a file and determine the root sector i.e., the sector which
  * has no parent node.
  *
- * \param fs_priv a pointer to the private file system structure.
- * \param file_id unique file identifier
- * \return sector number of the root sector on success
+ * \param fs_priv[in] a pointer to the private file system structure.
+ * \param file_id[in] unique file identifier
+ * \return sector[in] number of the root sector on success
  * \return \ref FS_PRIV_NOT_ALLOCATED if the file was not found
  */
 static uint8_t find_file_root(fs_priv_t *fs_priv, uint8_t file_id)
@@ -297,9 +312,9 @@ static uint8_t find_file_root(fs_priv_t *fs_priv, uint8_t file_id)
  * file_id already exists, opening a file for writing that has been
  * protected.  This routine traps an such errors.
  *
- * \param fs_priv a pointer to the private file system structure.
- * \param root the root sector number containing the file's properties.
- * \param mode desired mode requested for opening the file.
+ * \param fs_priv[in] a pointer to the private file system structure.
+ * \param root[in] the root sector number containing the file's properties.
+ * \param mode[in] desired mode requested for opening the file.
  * \return \ref FS_NO_ERROR if all checks pass
  * \return \ref FS_ERROR_FILE_NOT_FOUND if the root node was not found
  * \return \ref FS_ERROR_WRITE_PROTECTED if the file is write protected
@@ -336,9 +351,9 @@ static int check_file_flags(fs_priv_t *fs_priv, uint8_t root, fs_mode_t mode)
  * the last known write position and also the next available session
  * write offset, so the new write position can be tracked.
  *
- * \param fs_priv a pointer to the private file system structure.
- * \param sector the sector number to check.
- * \param data_offset pointer to data offset relative to start of sector
+ * \param fs_priv[in] a pointer to the private file system structure.
+ * \param sector[in] the sector number to check.
+ * \param data_offset[out] pointer to data offset relative to start of sector
  *        which shall be used to store the current write offset
  * \return session write offset e.g., 0 means the first session entry.
  * \return \ref FS_PRIV_NOT_ALLOCATED if no session entry is free.
@@ -383,8 +398,8 @@ static uint8_t find_next_session_offset(fs_priv_t *fs_priv, uint8_t sector, uint
  * a sector whose \ref fs_priv_file_info_t.next_allocation_unit
  * is set to \ref FS_PRIV_NOT_ALLOCATED.
  *
- * \param fs_priv a pointer to the private file system structure.
- * \param root the root sector number to start from.
+ * \param fs_priv[in] a pointer to the private file system structure.
+ * \param root[in] the root sector number to start from.
  * \return sector offset for the last sector of the file.
  */
 static uint8_t find_last_allocation_unit(fs_priv_t *fs_priv, uint8_t root)
@@ -406,11 +421,11 @@ static uint8_t find_last_allocation_unit(fs_priv_t *fs_priv, uint8_t root)
  *
  * See \ref find_last_allocation_unit and \ref find_next_session_offset.
  *
- * \param fs_priv a pointer to the private file system structure.
- * \param root the root sector number to start from.
- * \param last_alloc_unit pointer for storing the sector offset of
+ * \param fs_priv[in] a pointer to the private file system structure.
+ * \param root[in] the root sector number to start from.
+ * \param last_alloc_unit[out] pointer for storing the sector offset of
  *         the last allocation unit in the file chain.
- * \param data_offset pointer for storing the last known write position
+ * \param data_offset pointer[out] for storing the last known write position
  *        in the last sector of the file.
  * \return session write offset e.g., 0 means the first session entry.
  * \return \ref FS_PRIV_NOT_ALLOCATED if no session entry is free.
@@ -430,7 +445,7 @@ static uint8_t find_eof(fs_priv_t *fs_priv, uint8_t root, uint8_t *last_alloc_un
  * current data offset is pointing to the last byte of the last sector
  * in the file chain.
  *
- * \param[in] fs_priv_handle pointer to private file handle
+ * \param fs_priv_handle[in] pointer to private file handle
  * \return true if the handle is EOF, false otherwise
  */
 static bool is_eof(fs_priv_handle_t *fs_priv_handle)
@@ -449,7 +464,7 @@ static bool is_eof(fs_priv_handle_t *fs_priv_handle)
  * Both the alloction unit header stored locally and stored in
  * flash are synchronized.
  *
- * \param fs_priv a pointer to the private file system structure.
+ * \param fs_priv[in] a pointer to the private file system structure.
  * \param sector the sector number to erase.
  * \return \ref FS_NO_ERROR on success.
  * \return \ref FS_ERROR_FLASH_MEDIA on error.
@@ -558,7 +573,7 @@ static int flush_handle(fs_priv_handle_t *fs_priv_handle)
  * that any file allocation data is written to flash immediately to
  * ensure integrity of the file allocation information.
  *
- * \param fs_priv_handle pointer to private flash handle for which we
+ * \param fs_priv_handle[in] pointer to private flash handle for which we
  * want to allocate a new sector for.
  * \return \ref FS_NO_ERROR on success.
  * \return \ref FS_ERROR_FLASH_MEDIA if a flash write failed.
@@ -631,7 +646,7 @@ static int allocate_new_sector_to_file(fs_priv_handle_t *fs_priv_handle)
  * Initializes the associated flash memory device and ensures all
  * file handles are marked as free.
  *
- * \param device flash media device number to use for the file system
+ * \param device[in] flash media device number to use for the file system
  * \return \ref FS_NO_ERROR on success.
  * \return \ref FS_ERROR_FLASH_MEDIA on flash initialization error.
  * \return \ref FS_ERROR_BAD_DEVICE device number out of range.
@@ -659,7 +674,7 @@ int fs_init(uint32_t device)
  *
  * Terminates the associated flash memory device.
  *
- * \param device flash media device number to terminate
+ * \param device[in] flash media device number to terminate
  * \return \ref FS_NO_ERROR on success.
  * \return \ref FS_ERROR_FLASH_MEDIA on flash terminate error.
  * \return \ref FS_ERROR_BAD_DEVICE device number out of range.
@@ -684,7 +699,7 @@ int fs_term(uint32_t device)
  * memory and stores alloction unit headers locally to
  * keep track of the overall file system state.
  *
- * \param device flash media device number to mount file system on
+ * \param device[in] flash media device number to mount file system on
  * \return \ref FS_NO_ERROR on success.
  * \return \ref FS_ERROR_BAD_DEVICE if the device number is out of range
  */
@@ -706,7 +721,7 @@ int fs_mount(uint32_t device, fs_t *fs)
  * allocation counters, for wear levelling, are preserved and
  * incremented as per \ref erase_allocation_unit.
  *
- * \param fs file system object to format
+ * \param fs[in] file system object to format
  * \return \ref FS_NO_ERROR on success.
  * \return \ref FS_ERROR_FLASH_MEDIA on flash media error.
  */
@@ -744,7 +759,12 @@ int fs_format(fs_t fs)
  * using the \ref fs_flush function.  When finished using a
  * file then \ref fs_close function should be called.
  *
- * \param fs file system on which to open a file.
+ * \param fs[in] file system on which to open a file.
+ * \param handle[out] pointer for storing allocated file handle.
+ * \param file_id[in] file identifier to open.
+ * \param mode[in] file open mode.
+ * \param user_flags sets the user flags on create, otherwise
+ * retrieves the user flags.
  * \return \ref FS_NO_ERROR on success.
  * \return \ref FS_ERROR_FILE_NOT_FOUND if the \ref file_id was not
  * found.
@@ -819,23 +839,77 @@ open_cleanup:
     return ret;
 }
 
+/*! \brief Close an open file handle.
+ *
+ * Shall try to execute a flush operation and then frees
+ * the file handle.  Note that any error during the
+ * flush operation shall not be seen at this level so
+ * it is advisable to flush separately first before
+ * closing the file handle.
+ *
+ * \param handle[in] file handle to close.
+ * \return \ref FS_NO_ERROR on success.
+ */
 int fs_close(fs_handle_t handle)
 {
-    int ret;
-
     fs_priv_handle_t *fs_priv_handle = (fs_priv_handle_t *)handle;
-    ret = fs_flush(handle);
+    fs_flush(handle);
     free_handle(fs_priv_handle);
 
-    return ret;
+    return FS_NO_ERROR;
 }
 
+/*! \brief Write data to an open file handle.
+ *
+ * Data bytes shall be written to the file handle via
+ * a page cache.  The page cache will write-through to
+ * flash memory whenever current write pointer reaches a
+ * page boundary and there is data in the cache.
+ *
+ * The session write pointer is not stored to flash unless the current
+ * sector is filled whereupon a new sector is allocated.  Use
+ * \ref fs_flush to periodically store the session write pointer
+ * to flash.
+ *
+ * The write process may continue indefinitely if the file
+ * type is circular.  In the case of a circular file type,
+ * the root sector is reclaimed.  Otherwise, once all
+ * sectors have been exhausted a \ref FS_ERROR_FILESYSTEM_FULL
+ * error is returned.
+ *
+ * \param handle[in] file handle to write to.
+ * \param src[in] pointer to memory containing bytes to write.
+ * \param size[in] number of bytes to write.
+ * \param written[out] pointer for storing number of bytes actually
+ * written, which may be less than the amount requested.
+ * \return \ref FS_NO_ERROR on success.
+ * \return \ref FS_ERROR_FLASH_MEDIA on flash write error.
+ * \return \ref FS_ERROR_FILESYSTEM_FULL unable to return as the
+ * file system is full.
+ */
 int fs_write(fs_handle_t handle, void * const src, uint32_t size, uint32_t *written)
 {
    fs_priv_handle_t *fs_priv_handle = (fs_priv_handle_t *)handle;
 
+   /* TODO: need to handle both CIRCULAR and LINEAR file modes */
 }
 
+/*! \brief Read data from an open file handle.
+ *
+ * The requested number of bytes shall be read from the file.
+ * The file's read position shall be updated accordingly.
+ * The actual number of bytes read may be less than the number of
+ * bytes requested e.g., EOF.
+ *
+ * \param handle[in] file handle to read.
+ * \param dest[out] pointer to buffer for storing read data.
+ * \param size[in] number of bytes to read.
+ * \param read[out] pointer for storing number of bytes actually read.
+ * \return \ref FS_NO_ERROR on success.
+ * \return \ref FS_ERROR_FLASH_MEDIA if a flash read failed.
+ * \return \ref FS_ERROR_INVALID_MODE if the file handle is not readable.
+ * \return \ref FS_ERROR_END_OF_FILE if the end of file has already been reached.
+ */
 int fs_read(fs_handle_t handle, const void *dest, uint32_t size, uint32_t *read)
 {
 	fs_priv_handle_t *fs_priv_handle = (fs_priv_handle_t *)handle;
@@ -889,17 +963,31 @@ int fs_read(fs_handle_t handle, const void *dest, uint32_t size, uint32_t *read)
 	return FS_NO_ERROR;
 }
 
+/*! \brief Flush an open file.
+ *
+ * Shall result in any cached data being purged from the
+ * page cache and being written to the underlying flash memory.
+ * The current session information shall also be stored to
+ * flash memory to reflect a new write position, if
+ * changed.
+ *
+ * \param handle[in] file handle to flush.
+ * \return \ref FS_NO_ERROR on success.
+ * \return \ref FS_ERROR_FLASH_MEDIA if a flash write failed.
+ * \return \ref FS_ERROR_INVALID_MODE if the file handle is not writeable.
+ * \return \ref FS_ERROR_FILE_PROTECTED if the file is protected.
+ */
 int fs_flush(fs_handle_t handle)
 {
 	fs_priv_handle_t *fs_priv_handle = (fs_priv_handle_t *)handle;
 	fs_priv_t *fs_priv = fs_priv_handle->fs_priv;
 
 	/* Make sure the file is writeable and not protected */
-	if ((fs_priv_handle->mode & FS_FILE_WRITEABLE) == 0)
+	if ((fs_priv_handle->flags.mode_flags & FS_FILE_WRITEABLE) == 0)
 		return FS_ERROR_INVALID_MODE;
 
 	/* Make sure the file is not protected */
-	uint8_t protection_bits = fs_priv->alloc_unit_list[fs_priv_handle->root_allocation_unit].file_info.file_protect;
+	uint8_t protection_bits = get_file_protect(fs_priv, fs_priv_handle->root_allocation_unit);
 	if (is_protected(protection_bits))
 		return FS_ERROR_FILE_PROTECTED;
 
@@ -907,14 +995,98 @@ int fs_flush(fs_handle_t handle)
 	flush_handle(fs_priv_handle);
 }
 
+/*! \brief Protect a file from the file system.
+ *
+ * If \ref file_id references a file that can be found on
+ * the flash memory and the file is not protected, then
+ * the file's protection bits shall be modified.
+ *
+ * \param fs[in] file system on which to perform protect operation.
+ * \param file_id[in] file identifier to protect.
+ * \return \ref FS_NO_ERROR on success.
+ * \return \ref FS_ERROR_FILE_NOT_FOUND if the \ref file_id was not found.
+ * \return \ref FS_ERROR_FLASH_MEDIA if a flash write failed.
+ */
 int fs_protect(fs_t fs, uint8_t file_id)
 {
+    fs_priv_t *fs_priv = (fs_priv_t *)fs;
+
+    /* Find the root allocation unit for this file */
+    uint8_t root = find_file_root(fs_priv, file_id);
+    if ((uint8_t)FS_PRIV_NOT_ALLOCATED == root)
+        return FS_ERROR_FILE_NOT_FOUND;
+
+    /* No action needed if already protected */
+    if (is_protected(get_file_protect(fs_priv, root)))
+        return FS_NO_ERROR;
+
+    uint8_t file_protect = get_file_protect(fs_priv, root);
+    file_protect = set_protected(true, file_protect);
+
+    /* Write updated file protect bits to flash */
+    if (syshal_flash_write(fs_priv->device, &file_protect,
+        FS_PRIV_SECTOR_ADDR(root) + FS_PRIV_FILE_PROTECT_OFFSET,
+        sizeof(uint8_t)))
+        return FS_ERROR_FLASH_MEDIA;
+
+    fs_priv->alloc_unit_list[root].file_info.file_protect = file_protect;
+
+    return FS_NO_ERROR;
 }
 
+/*! \brief Unprotect a file from the file system.
+ *
+ * If \ref file_id references a file that can be found on
+ * the flash memory and the file is protected, then
+ * the file's protection bits shall be modified.
+ *
+ * \param fs[in] file system on which to perform unprotect operation.
+ * \param file_id[in] file identifier to unprotect.
+ * \return \ref FS_NO_ERROR on success.
+ * \return \ref FS_ERROR_FILE_NOT_FOUND if the \ref file_id was not found.
+ * \return \ref FS_ERROR_FLASH_MEDIA if a flash write failed.
+ */
 int fs_unprotect(fs_t fs, uint8_t file_id)
 {
+    int ret;
+    fs_priv_t *fs_priv = (fs_priv_t *)fs;
+
+    /* Find the root allocation unit for this file */
+    uint8_t root = find_file_root(fs_priv, file_id);
+    if ((uint8_t)FS_PRIV_NOT_ALLOCATED == root)
+        return FS_ERROR_FILE_NOT_FOUND;
+
+    /* No action needed if already unprotected */
+    if (!is_protected(get_file_protect(fs_priv, root)))
+        return FS_NO_ERROR;
+
+    uint8_t file_protect = get_file_protect(fs_priv, root);
+    file_protect = set_protected(false, file_protect);
+
+    /* Write updated file protect bits to flash */
+    if (syshal_flash_write(fs_priv->device, &file_protect,
+        FS_PRIV_SECTOR_ADDR(root) + FS_PRIV_FILE_PROTECT_OFFSET,
+        sizeof(uint8_t)))
+        return FS_ERROR_FLASH_MEDIA;
+
+    fs_priv->alloc_unit_list[root].file_info.file_protect = file_protect;
+
+    return FS_NO_ERROR;
 }
 
+/*! \brief Delete a file from the file system.
+ *
+ * If \ref file_id references a file that can be found on
+ * the flash memory and the file is not protected, then
+ * the file shall be removed.  This entails erasing every
+ * sector in flash associated with the file.
+ *
+ * \param fs[in] file system on which to perform file delete.
+ * \param file_id[in] file identifier to delete.
+ * \return \ref FS_NO_ERROR on success.
+ * \return \ref FS_ERROR_FILE_NOT_FOUND if the \ref file_id was not found.
+ * \return \ref FS_ERROR_FILE_PROTECTED if the file is protected.
+ */
 int fs_delete(fs_t fs, uint8_t file_id)
 {
     int ret;
@@ -925,6 +1097,10 @@ int fs_delete(fs_t fs, uint8_t file_id)
     if ((uint8_t)FS_PRIV_NOT_ALLOCATED == root)
         return FS_ERROR_FILE_NOT_FOUND;
 
+    /* Make sure the file is not protected */
+    if (is_protected(get_file_protect(fs_priv, root)))
+        return FS_ERROR_FILE_PROTECTED;
+
     /* Erase each allocation unit associated with the file */
     while ((uint8_t)FS_PRIV_NOT_ALLOCATED != root)
     {
@@ -934,7 +1110,7 @@ int fs_delete(fs_t fs, uint8_t file_id)
         root = next_allocation_unit(fs_priv, root);
 
         /* This will erase both the flash sector and the local copy
-         * of the alloction unit's header.
+         * of the allocation unit's header.
          */
         ret = erase_allocation_unit(fs_priv, temp);
         if (ret)
@@ -944,6 +1120,23 @@ int fs_delete(fs_t fs, uint8_t file_id)
     return FS_NO_ERROR;
 }
 
+/*! \brief Obtain file or file system status.
+ *
+ * If \ref file_id is set to \ref FS_FILE_ID_NONE then the operation
+ * shall be performed with respect to the file system.  The only
+ * field populated shall be \ref fs_stat_t.size and this shall
+ * reflect the total number of free bytes in the file system.
+ *
+ * Otherwise, the specific \ref file_id is retrieved and its
+ * total size is scanned along with the file's attributes.
+ *
+ * \param fs[in] file system on which to perform stat operation.
+ * \param file_id[in] shall be FS_FILE_ID_NONE or a valid file identifier.
+ * \param stat[out] pointer to file status structure
+ * \return \ref FS_NO_ERROR on success.
+ * \return \ref FS_ERROR_FILE_NOT_FOUND if the \ref file_id was not
+ * found.
+ */
 int fs_stat(fs_t fs, uint8_t file_id, const fs_stat_t *stat)
 {
     fs_priv_t *fs_priv = (fs_priv_t *)fs;
@@ -956,9 +1149,17 @@ int fs_stat(fs_t fs, uint8_t file_id, const fs_stat_t *stat)
         for (uint8_t sector; sector < FS_PRIV_MAX_SECTORS; sector++)
         {
             if (get_file_id(fs_priv, sector) == (uint8_t)FS_PRIV_NOT_ALLOCATED)
+            {
+                /* Spare sector, so increment by the sector size less the
+                 * space we allocate for the file allocation unit management.
+                 */
                 stat->size += (FS_PRIV_SECTOR_SIZE - FS_PRIV_ALLOC_UNIT_SIZE);
+            }
             else
             {
+                /* Used sector, so retrieve how much data in the sector has
+                 * been used and deduct this from the sector size.
+                 */
                 uint32_t data_offset;
                 if (find_next_session_offset(fs_priv, sector, &data_offset) !=
                     (uint8_t)FS_PRIV_NOT_ALLOCATED)
@@ -969,14 +1170,15 @@ int fs_stat(fs_t fs, uint8_t file_id, const fs_stat_t *stat)
     }
     else
     {
+        /* A file identifier was provided, so find its root sector */
         uint8_t root = find_file_root(fs_priv, file_id);
         if ((uint8_t)FS_PRIV_NOT_ALLOCATED == root)
             return FS_ERROR_FILE_NOT_FOUND;
 
         /* These fields are all in the header of the root sector */
-        stat->mode = 0;
-        stat->user_flags = 0;
-        stat->is_protected = 0;
+        stat->is_circular = get_mode_flags(fs_priv, root);
+        stat->user_flags = get_user_flags(fs_priv, root);
+        stat->is_protected = is_protected(get_file_protect(fs_priv, root));
 
         /* We have to compute the size of the file on the disk iteratively by
          * visiting each sector in the file chain.

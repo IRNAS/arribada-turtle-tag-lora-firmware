@@ -109,7 +109,7 @@ typedef struct
 {
     fs_priv_t      *fs_priv;              /*!< File system object pointer */
     fs_priv_flags_t flags;                /*!< File open mode flags */
-    uint8_t			file_id;              /*!< File identifier for this file */
+    uint8_t         file_id;              /*!< File identifier for this file */
     uint8_t         root_allocation_unit; /*!< Root sector of file */
     uint8_t         curr_allocation_unit; /*!< Current accessed sector of file */
     uint8_t         curr_session_offset;  /*!< Session offset to use */

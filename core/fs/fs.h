@@ -57,8 +57,8 @@ typedef enum
 
 typedef struct
 {
-    fs_mode_t mode;            /* File mode (ignore for FS_FILE_ID_NONE) */
     uint8_t   user_flags;      /* User flags when file was created (ignore for FS_FILE_ID_NONE) */
+    bool      is_circular;     /* File type is circular */
     bool      is_protected;    /* File protection status (ignore for FS_FILE_ID_NONE) */
     uint32_t  size;            /* File size (total bytes free for FS_FILE_ID_NONE) */
 } fs_stat_t;
