@@ -29,7 +29,7 @@ static UART_HandleTypeDef huart2;
 
 // Internal variables
 static ring_buffer_t rx_buffer[UART_TOTAL_NUMBER];
-static uint8_t rx_data[UART_TOTAL_NUMBER][USART_RX_BUF_SIZE];
+static uint8_t rx_data[UART_TOTAL_NUMBER][UART_RX_BUF_SIZE];
 
 static inline UART_HandleTypeDef * get_handle(UART_t instance)
 {
@@ -51,7 +51,7 @@ void syshal_uart_init(UART_t instance)
     handle->Init = UART_Inits[instance].Init;
 
     // Setup rx buffer
-    rb_init(&rx_buffer[instance], USART_RX_BUF_SIZE, &rx_data[instance][0]);
+    rb_init(&rx_buffer[instance], UART_RX_BUF_SIZE, &rx_data[instance][0]);
 
     // Turn off buffers. This ensure printf prints immediately
     if (handle == &PRINTF_UART_OUTPUT)

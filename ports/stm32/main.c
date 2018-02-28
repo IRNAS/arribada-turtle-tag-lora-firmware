@@ -58,12 +58,16 @@ int main(void)
     {
         syshal_gpio_setOutputToggle(GPIO_LED3);
 
-        // Echo uart
-        uint8_t readBuf[100];
-        uint32_t readBytes = syshal_uart_receive(UART_2, readBuf, sizeof(readBuf));
+        uint8_t readBuf[UART_RX_BUF_SIZE];
+        uint32_t readBytes;
+
+        // Echo UART_1 to PC
+        readBytes = syshal_uart_receive(UART_1, readBuf, sizeof(readBuf));
         syshal_uart_transfer(UART_2, readBuf, readBytes);
 
-        //syshal_time_delayMs(1000);
+        // Echo PC to UART_1
+        readBytes = syshal_uart_receive(UART_2, readBuf, sizeof(readBuf));
+        syshal_uart_transfer(UART_1, readBuf, readBytes);
     }
 
 }
