@@ -64,6 +64,7 @@ $(STMHAL_DIR)/Src/stm32f0xx_hal_i2c_ex.c \
 $(CORE_DIR)/debug/debug.c \
 boards/$(BOARD)/bsp.c \
 $(DEVICE_DIR)/battery/BQ27621/BQ27621.c \
+$(DEVICE_DIR)/gps/M8N/M8N.c \
 syshal/syshal_gpio.c \
 syshal/syshal_i2c.c \
 syshal/syshal_pmu.c \
@@ -138,7 +139,8 @@ C_INCLUDES =  \
 -I$(STMHAL_DIR)/Inc/Legacy \
 -I$(CMSIS_DIR)/Device/ST/STM32F0xx/Include \
 -I$(CMSIS_DIR)/Include \
--I$(DEVICE_DIR)/battery/BQ27621/
+-I$(DEVICE_DIR)/battery/BQ27621/ \
+-I$(DEVICE_DIR)/gps/M8N/
 
 # compile gcc flags
 ASFLAGS = $(MCU) $(AS_DEFS) $(AS_INCLUDES) $(OPT) -Wall -fdata-sections -ffunction-sections

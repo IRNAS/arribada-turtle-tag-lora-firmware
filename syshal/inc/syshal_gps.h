@@ -19,6 +19,14 @@
 #ifndef _SYSHAL_GPS_H_
 #define _SYSHAL_GPS_H_
 
+#include <stdbool.h>
+#include "syshal_uart.h"
 
+void syshal_gps_init(UART_t instance);
+void syshal_gps_shutdown(void);
+bool syshal_gps_locked(void);
+bool syshal_gps_locationAvailable(void);
+bool syshal_gps_getLocation(uint32_t * iTOW, int32_t * longitude, int32_t * latitude, int32_t * height);
+void syshal_gps_tick(void);
 
 #endif /* _SYSHAL_GPS_H_ */

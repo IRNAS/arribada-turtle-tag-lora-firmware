@@ -23,6 +23,7 @@
 #include "syshal_spi.h"
 #include "syshal_uart.h"
 #include "syshal_batt.h"
+#include "syshal_gps.h"
 #include "version.h"
 #include <string.h>
 
@@ -44,30 +45,54 @@ int main(void)
     syshal_gpio_init(GPIO_LED3);
     syshal_uart_init(UART_1);
     syshal_uart_init(UART_2);
-    syshal_spi_init(SPI_1);
-    syshal_i2c_init(I2C_1);
-    syshal_batt_init(I2C_1);
+    //syshal_spi_init(SPI_1);
+    //syshal_i2c_init(I2C_1);
+    //syshal_batt_init(I2C_1);
+    syshal_gps_init(UART_1);
 
     // Print General System Info
     DEBUG_PR_SYS("Arribada Tracker Device");
     DEBUG_PR_SYS("Version:  %s", GIT_VERSION);
     DEBUG_PR_SYS("Compiled: %s %s With %s", COMPILE_DATE, COMPILE_TIME, COMPILER_NAME);
 
-    // Toggle IO in an infinite loop
+    bool GPS_lock_state = false;
+    bool GPS_last_state = false;
+
     while (1)
     {
         syshal_gpio_setOutputToggle(GPIO_LED3);
 
-        uint8_t readBuf[UART_RX_BUF_SIZE];
-        uint32_t readBytes;
+        if (syshal_gps_locked())
+            GPS_lock_state = true;
+        else
+            GPS_lock_state = false;
 
-        // Echo UART_1 to PC
-        readBytes = syshal_uart_receive(UART_1, readBuf, sizeof(readBuf));
-        syshal_uart_transfer(UART_2, readBuf, readBytes);
+        // GPS state has changed
+        if (GPS_last_state != GPS_lock_state)
+        {
+            // If gps was locked
+            if (GPS_lock_state)
+            {
+                DEBUG_PR_SYS("GPS lock made");
+            }
+            else
+            {
+                DEBUG_PR_SYS("GPS lock lost");
+            }
+        }
 
-        // Echo PC to UART_1
-        readBytes = syshal_uart_receive(UART_2, readBuf, sizeof(readBuf));
-        syshal_uart_transfer(UART_1, readBuf, readBytes);
+        GPS_last_state = GPS_lock_state;
+
+        if (GPS_lock_state && syshal_gps_locationAvailable())
+        {
+            uint32_t iTOW;
+            int32_t longitude, latitude, height;
+            syshal_gps_getLocation(&iTOW, &longitude, &latitude, &height);
+            DEBUG_PR_INFO("New Location - time: %u ms, Long: %dE-7 deg, Lat: %dE-7 deg, Height: %d mm", iTOW, longitude, latitude, height);
+        }
+
+        syshal_gps_tick();
+
     }
 
 }

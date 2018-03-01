@@ -16,7 +16,7 @@
 
 #include "debug.h"
 
-debug_level_t g_debug_level = DEBUG_TRACE;
+debug_level_t g_debug_level = DEBUG_INFO;
 
 const char * g_dbg_lvl[] =
 {

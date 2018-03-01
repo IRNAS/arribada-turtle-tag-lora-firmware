@@ -142,6 +142,25 @@ static inline int rb_peek(ring_buffer_t * rb)
     }
 }
 
+/*
+ * @brief Return the nth element from a ring buffer, without removing it
+ * @param rb Buffer to remove from, must contain at least one element.
+ */
+static inline int rb_peek_at(ring_buffer_t * rb, uint8_t element)
+{
+    if (rb->head == rb->tail)
+    {
+        return -1;
+    }
+    else
+    {
+        if(rb_full_count(rb) < element)
+            return -1;
+
+        uint16_t location = (rb->head + element) % rb->size;
+        return rb->buf[location];
+    }
+}
 
 /**
  * @brief Attempt to remove the first item from a ring buffer.

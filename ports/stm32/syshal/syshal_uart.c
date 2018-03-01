@@ -113,6 +113,17 @@ uint32_t syshal_uart_receive(UART_t instance, uint8_t * data, uint32_t size)
     return size;
 }
 
+// Peek at character at location at nth depth in rx buffer (0 being the oldest/top value of the FIFO). Return true on success
+bool syshal_uart_peekAt(UART_t instance, uint8_t * byte, uint32_t location)
+{
+    *byte = rb_peek_at(&rx_buffer[instance], location);//rb_peek(&rx_buffer[instance]);//rb_peek_at(&rx_buffer[instance], location);
+
+    if (-1 == *byte)
+        return false;
+    else
+        return true;
+}
+
 void syshal_uart_transfer(UART_t instance, uint8_t * data, uint32_t size)
 {
 
@@ -209,13 +220,16 @@ static inline void uart_irq(UART_t instance)
     // Did we receive data ?
     if (__HAL_UART_GET_IT(huart, UART_IT_RXNE))
     {
-        uint8_t rxBuffer; // Read one byte from the receive data register
+        uint16_t byte; // Ensure correct alignment
 
-        rxBuffer = huart->Instance->RDR & 0xFF;
+        byte = huart->Instance->RDR;
+
+        uint8_t rxBuffer = (uint8_t)byte;
 
 #ifdef UART_SAFE_INSERT
         // If the buffer is full and the user defines UART_SAFE_INSERT, ignore new bytes.
-        rb_safe_insert(&rx_buffer[instance], rxBuffer);
+        if (!rb_safe_insert(&rx_buffer[instance], rxBuffer))
+            DEBUG_PR_ERROR("Rx buffer UART_%u full", instance + 1);
 #else
         // If the buffer is full overwrite data
         rb_push_insert(&rx_buffer[instance], rxBuffer);
