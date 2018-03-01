@@ -42,6 +42,8 @@
 #define FS_PRIV_SECTOR_SIZE             (256 * 1024)
 #endif
 
+#define FS_PRIV_USABLE_SIZE             (FS_PRIV_SECTOR_SIZE - FS_PRIV_ALLOC_UNIT_SIZE)
+
 #ifndef FS_PRIV_PAGE_SIZE
 #define FS_PRIV_PAGE_SIZE               512
 #endif
