@@ -32,13 +32,12 @@
 #define FS_ERROR_FLASH_MEDIA         -1
 #define FS_ERROR_FILE_ALREADY_EXISTS -2
 #define FS_ERROR_FILE_NOT_FOUND      -3
-#define FS_ERROR_FLASH_MEDIA_FULL    -4
-#define FS_ERROR_FILE_PROTECTED      -5
-#define FS_ERROR_NO_FREE_HANDLE      -6
-#define FS_ERROR_INVALID_MODE        -7
-#define FS_ERROR_FILESYSTEM_FULL     -8
-#define FS_ERROR_END_OF_FILE         -9
-#define FS_ERROR_BAD_DEVICE          -10
+#define FS_ERROR_FILE_PROTECTED      -4
+#define FS_ERROR_NO_FREE_HANDLE      -5
+#define FS_ERROR_INVALID_MODE        -6
+#define FS_ERROR_FILESYSTEM_FULL     -7
+#define FS_ERROR_END_OF_FILE         -8
+#define FS_ERROR_BAD_DEVICE          -9
 
 /* Macros */
 

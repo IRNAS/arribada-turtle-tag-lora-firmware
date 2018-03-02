@@ -154,7 +154,7 @@ static inline uint16_t cached_bytes(fs_priv_handle_t *fs_priv_handle)
  */
 static uint8_t find_free_allocation_unit(fs_priv_t *fs_priv)
 {
-    uint8_t min_allocation_counter = (uint8_t)FS_PRIV_NOT_ALLOCATED;
+    uint32_t min_allocation_counter = (uint32_t)FS_PRIV_NOT_ALLOCATED;
     uint8_t free_sector = (uint8_t)FS_PRIV_NOT_ALLOCATED;
 
     /* In the worst case, we have to check every sector on the disk to
@@ -461,7 +461,7 @@ static uint8_t find_last_allocation_unit(fs_priv_t *fs_priv, uint8_t root)
 static uint8_t find_eof(fs_priv_t *fs_priv, uint8_t root, uint8_t *last_alloc_unit, uint32_t *data_offset)
 {
     *last_alloc_unit = find_last_allocation_unit(fs_priv, root);
-    return find_next_session_offset(fs_priv, root, data_offset);
+    return find_next_session_offset(fs_priv, *last_alloc_unit, data_offset);
 }
 
 /*! \brief Determines if a handle is in the end of a file condition.
@@ -565,6 +565,10 @@ static int update_session_offset(fs_priv_handle_t *fs_priv_handle)
 {
     uint32_t address;
 
+    /* Check to see if the session offset needs updating */
+    if (fs_priv_handle->last_data_offset == fs_priv_handle->curr_session_value)
+        return FS_NO_ERROR;
+
     /* Compute physical address for next write offset */
     address = FS_PRIV_SECTOR_ADDR(fs_priv_handle->curr_allocation_unit) +
             FS_PRIV_SESSION_OFFSET +
@@ -575,6 +579,9 @@ static int update_session_offset(fs_priv_handle_t *fs_priv_handle)
             &fs_priv_handle->last_data_offset,
             address, sizeof(uint32_t)))
         return FS_ERROR_FLASH_MEDIA;
+
+    /* Update session write pointer */
+    fs_priv_handle->curr_session_value = fs_priv_handle->last_data_offset;
 
     /* Set next available write offset */
     fs_priv_handle->curr_session_offset++;
@@ -667,7 +674,7 @@ static int allocate_new_sector_to_file(fs_priv_handle_t *fs_priv_handle)
 
         /* Write updated file information header contents to flash for the current sector */
         if (syshal_flash_write(fs_priv->device, &fs_priv->alloc_unit_list[fs_priv_handle->curr_allocation_unit],
-                FS_PRIV_SECTOR_ADDR(sector),
+                FS_PRIV_SECTOR_ADDR(fs_priv_handle->curr_allocation_unit),
                 sizeof(fs_priv_file_info_t)))
         {
             return FS_ERROR_FLASH_MEDIA;
@@ -679,6 +686,7 @@ static int allocate_new_sector_to_file(fs_priv_handle_t *fs_priv_handle)
     fs_priv_handle->last_data_offset = 0;
     fs_priv_handle->curr_data_offset = 0;
     fs_priv_handle->curr_session_offset = 0;
+    fs_priv_handle->curr_session_value = 0;
 
     /* Write file information header contents to flash for new sector */
     if (syshal_flash_write(fs_priv->device, &fs_priv->alloc_unit_list[sector],
@@ -981,6 +989,9 @@ int fs_open(fs_t fs, fs_handle_t *handle, uint8_t file_id, fs_mode_t mode, uint8
             fs_priv_handle->curr_session_offset = find_eof(fs_priv, root,
                     &fs_priv_handle->curr_allocation_unit,
                     &fs_priv_handle->curr_data_offset);
+
+            /* Reset session pointer value */
+            fs_priv_handle->curr_session_value = fs_priv_handle->curr_data_offset;
 
             /* Page write cache should be marked empty */
             fs_priv_handle->last_data_offset = fs_priv_handle->curr_data_offset;

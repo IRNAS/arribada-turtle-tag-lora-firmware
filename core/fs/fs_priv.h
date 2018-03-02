@@ -114,7 +114,8 @@ typedef struct
     uint8_t         root_allocation_unit; /*!< Root sector of file */
     uint8_t         curr_allocation_unit; /*!< Current accessed sector of file */
     uint8_t         curr_session_offset;  /*!< Session offset to use */
-    uint32_t        last_data_offset;     /*!< read: last readable offset, write: last flush position */
+    uint32_t        curr_session_value;   /*!< Session offset value */
+    uint32_t        last_data_offset;     /*!< Read: last readable offset, Write: last flash write position */
     uint32_t        curr_data_offset;     /*!< Current read/write data offset in sector */
     uint8_t         page_cache[FS_PRIV_PAGE_SIZE]; /*!< Page align cache */
 } fs_priv_handle_t;
