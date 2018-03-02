@@ -24,9 +24,9 @@
 /* Constants */
 
 #define FS_FILE_ID_NONE    0xFF
-#define FS_FILE_CREATE     0x80 /*!< File create flag */
-#define FS_FILE_WRITEABLE  0x40 /*!< File is writeable flag */
-#define FS_FILE_CIRCULAR   0x20 /*!< File is circular flag */
+#define FS_FILE_CREATE     0x08 /*!< File create flag */
+#define FS_FILE_WRITEABLE  0x04 /*!< File is writeable flag */
+#define FS_FILE_CIRCULAR   0x02 /*!< File is circular flag */
 
 #define FS_NO_ERROR                   0
 #define FS_ERROR_FLASH_MEDIA         -1
@@ -68,14 +68,15 @@ typedef struct
 int fs_init(uint32_t device);
 int fs_term(uint32_t device);
 int fs_mount(uint32_t device, fs_t *fs);
+int fs_format(fs_t fs);
 int fs_open(fs_t fs, fs_handle_t *handle, uint8_t file_id, fs_mode_t mode, uint8_t *user_flags);
 int fs_close(fs_handle_t handle);
-int fs_write(fs_handle_t handle, void * const src, uint32_t size, uint32_t *written);
-int fs_read(fs_handle_t handle, const void *dest, uint32_t size, uint32_t *read);
+int fs_write(fs_handle_t handle, const void *src, uint32_t size, uint32_t *written);
+int fs_read(fs_handle_t handle, void *dest, uint32_t size, uint32_t *read);
 int fs_flush(fs_handle_t handle);
 int fs_protect(fs_t fs, uint8_t file_id);
 int fs_unprotect(fs_t fs, uint8_t file_id);
 int fs_delete(fs_t fs, uint8_t file_id);
-int fs_stat(fs_t fs, uint8_t file_id, const fs_stat_t *stat);
+int fs_stat(fs_t fs, uint8_t file_id, fs_stat_t *stat);
 
 #endif /* _FS_H_ */

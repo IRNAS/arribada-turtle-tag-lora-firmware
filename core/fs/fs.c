@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <string.h>
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -43,6 +44,43 @@ static fs_priv_handle_t fs_priv_handle_list[FS_PRIV_MAX_HANDLES];
 
 /* Static Functions */
 
+
+static inline uint8_t get_user_flags(fs_priv_t *fs_priv, uint8_t sector)
+{
+    return fs_priv->alloc_unit_list[sector].file_info.file_flags.user_flags;
+}
+
+static inline uint8_t get_mode_flags(fs_priv_t *fs_priv, uint8_t sector)
+{
+    return fs_priv->alloc_unit_list[sector].file_info.file_flags.mode_flags;
+}
+
+static inline uint8_t get_file_protect(fs_priv_t *fs_priv, uint8_t sector)
+{
+    return fs_priv->alloc_unit_list[sector].file_info.file_protect;
+}
+
+static inline uint32_t get_alloc_counter(fs_priv_t *fs_priv, uint8_t sector)
+{
+    return fs_priv->alloc_unit_list[sector].alloc_counter;
+}
+
+static inline uint8_t get_file_id(fs_priv_t *fs_priv, uint8_t sector)
+{
+    return fs_priv->alloc_unit_list[sector].file_info.file_id;
+}
+
+static inline bool is_last_allocation_unit(fs_priv_t *fs_priv, uint8_t sector)
+{
+    return (fs_priv->alloc_unit_list[sector].file_info.next_allocation_unit ==
+            (uint8_t)FS_PRIV_NOT_ALLOCATED);
+}
+
+static inline uint8_t next_allocation_unit(fs_priv_t *fs_priv, uint8_t sector)
+{
+    return fs_priv->alloc_unit_list[sector].file_info.next_allocation_unit;
+}
+
 /*! \brief Initialize private file system device structure.
  *
  * Scan through each sector and read the allocation unit
@@ -68,13 +106,15 @@ static int init_fs_priv(uint32_t device)
     fs_priv = &fs_priv_list[device];
     fs_priv->device = device;  /* Keep a copy of the device index */
 
-    /* Iterate through each sector and read the alloction unit header into
+    /* Iterate through each sector and read the allocation unit header into
      * our file system device structure.
      */
     for (uint8_t sector = 0; sector < FS_PRIV_MAX_SECTORS; sector++)
+    {
         if (syshal_flash_read(device, &fs_priv->alloc_unit_list[sector],
                 FS_PRIV_SECTOR_ADDR(sector), sizeof(fs_priv_alloc_unit_header_t)))
             return FS_ERROR_FLASH_MEDIA;
+    }
 
     /* TODO: we should probably implement some kind of file system
      * validation check here to avoid using a corrupt file system.
@@ -82,40 +122,23 @@ static int init_fs_priv(uint32_t device)
     return FS_NO_ERROR;
 }
 
-static inline uint8_t get_user_flags(fs_priv_t *fs_priv, uint8_t sector)
+/*! \brief Return the number of bytes cached on the file handle.
+ *
+ * \param fs_priv_handle[in] pointer to private flash handle.
+ * \return number of bytes cached which shall be limited to the cache size.
+ */
+static inline uint16_t cached_bytes(fs_priv_handle_t *fs_priv_handle)
 {
-    return fs_priv->alloc_unit_list[sector].file_info.file_flags.user_flags;
+    return (fs_priv_handle->curr_data_offset - fs_priv_handle->last_data_offset);
 }
 
-static inline uint8_t get_mode_flags(fs_priv_t *fs_priv, uint8_t sector)
+/*! \brief Ascertain the number of bytes free in the allocation unit.
+ *
+ * \param fs_priv_handle[in] pointer to private flash handle.
+ * \return integer number of bytes that may still be written.
+ */static inline uint32_t remaining_bytes(fs_priv_handle_t *fs_priv_handle)
 {
-    return fs_priv->alloc_unit_list[sector].file_info.file_flags.mode_flags;
-}
-
-static inline uint8_t get_file_protect(fs_priv_t *fs_priv, uint8_t sector)
-{
-    return fs_priv->alloc_unit_list[sector].file_info.file_protect;
-}
-
-static inline uint8_t get_alloc_counter(fs_priv_t *fs_priv, uint8_t sector)
-{
-    return fs_priv->alloc_unit_list[sector].alloc_counter;
-}
-
-static inline uint8_t get_file_id(fs_priv_t *fs_priv, uint8_t sector)
-{
-    return fs_priv->alloc_unit_list[sector].file_info.file_id;
-}
-
-static inline bool is_last_allocation_unit(fs_priv_t *fs_priv, uint8_t sector)
-{
-    return (fs_priv->alloc_unit_list[sector].file_info.next_allocation_unit ==
-            (uint8_t)FS_PRIV_NOT_ALLOCATED);
-}
-
-static inline uint8_t next_allocation_unit(fs_priv_t *fs_priv, uint8_t sector)
-{
-    return fs_priv->alloc_unit_list[sector].file_info.next_allocation_unit;
+    return (FS_PRIV_USABLE_SIZE - fs_priv_handle->curr_data_offset);
 }
 
 /*! \brief Find a free allocation unit (sector) in the file system.
@@ -129,7 +152,7 @@ static inline uint8_t next_allocation_unit(fs_priv_t *fs_priv, uint8_t sector)
  * \return \ref FS_PRIV_NOT_ALLOCATED if no free sector found
  * \return sector number if a free sector was found
  */
-static uint8_t find_free_allocation_unit(const fs_priv_t *fs_priv)
+static uint8_t find_free_allocation_unit(fs_priv_t *fs_priv)
 {
     uint8_t min_allocation_counter = (uint8_t)FS_PRIV_NOT_ALLOCATED;
     uint8_t free_sector = (uint8_t)FS_PRIV_NOT_ALLOCATED;
@@ -274,8 +297,12 @@ static uint8_t find_file_root(fs_priv_t *fs_priv, uint8_t file_id)
     uint8_t root = (uint8_t)FS_PRIV_NOT_ALLOCATED;
     uint8_t parent[FS_PRIV_MAX_SECTORS];
 
+    /* Do not allow FS_PRIV_NOT_ALLOCATED as file_id */
+    if ((uint8_t)FS_PRIV_NOT_ALLOCATED == file_id)
+        return FS_PRIV_NOT_ALLOCATED;
+
     /* Reset parent list to known values */
-    memset(parent, sizeof(parent), (uint8_t)FS_PRIV_NOT_ALLOCATED);
+    memset(parent, (uint8_t)FS_PRIV_NOT_ALLOCATED, sizeof(parent));
 
     /* Scan all sectors and build a list of parent nodes for each
      * sector allocated against the specified file_id
@@ -433,7 +460,7 @@ static uint8_t find_last_allocation_unit(fs_priv_t *fs_priv, uint8_t root)
  */
 static uint8_t find_eof(fs_priv_t *fs_priv, uint8_t root, uint8_t *last_alloc_unit, uint32_t *data_offset)
 {
-    *last_alloc_unit = find_last_allocation_unit(root);
+    *last_alloc_unit = find_last_allocation_unit(fs_priv, root);
     return find_next_session_offset(fs_priv, root, data_offset);
 }
 
@@ -480,7 +507,7 @@ static int erase_allocation_unit(fs_priv_t *fs_priv, uint8_t sector)
         return FS_ERROR_FLASH_MEDIA;
 
     /* Reset local copy of allocation unit header */
-    memset(&fs_priv->alloc_unit_list[sector], sizeof(fs_priv->alloc_unit_list[sector]), 0xFF);
+    memset(&fs_priv->alloc_unit_list[sector], 0xFF, sizeof(fs_priv->alloc_unit_list[sector]));
 
     /* Set allocation counter locally */
     fs_priv->alloc_unit_list[sector].alloc_counter = new_alloc_counter;
@@ -536,7 +563,6 @@ static int flush_page_cache(fs_priv_handle_t *fs_priv_handle)
  */
 static int update_session_offset(fs_priv_handle_t *fs_priv_handle)
 {
-    int ret;
     uint32_t address;
 
     /* Compute physical address for next write offset */
@@ -616,7 +642,7 @@ static int allocate_new_sector_to_file(fs_priv_handle_t *fs_priv_handle)
     fs_priv->alloc_unit_list[sector].file_info.file_id = fs_priv_handle->file_id;
     fs_priv->alloc_unit_list[sector].file_info.next_allocation_unit = (uint8_t)FS_PRIV_NOT_ALLOCATED;
     fs_priv->alloc_unit_list[sector].file_info.file_flags.mode_flags =
-            (fs_priv_handle->flags.mode_flags & FS_FILE_CIRCULAR) ? FS_PRIV_CIRCULAR : 0;
+            (fs_priv_handle->flags.mode_flags & FS_FILE_CIRCULAR);
     fs_priv->alloc_unit_list[sector].file_info.file_flags.user_flags =
             fs_priv_handle->flags.user_flags;
 
@@ -678,25 +704,6 @@ static inline bool is_full(fs_priv_handle_t *fs_priv_handle)
             fs_priv_handle->curr_data_offset >= FS_PRIV_USABLE_SIZE);
 }
 
-/*! \brief Return the number of bytes cached on the file handle.
- *
- * \param fs_priv_handle[in] pointer to private flash handle.
- * \return number of bytes cached which shall be limited to the cache size.
- */
-static inline uint16_t cached_bytes(fs_priv_handle_t *fs_priv_handle)
-{
-    return (fs_priv_handle->curr_data_offset - fs_priv_handle->last_data_offset);
-}
-
-/*! \brief Ascertain the number of bytes free in the allocation unit.
- *
- * \param fs_priv_handle[in] pointer to private flash handle.
- * \return integer number of bytes that may still be written.
- */static inline uint32_t remaining_bytes(fs_priv_handle_t *fs_priv_handle)
-{
-    return (FS_PRIV_USABLE_SIZE - fs_priv_handle->curr_data_offset);
-}
-
  /*! \brief Write data to a file handle through its cache.
   *
   * The cache fill policy ensures that the cache may never fill more
@@ -711,7 +718,7 @@ static inline uint16_t cached_bytes(fs_priv_handle_t *fs_priv_handle)
   * \return \ref FS_NO_ERROR on success.
   * \return \ref FS_ERROR_FLASH_MEDIA on a flash write error.
   */
-static int write_through_cache(fs_priv_handle_t *fs_priv_handle, void * const src, uint16_t size, uint16_t *written)
+static int write_through_cache(fs_priv_handle_t *fs_priv_handle, const void *src, uint16_t size, uint16_t *written)
 {
     uint16_t cached, page_boundary, sz;
 
@@ -876,7 +883,7 @@ int fs_format(fs_t fs)
     int ret;
     fs_priv_t *fs_priv = (fs_priv_t *)fs;
 
-    for (uint8_t sector; sector < FS_PRIV_MAX_SECTORS; sector++)
+    for (uint8_t sector = 0; sector < FS_PRIV_MAX_SECTORS; sector++)
     {
         ret = erase_allocation_unit(fs_priv, sector);
         if (ret) break;
@@ -941,14 +948,21 @@ int fs_open(fs_t fs, fs_handle_t *handle, uint8_t file_id, fs_mode_t mode, uint8
         return ret;
 
     /* Reset file handle */
-    fs_priv_handle->flags.mode_flags = mode;
-    fs_priv_handle->flags.user_flags = user_flags ? *user_flags : 0;
+    *handle = fs_priv_handle;
+    fs_priv_handle->file_id = file_id;
     fs_priv_handle->root_allocation_unit = (uint8_t)FS_PRIV_NOT_ALLOCATED;
 
     if (root != (uint8_t)FS_PRIV_NOT_ALLOCATED)
     {
         /* Existing file: populate file handle */
         fs_priv_handle->root_allocation_unit = root;
+        fs_priv_handle->flags.user_flags = get_user_flags(fs_priv, root);
+        fs_priv_handle->flags.mode_flags = get_mode_flags(fs_priv, root) | mode;
+
+        /* Retrieve existing user flags if requested */
+        if (user_flags)
+            *user_flags = fs_priv_handle->flags.user_flags;
+
         if ((mode & FS_FILE_WRITEABLE) == 0)
         {
             /* Read only - reset to beginning of root sector */
@@ -974,13 +988,15 @@ int fs_open(fs_t fs, fs_handle_t *handle, uint8_t file_id, fs_mode_t mode, uint8
     }
     else
     {
-        /* Allocate new sector to file handle */
-        allocate_new_sector_to_file(fs_priv_handle);
-    }
+        /* Set file flags since we are creating a new file */
+        fs_priv_handle->flags.mode_flags = mode;
+        fs_priv_handle->flags.user_flags = user_flags ? *user_flags : 0;
 
-    /* Free handle has been allocated */
-    open_cleanup:
-    free_handle(fs_handle_t *handle);
+        /* Allocate new sector to file handle */
+        ret = allocate_new_sector_to_file(fs_priv_handle);
+        if (ret)
+            free_handle(fs_priv_handle);
+    }
 
     return ret;
 }
@@ -1033,18 +1049,19 @@ int fs_close(fs_handle_t handle)
  * \return \ref FS_ERROR_FILESYSTEM_FULL unable to write all data as the
  * file system is full.
  */
-int fs_write(fs_handle_t handle, void * const src, uint32_t size, uint32_t *written)
+int fs_write(fs_handle_t handle, const void *src, uint32_t size, uint32_t *written)
 {
     int ret = FS_NO_ERROR;
     fs_priv_handle_t *fs_priv_handle = (fs_priv_handle_t *)handle;
-    fs_priv_t *fs_priv = fs_priv_handle->fs_priv;
     uint16_t write_size, actual_write;
+
+    /* Reset counter */
+    *written = 0;
 
     /* Check the file is writable */
     if ((fs_priv_handle->flags.mode_flags & FS_FILE_WRITEABLE) == 0)
         return FS_ERROR_INVALID_MODE;
 
-    *written = 0;
     while (size > 0 && !ret)
     {
         /* Check if the current sector is full */
@@ -1097,10 +1114,13 @@ int fs_write(fs_handle_t handle, void * const src, uint32_t size, uint32_t *writ
  * \return \ref FS_ERROR_INVALID_MODE if the file handle is not readable.
  * \return \ref FS_ERROR_END_OF_FILE if the end of file has already been reached.
  */
-int fs_read(fs_handle_t handle, const void *dest, uint32_t size, uint32_t *read)
+int fs_read(fs_handle_t handle, void *dest, uint32_t size, uint32_t *read)
 {
     fs_priv_handle_t *fs_priv_handle = (fs_priv_handle_t *)handle;
     fs_priv_t *fs_priv = fs_priv_handle->fs_priv;
+
+    /* Reset counter */
+    *read = 0;
 
     /* Check the file is read only */
     if (fs_priv_handle->flags.mode_flags & FS_FILE_WRITEABLE)
@@ -1110,17 +1130,17 @@ int fs_read(fs_handle_t handle, const void *dest, uint32_t size, uint32_t *read)
     if (is_eof(fs_priv_handle))
         return FS_ERROR_END_OF_FILE;
 
-    *read = 0;
     while (size > 0)
     {
         /* Check to see if we need to move to the next sector in the file chain */
-        if (fs_priv_handle->last_data_offset == fs_priv_handle->curr_data_offset &&
-                !is_last_allocation_unit(fs_priv, fs_priv_handle->curr_allocation_unit))
+        if (fs_priv_handle->last_data_offset == fs_priv_handle->curr_data_offset)
         {
-            uint8_t sector = next_allocation_unit(fs_priv, fs_priv_handle->curr_allocation_unit);
+            /* Check if we reached the end of the file chain */
+            if (is_last_allocation_unit(fs_priv, fs_priv_handle->curr_allocation_unit))
+                break;
 
-            if ((uint8_t)FS_PRIV_NOT_ALLOCATED == sector)
-                break; /* End of file has just been reached */
+            /* Not the end of the file chain */
+            uint8_t sector = next_allocation_unit(fs_priv, fs_priv_handle->curr_allocation_unit);
 
             /* Find the last known write position in this sector so we
              * can check for when to advance to next sector or catch EOF
@@ -1167,7 +1187,6 @@ int fs_read(fs_handle_t handle, const void *dest, uint32_t size, uint32_t *read)
 int fs_flush(fs_handle_t handle)
 {
     fs_priv_handle_t *fs_priv_handle = (fs_priv_handle_t *)handle;
-    fs_priv_t *fs_priv = fs_priv_handle->fs_priv;
 
     /* Make sure the file is writeable */
     if ((fs_priv_handle->flags.mode_flags & FS_FILE_WRITEABLE) == 0)
@@ -1230,7 +1249,6 @@ int fs_protect(fs_t fs, uint8_t file_id)
  */
 int fs_unprotect(fs_t fs, uint8_t file_id)
 {
-    int ret;
     fs_priv_t *fs_priv = (fs_priv_t *)fs;
 
     /* Find the root allocation unit for this file */
@@ -1319,7 +1337,7 @@ int fs_delete(fs_t fs, uint8_t file_id)
  * \return \ref FS_ERROR_FILE_NOT_FOUND if the \ref file_id was not
  * found.
  */
-int fs_stat(fs_t fs, uint8_t file_id, const fs_stat_t *stat)
+int fs_stat(fs_t fs, uint8_t file_id, fs_stat_t *stat)
 {
     fs_priv_t *fs_priv = (fs_priv_t *)fs;
 
@@ -1328,7 +1346,7 @@ int fs_stat(fs_t fs, uint8_t file_id, const fs_stat_t *stat)
         stat->size = 0; /* Reset size to zero before we start */
 
         /* Find the total amount of free space on the disk */
-        for (uint8_t sector; sector < FS_PRIV_MAX_SECTORS; sector++)
+        for (uint8_t sector = 0; sector < FS_PRIV_MAX_SECTORS; sector++)
         {
             if (get_file_id(fs_priv, sector) == (uint8_t)FS_PRIV_NOT_ALLOCATED)
             {

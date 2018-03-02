@@ -20,7 +20,6 @@
 
 /* Constants */
 
-#define FS_PRIV_CIRCULAR                1
 #define FS_PRIV_NOT_ALLOCATED          -1
 
 #ifndef FS_PRIV_MAX_DEVICES

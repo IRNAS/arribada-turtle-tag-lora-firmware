@@ -1,0 +1,6 @@
+:cmock:
+  :plugins:
+     - :callback
+     - :ignore
+  :ignore:
+      :args_only
