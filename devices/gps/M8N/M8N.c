@@ -19,6 +19,7 @@
 #include <string.h>
 #include "M8N.h"
 #include "syshal_gps.h"
+#include "syshal_uart.h"
 #include "debug.h"
 
 // Private functions
@@ -26,7 +27,7 @@ static int syshal_gps_parseRxBuffer_priv(UBX_Packet_t * packet);
 static void syshal_gps_process_nav_status_priv(UBX_Packet_t * packet);
 static void syshal_gps_process_nav_posllh_priv(UBX_Packet_t * packet);
 
-UART_t uart_handle;
+uint32_t uart_handle;
 bool gps_locked = false; // Do we currently have a GPS lock
 bool gps_newData = false; // Keep track of if data is fresh/new
 
@@ -39,7 +40,7 @@ struct
     int32_t  hMSL;   // Height above mean sea level
 } lastReadLocation; // Last known location
 
-void syshal_gps_init(UART_t instance)
+void syshal_gps_init(uint32_t instance)
 {
     uart_handle = instance;
     gps_locked = false;
@@ -47,14 +48,27 @@ void syshal_gps_init(UART_t instance)
     memset(&lastReadLocation, 0, sizeof(lastReadLocation)); // Clear structure
 }
 
-// Returns if there's any new location data since the last read
-bool syshal_gps_locationAvailable(void)
+/**
+ * @brief      Is there a new location update that hasn't been read?
+ *
+ * @return     True / False
+ */
+bool syshal_gps_location_available(void)
 {
     return gps_newData;
 }
 
-// Returns true if the location received has been previously unread
-bool syshal_gps_getLocation(uint32_t * iTOW, int32_t * longitude, int32_t * latitude, int32_t * height)
+/**
+ * @brief      Get the most recent location from the GPS
+ *
+ * @param      iTOW       The tow
+ * @param      longitude  The longitude
+ * @param      latitude   The latitude
+ * @param      height     The height
+ *
+ * @return     Returns true if the location received has been previously unread
+ */
+bool syshal_gps_get_location(uint32_t * iTOW, int32_t * longitude, int32_t * latitude, int32_t * height)
 {
 
     *iTOW = lastReadLocation.iTOW;
@@ -81,6 +95,11 @@ bool syshal_gps_getLocation(uint32_t * iTOW, int32_t * longitude, int32_t * lati
     send_ubx_packet();
 }*/
 
+/**
+ * @brief      Does the GPS have a satallite lock
+ *
+ * @return     true if locked
+ */
 inline bool syshal_gps_locked(void)
 {
     return gps_locked;
@@ -220,7 +239,7 @@ static int syshal_gps_parseRxBuffer_priv(UBX_Packet_t * packet)
     // Look for SYNC1 byte
     for (uint32_t i = 0; i < bytesInRxBuffer; ++i)
     {
-        if (!syshal_uart_peekAt(uart_handle, &packet->syncChars[0], 0))
+        if (!syshal_uart_peek_at(uart_handle, &packet->syncChars[0], 0))
             return GPS_UART_ERROR_INSUFFICIENT_BYTES;
 
         if (UBX_PACKET_SYNC_CHAR1 == packet->syncChars[0])
@@ -235,7 +254,7 @@ static int syshal_gps_parseRxBuffer_priv(UBX_Packet_t * packet)
 label_sync_start:
 
     // Get the next character and see if it is the expected SYNC2
-    if (!syshal_uart_peekAt(uart_handle, &packet->syncChars[1], 1))
+    if (!syshal_uart_peek_at(uart_handle, &packet->syncChars[1], 1))
         return GPS_UART_ERROR_INSUFFICIENT_BYTES;
 
     if (UBX_PACKET_SYNC_CHAR2 != packet->syncChars[1])
@@ -250,10 +269,10 @@ label_sync_start:
     // Extract length field and check it is received fully
     uint8_t lengthLower, lengthUpper;
 
-    if (!syshal_uart_peekAt(uart_handle, &lengthLower, 4))
+    if (!syshal_uart_peek_at(uart_handle, &lengthLower, 4))
         return GPS_UART_ERROR_INSUFFICIENT_BYTES;
 
-    if (!syshal_uart_peekAt(uart_handle, &lengthUpper, 5))
+    if (!syshal_uart_peek_at(uart_handle, &lengthUpper, 5))
         return GPS_UART_ERROR_INSUFFICIENT_BYTES;
 
     uint16_t payloadLength = (uint16_t)lengthLower | ((uint16_t)lengthUpper << 8);

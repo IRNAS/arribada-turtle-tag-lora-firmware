@@ -1,31 +1,44 @@
-/* syshal_flash.h - HAL for flash device
- *
- * Copyright (C) 2018 Arribada
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
+/**
+  ******************************************************************************
+  * @file     syshal_i2c.c
+  * @brief    System hardware abstraction layer for I2C.
+  ******************************************************************************
+  * @attention
+  *
+  * <h2><center>&copy; COPYRIGHT(c) 2018 Arribada</center></h2>
+  *
+  * This program is free software: you can redistribute it and/or modify
+  * it under the terms of the GNU General Public License as published by
+  * the Free Software Foundation, either version 3 of the License, or
+  * (at your option) any later version.
+  *
+  * This program is distributed in the hope that it will be useful,
+  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  * GNU General Public License for more details.
+  *
+  * You should have received a copy of the GNU General Public License
+  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+  *
+  ******************************************************************************
+  */
 
 #include "stm32f0xx_hal.h"
 #include "syshal_gpio.h"
 #include "syshal_i2c.h"
+#include "bsp.h"
 #include "debug.h"
 
 // Private variables
 static I2C_HandleTypeDef hi2c1;
 //static I2C_HandleTypeDef hi2c2;
 
-void syshal_i2c_init(I2C_t instance)
+/**
+ * @brief      Initialise the given I2C instance
+ *
+ * @param[in]  instance  The I2C instance
+ */
+void syshal_i2c_init(uint32_t instance)
 {
     if (I2C_1 == instance)
     {
@@ -46,7 +59,15 @@ void syshal_i2c_init(I2C_t instance)
     }*/
 }
 
-void syshal_i2c_transfer(I2C_t instance, uint8_t slaveAddress, uint8_t * data, uint32_t size)
+/**
+ * @brief      Transfer the given data to a slave
+ *
+ * @param[in]  instance      The I2C instance
+ * @param[in]  slaveAddress  The slave 8-bit address
+ * @param[in]  data          The data buffer to be sent
+ * @param[in]  size          The size of the data buffer in bytes
+ */
+void syshal_i2c_transfer(uint32_t instance, uint8_t slaveAddress, const uint8_t * data, uint32_t size)
 {
     HAL_StatusTypeDef status;
 
@@ -62,7 +83,17 @@ void syshal_i2c_transfer(I2C_t instance, uint8_t slaveAddress, uint8_t * data, u
     }
 }
 
-uint32_t syshal_i2c_receive(I2C_t instance, uint8_t slaveAddress, uint8_t * data, uint32_t size)
+/**
+ * @brief      Receive the given data from a slave
+ *
+ * @param[in]  instance      The I2C instance
+ * @param[in]  slaveAddress  The slave 8-bit address
+ * @param[out] data          The data buffer to be read into
+ * @param[in]  size          The size of the data to be read in bytes
+ *
+ * @return     The number of bytes read
+ */
+uint32_t syshal_i2c_receive(uint32_t instance, uint8_t slaveAddress, uint8_t * data, uint32_t size)
 {
     HAL_StatusTypeDef status;
 
@@ -82,7 +113,18 @@ uint32_t syshal_i2c_receive(I2C_t instance, uint8_t slaveAddress, uint8_t * data
     return size;
 }
 
-uint32_t syshal_i2c_read_reg(I2C_t instance, uint8_t slaveAddress, uint8_t regAddress, uint8_t * data, uint32_t size)
+/**
+ * @brief      Read the given register
+ *
+ * @param[in]  instance      The I2C instance
+ * @param[in]  slaveAddress  The slave 8-bit address
+ * @param[in]  regAddress    The register address
+ * @param[out] data          The data buffer to be read into
+ * @param[in]  size          The size of the data to be read in bytes
+ *
+ * @return     The number of bytes read
+ */
+uint32_t syshal_i2c_read_reg(uint32_t instance, uint8_t slaveAddress, uint8_t regAddress, uint8_t * data, uint32_t size)
 {
     HAL_StatusTypeDef status;
 
@@ -102,7 +144,16 @@ uint32_t syshal_i2c_read_reg(I2C_t instance, uint8_t slaveAddress, uint8_t regAd
     return size;
 }
 
-void syshal_i2c_write_reg(I2C_t instance, uint8_t slaveAddress, uint8_t regAddress, uint8_t * data, uint32_t size)
+/**
+ * @brief      Write to the given register
+ *
+ * @param[in]  instance      The I2C instance
+ * @param[in]  slaveAddress  The slave 8-bit address
+ * @param[in]  regAddress    The register address
+ * @param[in]  data          The data buffer to be sent
+ * @param[in]  size          The size of the data buffer in bytes
+ */
+void syshal_i2c_write_reg(uint32_t instance, uint8_t slaveAddress, uint8_t regAddress, const uint8_t * data, uint32_t size)
 {
     HAL_StatusTypeDef status;
 
@@ -117,7 +168,6 @@ void syshal_i2c_write_reg(I2C_t instance, uint8_t slaveAddress, uint8_t regAddre
         DEBUG_PR_ERROR("%s failed with %d", __FUNCTION__, status);
     }
 }
-
 
 // Implement MSP hooks that are called by stm32f0xx_hal_i2c
 void HAL_I2C_MspInit(I2C_HandleTypeDef * hi2c)

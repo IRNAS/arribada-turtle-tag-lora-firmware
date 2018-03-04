@@ -18,13 +18,14 @@
 
 // Datasheet: http://www.ti.com/product/bq27621-g1
 
+#include <stdbool.h>
 #include "BQ27621.h"
+#include "syshal_i2c.h"
 #include "syshal_batt.h"
 #include "syshal_time.h"
 #include "debug.h"
-#include <stdbool.h>
 
-static I2C_t I2C_handle;
+static uint32_t I2C_handle;
 
 //////////////////////////////////////// Internal functions ////////////////////////////////////////
 
@@ -66,7 +67,7 @@ static int BQ27621_cfgupdate(bool active)
 
     do
     {
-        syshal_time_delayMs(25);
+        syshal_time_delay_ms(25);
         status = BQ27621_read_flags();
     }
     while (!!(status & BQ27621_FLAG_CFGUP) != active && --try);
@@ -103,7 +104,7 @@ static inline int BQ27621_soft_reset(void)
 
 //////////////////////////////////////// Exposed functions ////////////////////////////////////////
 
-void syshal_batt_init(I2C_t instance)
+void syshal_batt_init(uint32_t instance)
 {
     I2C_handle = instance;
 
@@ -122,11 +123,11 @@ uint16_t syshal_batt_voltage(void)
     return BQ27621_read(BQ27621_REG_VOLT);
 }
 
-power_state_t syshal_batt_state(void)
+syshal_batt_state_t syshal_batt_state(void)
 {
     // WARN this would return POWER_SUPPLY_CAPACITY_LEVEL_NORMAL if the BQ27621 was unresponsive
 
-    power_state_t level;
+    syshal_batt_state_t level;
 
     uint16_t flags = BQ27621_read_flags();
 

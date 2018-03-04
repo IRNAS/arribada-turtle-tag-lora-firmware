@@ -25,7 +25,7 @@ void syshal_uart_init(UART_t instance);
 void syshal_uart_term(UART_t instance);
 void syshal_uart_transfer(UART_t instance, uint8_t * data, uint32_t size);
 uint32_t syshal_uart_receive(UART_t instance, uint8_t * data, uint32_t size);
-bool syshal_uart_peekAt(UART_t instance, uint8_t * byte, uint32_t location);
+bool syshal_uart_peek_at(UART_t instance, uint8_t * byte, uint32_t location);
 uint32_t syshal_uart_available(UART_t instance);
 
 #endif /* _SYSHAL_UART_H_ */

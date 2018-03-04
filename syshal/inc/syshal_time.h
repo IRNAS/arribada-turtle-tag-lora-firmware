@@ -19,11 +19,11 @@
 #ifndef _SYSHAL_TIME_H_
 #define _SYSHAL_TIME_H_
 
-uint32_t syshal_time_getTicksMs(void);
-void syshal_time_delayMs(uint32_t ms);
+uint32_t syshal_time_get_ticks_ms(void);
+void syshal_time_delay_ms(uint32_t ms);
 
 #define TICKS_PER_SECOND ( 1000 )
 #define ROUND_NEAREST_MULTIPLE(value, magnitude) ( (value + magnitude / 2) / magnitude ) // Integer round to nearest manitude
-#define TIME_IN_SECONDS ( ROUND_NEAREST_MULTIPLE(syshal_time_getTicksMs(), TICKS_PER_SECOND) ) // Convert millisecond time to seconds
+#define TIME_IN_SECONDS ( ROUND_NEAREST_MULTIPLE(syshal_time_get_ticks_ms(), TICKS_PER_SECOND) ) // Convert millisecond time to seconds
 
 #endif /* _SYSHAL_TIME_H_ */

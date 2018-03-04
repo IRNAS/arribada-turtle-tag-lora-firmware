@@ -114,7 +114,7 @@ uint32_t syshal_uart_receive(UART_t instance, uint8_t * data, uint32_t size)
 }
 
 // Peek at character at location at nth depth in rx buffer (0 being the oldest/top value of the FIFO). Return true on success
-bool syshal_uart_peekAt(UART_t instance, uint8_t * byte, uint32_t location)
+bool syshal_uart_peek_at(UART_t instance, uint8_t * byte, uint32_t location)
 {
     *byte = rb_peek_at(&rx_buffer[instance], location);//rb_peek(&rx_buffer[instance]);//rb_peek_at(&rx_buffer[instance], location);
 

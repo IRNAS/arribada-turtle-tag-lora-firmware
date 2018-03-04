@@ -24,8 +24,8 @@ typedef enum
     POWER_STOP,    // Lowest power consumption while all the SRAM and registers are kept
     POWER_SLEEP,   // Only the CPU clock is stopped
     POWER_STANDBY, // The lowest power consumption
-} power_level_t;
+} syshal_pmu_power_level_t;
 
-void syshal_pmu_setLevel(power_level_t level);
+void syshal_pmu_set_level(syshal_pmu_power_level_t level);
 
 #endif /* _SYSHAL_PMU_H_ */

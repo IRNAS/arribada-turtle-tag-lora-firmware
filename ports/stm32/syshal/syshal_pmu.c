@@ -1,25 +1,38 @@
-/* Copyright (C) 2018 Arribada
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
+/**
+  ******************************************************************************
+  * @file     syshal_pmu.c
+  * @brief    System hardware abstraction layer for sleep states.
+  ******************************************************************************
+  * @attention
+  *
+  * <h2><center>&copy; COPYRIGHT(c) 2018 Arribada</center></h2>
+  *
+  * This program is free software: you can redistribute it and/or modify
+  * it under the terms of the GNU General Public License as published by
+  * the Free Software Foundation, either version 3 of the License, or
+  * (at your option) any later version.
+  *
+  * This program is distributed in the hope that it will be useful,
+  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  * GNU General Public License for more details.
+  *
+  * You should have received a copy of the GNU General Public License
+  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+  *
+  ******************************************************************************
+  */
 
 #include "bsp.h"
 #include "syshal_pmu.h"
 #include "debug.h"
 
-// Sets the desired power mode
-void syshal_pmu_setLevel(power_level_t level)
+/**
+ * @brief      Set the desired power mode
+ *
+ * @param[in]  level  The power level
+ */
+void syshal_pmu_set_level(syshal_pmu_power_level_t level)
 {
 
     switch (level)

@@ -19,16 +19,16 @@
 #ifndef _SYSHAL_GPIO_H_
 #define _SYSHAL_GPIO_H_
 
+#include <stdint.h>
 #include <stdbool.h>
-#include "bsp.h"
 
-void syshal_gpio_init(GPIO_Pins_t pin);
-void syshal_gpio_term(GPIO_Pins_t pin);
-void syshal_gpio_enableInterrupt(GPIO_Pins_t pin, void (*callbackFunc)(void));
-void syshal_gpio_disableInterrupt(GPIO_Pins_t pin);
-void syshal_gpio_setOutputLow(GPIO_Pins_t pin);
-void syshal_gpio_setOutputHigh(GPIO_Pins_t pin);
-void syshal_gpio_setOutputToggle(GPIO_Pins_t pin);
-bool syshal_gpio_getInput(GPIO_Pins_t pin);
+void syshal_gpio_init(uint32_t pin);
+void syshal_gpio_term(uint32_t pin);
+void syshal_gpio_enable_interrupt(uint32_t pin, void (*callbackFunc)(void));
+void syshal_gpio_disable_interrupt(uint32_t pin);
+void syshal_gpio_set_output_low(uint32_t pin);
+void syshal_gpio_set_output_high(uint32_t pin);
+void syshal_gpio_set_output_toggle(uint32_t pin);
+bool syshal_gpio_get_input(uint32_t pin);
 
 #endif /* _SYSHAL_GPIO_H_ */

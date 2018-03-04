@@ -19,21 +19,21 @@
 #ifndef _SYSHAL_BATT_H_
 #define _SYSHAL_BATT_H_
 
-#include "syshal_i2c.h"
+#include <stdint.h>
 
-typedef enum {
-	POWER_SUPPLY_CAPACITY_LEVEL_UNKNOWN,
-	POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL,
-	POWER_SUPPLY_CAPACITY_LEVEL_LOW,
-	POWER_SUPPLY_CAPACITY_LEVEL_NORMAL,
-	POWER_SUPPLY_CAPACITY_LEVEL_HIGH,
-	POWER_SUPPLY_CAPACITY_LEVEL_FULL,
-} power_state_t;
+typedef enum
+{
+    POWER_SUPPLY_CAPACITY_LEVEL_UNKNOWN,
+    POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL,
+    POWER_SUPPLY_CAPACITY_LEVEL_LOW,
+    POWER_SUPPLY_CAPACITY_LEVEL_NORMAL,
+    POWER_SUPPLY_CAPACITY_LEVEL_HIGH,
+    POWER_SUPPLY_CAPACITY_LEVEL_FULL,
+} syshal_batt_state_t;
 
-void syshal_batt_init(I2C_t instance);
+void syshal_batt_init(uint32_t instance);
 uint16_t syshal_batt_temp(void);
 uint16_t syshal_batt_voltage(void);
-
-power_state_t syshal_batt_state(void);
+syshal_batt_state_t syshal_batt_state(void);
 
 #endif /* _SYSHAL_BATT_H_ */

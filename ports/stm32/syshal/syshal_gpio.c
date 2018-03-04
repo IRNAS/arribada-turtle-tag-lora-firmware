@@ -1,22 +1,37 @@
-/* Copyright (C) 2018 Arribada
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
+/**
+  ******************************************************************************
+  * @file     syshal_gpio.c
+  * @brief    System hardware abstraction layer for GPIO.
+  ******************************************************************************
+  * @attention
+  *
+  * <h2><center>&copy; COPYRIGHT(c) 2018 Arribada</center></h2>
+  *
+  * This program is free software: you can redistribute it and/or modify
+  * it under the terms of the GNU General Public License as published by
+  * the Free Software Foundation, either version 3 of the License, or
+  * (at your option) any later version.
+  *
+  * This program is distributed in the hope that it will be useful,
+  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  * GNU General Public License for more details.
+  *
+  * You should have received a copy of the GNU General Public License
+  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+  *
+  ******************************************************************************
+  */
 
 #include "syshal_gpio.h"
+#include "bsp.h"
 
-void syshal_gpio_init(GPIO_Pins_t pin)
+/**
+ * @brief      Initialise the given GPIO pin
+ *
+ * @param[in]  pin   The pin
+ */
+void syshal_gpio_init(uint32_t pin)
 {
 
     if (GPIOA == GPIO_Inits[pin].Port)
@@ -32,28 +47,54 @@ void syshal_gpio_init(GPIO_Pins_t pin)
 
 }
 
-// De-initialise the GPIOx peripheral registers to their default reset values
-void syshal_gpio_term(GPIO_Pins_t pin)
+/**
+ * @brief      De-initialise the GPIOx peripheral registers to their default reset values
+ *
+ * @param[in]  pin   The pin
+ */
+void syshal_gpio_term(uint32_t pin)
 {
     HAL_GPIO_DeInit(GPIO_Inits[pin].Port, GPIO_Inits[pin].Init.Pin);
 }
 
-void syshal_gpio_setOutputToggle(GPIO_Pins_t pin)
+/**
+ * @brief      Toggle the given GPIO output state
+ *
+ * @param[in]  pin   The pin
+ */
+void syshal_gpio_set_output_toggle(uint32_t pin)
 {
     HAL_GPIO_TogglePin(GPIO_Inits[pin].Port, GPIO_Inits[pin].Init.Pin);
 }
 
-void syshal_gpio_setOutputLow(GPIO_Pins_t pin)
+/**
+ * @brief      Set the given GPIO pin output to low
+ *
+ * @param[in]  pin   The pin
+ */
+void syshal_gpio_set_output_low(uint32_t pin)
 {
     HAL_GPIO_WritePin(GPIO_Inits[pin].Port, GPIO_Inits[pin].Init.Pin, GPIO_PIN_RESET);
 }
 
-void syshal_gpio_setOutputHigh(GPIO_Pins_t pin)
+/**
+ * @brief      Set the given GPIO pin output to high
+ *
+ * @param[in]  pin   The pin
+ */
+void syshal_gpio_set_output_high(uint32_t pin)
 {
     HAL_GPIO_WritePin(GPIO_Inits[pin].Port, GPIO_Inits[pin].Init.Pin, GPIO_PIN_SET);
 }
 
-bool syshal_gpio_getInput(GPIO_Pins_t pin)
+/**
+ * @brief      Get the given level on the specified GPIO pin
+ *
+ * @param[in]  pin   The pin
+ *
+ * @return     true for high, false for low
+ */
+bool syshal_gpio_get_input(uint32_t pin)
 {
     return ( (bool) HAL_GPIO_ReadPin(GPIO_Inits[pin].Port, GPIO_Inits[pin].Init.Pin) );
 }

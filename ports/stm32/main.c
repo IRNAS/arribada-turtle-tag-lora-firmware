@@ -60,7 +60,6 @@ int main(void)
 
     while (1)
     {
-        syshal_gpio_setOutputToggle(GPIO_LED3);
 
         if (syshal_gps_locked())
             GPS_lock_state = true;
@@ -83,12 +82,14 @@ int main(void)
 
         GPS_last_state = GPS_lock_state;
 
-        if (GPS_lock_state && syshal_gps_locationAvailable())
+        if (GPS_lock_state && syshal_gps_location_available())
         {
             uint32_t iTOW;
             int32_t longitude, latitude, height;
-            syshal_gps_getLocation(&iTOW, &longitude, &latitude, &height);
+            syshal_gps_get_location(&iTOW, &longitude, &latitude, &height);
             DEBUG_PR_INFO("New Location - time: %u ms, Long: %dE-7 deg, Lat: %dE-7 deg, Height: %d mm", iTOW, longitude, latitude, height);
+
+            syshal_gpio_set_output_toggle(GPIO_LED3);
         }
 
         syshal_gps_tick();
@@ -141,8 +142,8 @@ void _Error_Handler(char * file, int line)
     while (1)
     {
         // Toggle LED3 fast for error
-        syshal_gpio_setOutputToggle(GPIO_LED3);
-        syshal_time_delayMs(100);
+        syshal_gpio_set_output_toggle(GPIO_LED3);
+        syshal_time_delay_ms(100);
     }
 }
 

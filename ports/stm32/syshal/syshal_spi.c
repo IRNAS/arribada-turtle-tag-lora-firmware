@@ -1,18 +1,27 @@
-/* Copyright (C) 2018 Arribada
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
+/**
+  ******************************************************************************
+  * @file     syshal_spi.c
+  * @brief    System hardware abstraction layer for SPI.
+  ******************************************************************************
+  * @attention
+  *
+  * <h2><center>&copy; COPYRIGHT(c) 2018 Arribada</center></h2>
+  *
+  * This program is free software: you can redistribute it and/or modify
+  * it under the terms of the GNU General Public License as published by
+  * the Free Software Foundation, either version 3 of the License, or
+  * (at your option) any later version.
+  *
+  * This program is distributed in the hope that it will be useful,
+  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  * GNU General Public License for more details.
+  *
+  * You should have received a copy of the GNU General Public License
+  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+  *
+  ******************************************************************************
+  */
 
 #include "stm32f0xx_hal.h"
 #include "syshal_gpio.h"
@@ -23,6 +32,11 @@
 static SPI_HandleTypeDef hspi1;
 static SPI_HandleTypeDef hspi2;
 
+/**
+ * @brief      Initialise the given SPI instance
+ *
+ * @param[in]  instance  The SPI instance
+ */
 void syshal_spi_init(SPI_t instance)
 {
     if (SPI_1 == instance)
@@ -44,6 +58,13 @@ void syshal_spi_init(SPI_t instance)
     }
 }
 
+/**
+ * @brief      Transfer the given data on SPI
+ *
+ * @param[in]  instance  The SPI instance
+ * @param[in]  data      The data buffer to be sent
+ * @param[in]  size      The size of the data buffer in bytes
+ */
 void syshal_spi_transfer(SPI_t instance, uint8_t * data, uint32_t size)
 {
     HAL_StatusTypeDef status;
@@ -60,6 +81,15 @@ void syshal_spi_transfer(SPI_t instance, uint8_t * data, uint32_t size)
     }
 }
 
+/**
+ * @brief      Receive data from SPI
+ *
+ * @param[in]  instance  The SPI instance
+ * @param[out] data      The data buffer to be read into
+ * @param[in]  size      The size of the data to be read in bytes
+ *
+ * @return     { description_of_the_return_value }
+ */
 uint32_t syshal_spi_receive(SPI_t instance, uint8_t * data, uint32_t size)
 {
     HAL_StatusTypeDef status;
