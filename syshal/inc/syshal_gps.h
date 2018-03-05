@@ -22,11 +22,18 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-void syshal_gps_init(uint32_t instance);
+typedef enum
+{
+    SYSHAL_GPS_EVENT_LOCK_MADE,
+    SYSHAL_GPS_EVENT_LOCK_LOST,
+    SYSHAL_GPS_EVENT_NEW_DATA
+} syshal_gps_event_t;
+
+void syshal_gps_init(void);
 void syshal_gps_shutdown(void);
-bool syshal_gps_locked(void);
-bool syshal_gps_location_available(void);
-bool syshal_gps_get_location(uint32_t * iTOW, int32_t * longitude, int32_t * latitude, int32_t * height);
+void syshal_gps_get_location(uint32_t * iTOW, int32_t * longitude, int32_t * latitude, int32_t * height);
 void syshal_gps_tick(void);
+
+void syshal_gps_callback(syshal_gps_event_t event);
 
 #endif /* _SYSHAL_GPS_H_ */

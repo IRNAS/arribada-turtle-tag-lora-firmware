@@ -32,6 +32,27 @@
 // Private function prototypes -----------------------------------------------
 void SystemClock_Config(void);
 
+// Callback function overrides
+void syshal_gps_callback(syshal_gps_event_t event)
+{
+    switch (event)
+    {
+        case SYSHAL_GPS_EVENT_LOCK_MADE:
+            DEBUG_PR_SYS("GPS lock made");
+            break;
+        case SYSHAL_GPS_EVENT_LOCK_LOST:
+            DEBUG_PR_SYS("GPS lock lost");
+            break;
+        case SYSHAL_GPS_EVENT_NEW_DATA:
+            __NOP(); // Labels can only be followed by statements
+            uint32_t iTOW;
+            int32_t longitude, latitude, height;
+            syshal_gps_get_location(&iTOW, &longitude, &latitude, &height);
+            DEBUG_PR_INFO("New Location - time: %u ms, Long: %dE-7 deg, Lat: %dE-7 deg, Height: %d mm", iTOW, longitude, latitude, height);
+            break;
+    }
+}
+
 int main(void)
 {
 
@@ -48,20 +69,17 @@ int main(void)
     //syshal_spi_init(SPI_1);
     //syshal_i2c_init(I2C_1);
     //syshal_batt_init(I2C_1);
-    syshal_gps_init(UART_1);
+    syshal_gps_init();
 
     // Print General System Info
     DEBUG_PR_SYS("Arribada Tracker Device");
     DEBUG_PR_SYS("Version:  %s", GIT_VERSION);
     DEBUG_PR_SYS("Compiled: %s %s With %s", COMPILE_DATE, COMPILE_TIME, COMPILER_NAME);
 
-    bool GPS_lock_state = false;
-    bool GPS_last_state = false;
-
     while (1)
     {
 
-        if (syshal_gps_locked())
+        /*if (syshal_gps_locked())
             GPS_lock_state = true;
         else
             GPS_lock_state = false;
@@ -90,7 +108,7 @@ int main(void)
             DEBUG_PR_INFO("New Location - time: %u ms, Long: %dE-7 deg, Lat: %dE-7 deg, Height: %d mm", iTOW, longitude, latitude, height);
 
             syshal_gpio_set_output_toggle(GPIO_LED3);
-        }
+        }*/
 
         syshal_gps_tick();
 

@@ -27,9 +27,8 @@ static int syshal_gps_parseRxBuffer_priv(UBX_Packet_t * packet);
 static void syshal_gps_process_nav_status_priv(UBX_Packet_t * packet);
 static void syshal_gps_process_nav_posllh_priv(UBX_Packet_t * packet);
 
-uint32_t uart_handle;
 bool gps_locked = false; // Do we currently have a GPS lock
-bool gps_newData = false; // Keep track of if data is fresh/new
+bool gps_locked_last = false;
 
 struct
 {
@@ -40,22 +39,22 @@ struct
     int32_t  hMSL;   // Height above mean sea level
 } lastReadLocation; // Last known location
 
-void syshal_gps_init(uint32_t instance)
+void syshal_gps_init(void)
 {
-    uart_handle = instance;
     gps_locked = false;
-    gps_newData = false;
+    gps_locked_last = false;
     memset(&lastReadLocation, 0, sizeof(lastReadLocation)); // Clear structure
 }
 
 /**
- * @brief      Is there a new location update that hasn't been read?
+ * @brief      GPS callback stub, should be overriden by the user application
  *
- * @return     True / False
+ * @param[in]  event  The event that occured
  */
-bool syshal_gps_location_available(void)
+__attribute__((weak)) void syshal_gps_callback(syshal_gps_event_t event)
 {
-    return gps_newData;
+    UNUSED(event);
+    DEBUG_PR_WARN("%s Not implemented", __FUNCTION__);
 }
 
 /**
@@ -68,17 +67,12 @@ bool syshal_gps_location_available(void)
  *
  * @return     Returns true if the location received has been previously unread
  */
-bool syshal_gps_get_location(uint32_t * iTOW, int32_t * longitude, int32_t * latitude, int32_t * height)
+void syshal_gps_get_location(uint32_t * iTOW, int32_t * longitude, int32_t * latitude, int32_t * height)
 {
-
     *iTOW = lastReadLocation.iTOW;
     *longitude = lastReadLocation.lon;
     *latitude = lastReadLocation.lat;
     *height = lastReadLocation.height;
-
-    bool isDataFresh = gps_newData;
-    gps_newData = false;
-    return isDataFresh;
 }
 
 /*void syshal_gps_shutdown(void)
@@ -94,16 +88,6 @@ bool syshal_gps_get_location(uint32_t * iTOW, int32_t * longitude, int32_t * lat
     // No ACK is expected for this message
     send_ubx_packet();
 }*/
-
-/**
- * @brief      Does the GPS have a satallite lock
- *
- * @return     true if locked
- */
-inline bool syshal_gps_locked(void)
-{
-    return gps_locked;
-}
 
 void syshal_gps_tick(void)
 {
@@ -163,10 +147,22 @@ static void syshal_gps_process_nav_status_priv(UBX_Packet_t * packet)
 {
     uint8_t gpsFix = UBX_PAYLOAD(packet, UBX_NAV_STATUS)->gpsFix;
 
+    // Do we have a GPS fix?
     if ( (gpsFix > UBX_NAV_STATUS_GPSFIX_NOFIX) && (gpsFix <= UBX_NAV_STATUS_GPSFIX_TIME_ONLY) )
         gps_locked = true;
     else
         gps_locked = false;
+
+    // Has our connection state changed from last time, if so notify the user application
+    if (gps_locked_last != gps_locked)
+    {
+        if (gps_locked)
+            syshal_gps_callback(SYSHAL_GPS_EVENT_LOCK_MADE);
+        else
+            syshal_gps_callback(SYSHAL_GPS_EVENT_LOCK_LOST);
+    }
+
+    gps_locked_last = gps_locked;
 }
 
 static void syshal_gps_process_nav_posllh_priv(UBX_Packet_t * packet)
@@ -179,14 +175,14 @@ static void syshal_gps_process_nav_posllh_priv(UBX_Packet_t * packet)
         lastReadLocation.height = UBX_PAYLOAD(packet, UBX_NAV_POSLLH)->height;
         lastReadLocation.hMSL = UBX_PAYLOAD(packet, UBX_NAV_POSLLH)->hMSL;
 
-        gps_newData = true;
+        syshal_gps_callback(SYSHAL_GPS_EVENT_NEW_DATA); // Notify the user application that there is new data pending
     }
 }
 
-static void syshal_gps_computeChecksum_priv(UBX_Packet_t *packet, uint8_t ck[2])
+static void syshal_gps_computeChecksum_priv(UBX_Packet_t * packet, uint8_t ck[2])
 {
     ck[0] = ck[1] = 0;
-    uint8_t *buffer = &packet->msgClass;
+    uint8_t * buffer = &packet->msgClass;
 
     /* Taken directly from Section 29 UBX Checksum of the u-blox8
      * receiver specification
@@ -205,7 +201,7 @@ static void syshal_gps_computeChecksum_priv(UBX_Packet_t *packet, uint8_t ck[2])
     }
 }
 
-void syshal_gps_setChecksum_priv(UBX_Packet_t *packet)
+void syshal_gps_setChecksum_priv(UBX_Packet_t * packet)
 {
     uint8_t ck[2];
 
@@ -216,7 +212,7 @@ void syshal_gps_setChecksum_priv(UBX_Packet_t *packet)
 }
 
 // Return 0 on CRC match
-int syshal_gps_checkChecksum_priv(UBX_Packet_t *packet)
+int syshal_gps_checkChecksum_priv(UBX_Packet_t * packet)
 {
     uint8_t ck[2];
 
@@ -230,7 +226,7 @@ static int syshal_gps_parseRxBuffer_priv(UBX_Packet_t * packet)
 {
 
     // Discard everything up until first sync word
-    uint32_t bytesInRxBuffer = syshal_uart_available(uart_handle);
+    uint32_t bytesInRxBuffer = syshal_uart_available(GPS_UART);
 
     // Check for minimum allowed message size
     if (bytesInRxBuffer < UBX_HEADER_AND_CRC_LENGTH)
@@ -239,13 +235,13 @@ static int syshal_gps_parseRxBuffer_priv(UBX_Packet_t * packet)
     // Look for SYNC1 byte
     for (uint32_t i = 0; i < bytesInRxBuffer; ++i)
     {
-        if (!syshal_uart_peek_at(uart_handle, &packet->syncChars[0], 0))
+        if (!syshal_uart_peek_at(GPS_UART, &packet->syncChars[0], 0))
             return GPS_UART_ERROR_INSUFFICIENT_BYTES;
 
         if (UBX_PACKET_SYNC_CHAR1 == packet->syncChars[0])
             goto label_sync_start;
         else
-            syshal_uart_receive(uart_handle, &packet->syncChars[0], 1); // remove this character
+            syshal_uart_receive(GPS_UART, &packet->syncChars[0], 1); // remove this character
     }
 
     // No SYNC1 found
@@ -254,7 +250,7 @@ static int syshal_gps_parseRxBuffer_priv(UBX_Packet_t * packet)
 label_sync_start:
 
     // Get the next character and see if it is the expected SYNC2
-    if (!syshal_uart_peek_at(uart_handle, &packet->syncChars[1], 1))
+    if (!syshal_uart_peek_at(GPS_UART, &packet->syncChars[1], 1))
         return GPS_UART_ERROR_INSUFFICIENT_BYTES;
 
     if (UBX_PACKET_SYNC_CHAR2 != packet->syncChars[1])
@@ -262,17 +258,17 @@ label_sync_start:
         // Okay so SYNC1 is valid but SYNC2 is not
         // We should dispose of both to prevent the program locking
         uint8_t dumpBuffer[2];
-        syshal_uart_receive(uart_handle, &dumpBuffer[0], 2);
+        syshal_uart_receive(GPS_UART, &dumpBuffer[0], 2);
         return GPS_UART_ERROR_MISSING_SYNC2; // Invalid SYNC2
     }
 
     // Extract length field and check it is received fully
     uint8_t lengthLower, lengthUpper;
 
-    if (!syshal_uart_peek_at(uart_handle, &lengthLower, 4))
+    if (!syshal_uart_peek_at(GPS_UART, &lengthLower, 4))
         return GPS_UART_ERROR_INSUFFICIENT_BYTES;
 
-    if (!syshal_uart_peek_at(uart_handle, &lengthUpper, 5))
+    if (!syshal_uart_peek_at(GPS_UART, &lengthUpper, 5))
         return GPS_UART_ERROR_INSUFFICIENT_BYTES;
 
     uint16_t payloadLength = (uint16_t)lengthLower | ((uint16_t)lengthUpper << 8);
@@ -283,8 +279,8 @@ label_sync_start:
         uint8_t dumpBuffer;
 
         // Message is too big to store so throw it all away
-        while (syshal_uart_available(uart_handle) > 0)
-            syshal_uart_receive(uart_handle, &dumpBuffer, 1);
+        while (syshal_uart_available(GPS_UART) > 0)
+            syshal_uart_receive(GPS_UART, &dumpBuffer, 1);
 
         return GPS_UART_ERROR_MSG_TOO_BIG;
     }
@@ -296,13 +292,13 @@ label_sync_start:
     // Message is okay, lets grab the lot and remove it from the buffer
     uint8_t * buffer = (uint8_t *) packet;
 
-    if (UBX_HEADER_LENGTH != syshal_uart_receive(uart_handle, buffer, UBX_HEADER_LENGTH))
+    if (UBX_HEADER_LENGTH != syshal_uart_receive(GPS_UART, buffer, UBX_HEADER_LENGTH))
         return GPS_UART_ERROR_INSUFFICIENT_BYTES;
 
     buffer = packet->payloadAndCrc; // Now lets get the payload
 
     uint32_t totalToRead = payloadLength + UBX_CRC_LENGTH;
-    if (totalToRead != syshal_uart_receive(uart_handle, buffer, totalToRead))
+    if (totalToRead != syshal_uart_receive(GPS_UART, buffer, totalToRead))
         return GPS_UART_ERROR_INSUFFICIENT_BYTES;
 
     // Compute CRC and return

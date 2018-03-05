@@ -112,4 +112,7 @@ typedef struct
 
 extern const UART_InitTypeDefAndInst_t UART_Inits[UART_TOTAL_NUMBER];
 
+///////////////////////////////// GPS definitions /////////////////////////////////
+#define GPS_UART UART_1
+
 #endif /* _BSP_H_ */
