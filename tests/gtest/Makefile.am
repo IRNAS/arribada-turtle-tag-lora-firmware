@@ -1,5 +1,6 @@
 basedir=$(top_srcdir)/..
 core_srcdir=$(basedir)/core
+devices_srcdir=$(basedir)/devices
 syshal_srcdir=$(basedir)/syshal
 gtest_srcdir=$(top_srcdir)/gtest
 hw_platform=arribada_v1
@@ -34,6 +35,17 @@ Fs_LDADD = $(COMMON_LDADD)
 Fs_CPPFLAGS = $(AM_CPPFLAGS) -I$(core_srcdir)/fs
 
 TESTS += Fs.test
+
+check_PROGRAMS += Flash
+nodist_Flash_SOURCES = $(gtest_srcdir)/Flash.cpp \
+                    $(gtest_srcdir)/mocks/cmock.c \
+                    $(gtest_srcdir)/mocks/Mocksyshal_spi.c \
+                    $(devices_srcdir)/flash/S25FL128/S25FL128.c
+
+Flash_LDADD = $(COMMON_LDADD)
+Flash_CPPFLAGS = $(AM_CPPFLAGS) -I$(devices_srcdir)/flash/S25FL128
+
+TESTS += Flash.test
 
 LINT_FLAGS  = -"A(C++2010)"
 LINT_FLAGS += -e537 # Ignore repeated includes

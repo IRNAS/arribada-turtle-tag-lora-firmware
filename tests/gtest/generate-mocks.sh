@@ -11,6 +11,7 @@
 # NOTE: Assumes you have ruby already installed
 #
 mocks="../../syshal/inc/syshal_flash.h \
+       ../../syshal/inc/syshal_spi.h \
       "
 tar -zxvf CMock-master.tar.gz
 ruby CMock-master/lib/cmock.rb -ocmock_options.yml $mocks

@@ -37,6 +37,6 @@ int syshal_flash_init(uint32_t drive, uint32_t device);
 int syshal_flash_term(uint32_t drive);
 int syshal_flash_erase(uint32_t drive, uint32_t address, uint32_t size);
 int syshal_flash_write(uint32_t drive, const void *src, uint32_t address, uint32_t size);
-int syshal_flash_read(uint32_t drive, void * const dest, uint32_t address, uint32_t size);
+int syshal_flash_read(uint32_t drive, void *dest, uint32_t address, uint32_t size);
 
 #endif /* _SYSHAL_FLASH_H_ */
