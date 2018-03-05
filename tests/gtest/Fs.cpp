@@ -742,3 +742,47 @@ TEST_F(FsTest, LargeFileDataIntegrityCheck)
     }
     EXPECT_EQ(FS_NO_ERROR, fs_close(handle));
 }
+
+TEST_F(FsTest, CircularFileCanOverwriteAndReadBack)
+{
+    fs_t fs;
+    fs_handle_t handle;
+    uint32_t wr, rd;
+    char test_string[][256] = {
+            "DEADBEEFFEEDBEEF", /* Even sector */
+            "FEEDBEEFDEADBEEF", /* Odd sector */
+    };
+    char buf[256];
+    uint8_t wr_user_flags = 0x7, rd_user_flags;
+
+    syshal_flash_init_ExpectAndReturn(0, 0);
+    EXPECT_EQ(FS_NO_ERROR, fs_init(0));
+    EXPECT_EQ(FS_NO_ERROR, fs_mount(0, &fs));
+    EXPECT_EQ(FS_NO_ERROR, fs_format(fs));
+    EXPECT_EQ(FS_NO_ERROR, fs_open(fs, &handle, 0, FS_MODE_CREATE_CIRCULAR, &wr_user_flags));
+    /* Fill file system with even/odd sector pattern */
+    for (unsigned int i = 0; i < FS_PRIV_MAX_SECTORS; i++)
+        for (unsigned int j = 0; j < FS_PRIV_USABLE_SIZE; j += strlen(test_string[0]))
+            EXPECT_EQ(FS_NO_ERROR, fs_write(handle, test_string[i&1], strlen(test_string[0]), &wr));
+    /* Now overwrite previous root sector (even) which means new root sector should be odd */
+    for (unsigned int i = 0; i < 1; i++)
+        for (unsigned int j = 0; j < FS_PRIV_USABLE_SIZE; j += strlen(test_string[0]))
+            EXPECT_EQ(FS_NO_ERROR, fs_write(handle, test_string[i&1], strlen(test_string[0]), &wr));
+    EXPECT_EQ(FS_NO_ERROR, fs_close(handle));
+
+    /* Now open the file as read only */
+    EXPECT_EQ(FS_NO_ERROR, fs_open(fs, &handle, 0, FS_MODE_READONLY, &rd_user_flags));
+    EXPECT_EQ(wr_user_flags, rd_user_flags);
+
+    /* First sector should now be odd, 2nd even, etc */
+    for (unsigned int i = 0; i < FS_PRIV_MAX_SECTORS; i++)
+        for (unsigned int j = 0; j < FS_PRIV_USABLE_SIZE; j += strlen(test_string[0]))
+        {
+            EXPECT_EQ(FS_NO_ERROR, fs_read(handle, buf, strlen(test_string[(i+1) & 1]), &rd));
+            EXPECT_EQ(0, strncmp(test_string[(i+1) & 1], buf, strlen(test_string[(i+1) & 1])));
+        }
+
+    /* Next read should be EOF, even for circular file type */
+    EXPECT_EQ(FS_ERROR_END_OF_FILE, fs_read(handle, buf, sizeof(buf), &rd));
+    EXPECT_EQ(FS_NO_ERROR, fs_close(handle));
+}

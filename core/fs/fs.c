@@ -643,7 +643,26 @@ static int allocate_new_sector_to_file(fs_priv_handle_t *fs_priv_handle)
     /* Find a free allocation unit */
     sector = find_free_allocation_unit(fs_priv);
     if ((uint8_t)FS_PRIV_NOT_ALLOCATED == sector)
-        return FS_ERROR_FILESYSTEM_FULL;
+    {
+        /* File system is full but if the file type is circular
+         * then we should erase the root sector and try to recycle it.
+         */
+        if ((fs_priv_handle->flags.mode_flags & FS_FILE_CIRCULAR) == 0 ||
+            fs_priv_handle->root_allocation_unit == (uint8_t)FS_PRIV_NOT_ALLOCATED)
+            return FS_ERROR_FILESYSTEM_FULL;
+
+        /* Erase the current root sector so it can be recycled */
+        uint8_t new_root =
+            fs_priv->alloc_unit_list[fs_priv_handle->root_allocation_unit].file_info.next_allocation_unit;
+        if (erase_allocation_unit(fs_priv, fs_priv_handle->root_allocation_unit))
+            return FS_ERROR_FLASH_MEDIA;
+
+        /* Set new root sector and also link the new sector's next pointer to
+         * the new root sector.
+         */
+        sector = fs_priv_handle->root_allocation_unit;
+        fs_priv_handle->root_allocation_unit = new_root;
+    }
 
     /* Update file system allocation table information for this allocation unit */
     fs_priv->alloc_unit_list[sector].file_info.file_id = fs_priv_handle->file_id;
