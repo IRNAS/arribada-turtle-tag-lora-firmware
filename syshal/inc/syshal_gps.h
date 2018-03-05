@@ -32,6 +32,7 @@ typedef enum
 void syshal_gps_init(void);
 void syshal_gps_shutdown(void);
 void syshal_gps_wake_up(void);
+uint32_t syshal_gps_time_till_first_fix(void);
 void syshal_gps_get_location(uint32_t * iTOW, int32_t * longitude, int32_t * latitude, int32_t * height);
 void syshal_gps_tick(void);
 

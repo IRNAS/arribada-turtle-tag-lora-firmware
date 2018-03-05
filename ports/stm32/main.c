@@ -38,7 +38,7 @@ void syshal_gps_callback(syshal_gps_event_t event)
     switch (event)
     {
         case SYSHAL_GPS_EVENT_LOCK_MADE:
-            DEBUG_PR_SYS("GPS lock made");
+            DEBUG_PR_SYS("GPS lock made in %u ms", syshal_gps_time_till_first_fix());
             break;
         case SYSHAL_GPS_EVENT_LOCK_LOST:
             DEBUG_PR_SYS("GPS lock lost");

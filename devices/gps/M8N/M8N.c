@@ -30,6 +30,7 @@ static void syshal_gps_set_checksum_priv(UBX_Packet_t * packet);
 
 bool gps_locked = false; // Do we currently have a GPS lock
 bool gps_locked_last = false;
+uint32_t time_to_first_fix; // Time to first GPS fix in ms
 
 struct
 {
@@ -44,6 +45,7 @@ void syshal_gps_init(void)
 {
     gps_locked = false;
     gps_locked_last = false;
+    time_to_first_fix = 0;
     memset(&lastReadLocation, 0, sizeof(lastReadLocation)); // Clear structure
 }
 
@@ -86,6 +88,11 @@ void syshal_gps_get_location(uint32_t * iTOW, int32_t * longitude, int32_t * lat
     *height = lastReadLocation.height;
 }
 
+uint32_t syshal_gps_time_till_first_fix(void)
+{
+    return time_to_first_fix;
+}
+
 void syshal_gps_shutdown(void)
 {
     DEBUG_PR_TRACE("Shutdown GPS %s", __FUNCTION__);
@@ -100,9 +107,12 @@ void syshal_gps_shutdown(void)
     syshal_gps_send_packet_priv(&ubx_packet);
 
     // We're sleeping so we don't have a gps lock
-    gps_locked = false;
-    gps_locked_last = false;
-    syshal_gps_callback(SYSHAL_GPS_EVENT_LOCK_LOST);
+    if (gps_locked)
+    {
+        gps_locked = false;
+        gps_locked_last = false;
+        syshal_gps_callback(SYSHAL_GPS_EVENT_LOCK_LOST);
+    }
 }
 
 void syshal_gps_wake_up(void)
@@ -171,6 +181,7 @@ void syshal_gps_tick(void)
 static void syshal_gps_process_nav_status_priv(UBX_Packet_t * packet)
 {
     uint8_t gpsFix = UBX_PAYLOAD(packet, UBX_NAV_STATUS)->gpsFix;
+    time_to_first_fix = UBX_PAYLOAD(packet, UBX_NAV_STATUS)->ttff;
 
     // Do we have a GPS fix?
     if ( (gpsFix > UBX_NAV_STATUS_GPSFIX_NOFIX) && (gpsFix <= UBX_NAV_STATUS_GPSFIX_TIME_ONLY) )
