@@ -23,16 +23,20 @@
 
 /* Constants */
 
+#define SYSHAL_FLASH_NO_ERROR             0
+#define SYSHAL_FLASH_ERROR_INVALID_DRIVE -1
+#define SYSHAL_FLASH_ERROR_DEVICE        -2
+
 /* Macros */
 
 /* Types */
 
 /* Functions */
 
-int syshal_flash_init(uint32_t device);
-int syshal_flash_term(uint32_t device);
-int syshal_flash_erase(uint32_t device, uint32_t address, uint32_t size);
-int syshal_flash_write(uint32_t device, const void *src, uint32_t address, uint32_t size);
-int syshal_flash_read(uint32_t device, void * const dest, uint32_t address, uint32_t size);
+int syshal_flash_init(uint32_t drive, uint32_t device);
+int syshal_flash_term(uint32_t drive);
+int syshal_flash_erase(uint32_t drive, uint32_t address, uint32_t size);
+int syshal_flash_write(uint32_t drive, const void *src, uint32_t address, uint32_t size);
+int syshal_flash_read(uint32_t drive, void * const dest, uint32_t address, uint32_t size);
 
 #endif /* _SYSHAL_FLASH_H_ */

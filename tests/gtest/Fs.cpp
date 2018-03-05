@@ -46,7 +46,6 @@ class FsTest : public ::testing::Test {
 
     virtual void SetUp() {
         trace_on = false;
-        Mocksyshal_flash_Init();
         syshal_flash_read_StubWithCallback(syshal_flash_read_Callback);
         syshal_flash_write_StubWithCallback(syshal_flash_write_Callback);
         syshal_flash_erase_StubWithCallback(syshal_flash_erase_Callback);
@@ -144,7 +143,6 @@ TEST_F(FsTest, FormatPreservesAllocationCounter)
 {
     fs_t fs;
 
-    syshal_flash_init_ExpectAndReturn(0, 0);
     EXPECT_EQ(FS_NO_ERROR, fs_init(0));
     EXPECT_EQ(FS_NO_ERROR, fs_mount(0, &fs));
     EXPECT_EQ(FS_NO_ERROR, fs_format(fs));
@@ -176,7 +174,6 @@ TEST_F(FsTest, SimpleFileIO)
     };
     char buf[256];
 
-    syshal_flash_init_ExpectAndReturn(0, 0);
     EXPECT_EQ(FS_NO_ERROR, fs_init(0));
     EXPECT_EQ(FS_NO_ERROR, fs_mount(0, &fs));
     EXPECT_EQ(FS_NO_ERROR, fs_format(fs));
@@ -201,7 +198,6 @@ TEST_F(FsTest, CannotReadPastEndOfFile)
     };
     char buf[256];
 
-    syshal_flash_init_ExpectAndReturn(0, 0);
     EXPECT_EQ(FS_NO_ERROR, fs_init(0));
     EXPECT_EQ(FS_NO_ERROR, fs_mount(0, &fs));
     EXPECT_EQ(FS_NO_ERROR, fs_format(fs));
@@ -227,7 +223,6 @@ TEST_F(FsTest, FileUserFlagsArePreserved)
     };
     uint8_t wr_user_flags = 0x7, rd_user_flags;
 
-    syshal_flash_init_ExpectAndReturn(0, 0);
     EXPECT_EQ(FS_NO_ERROR, fs_init(0));
     EXPECT_EQ(FS_NO_ERROR, fs_mount(0, &fs));
     EXPECT_EQ(FS_NO_ERROR, fs_format(fs));
@@ -251,7 +246,6 @@ TEST_F(FsTest, StatExistingFileAttributesArePreserved)
     };
     uint8_t wr_user_flags = 0x7;
 
-    syshal_flash_init_ExpectAndReturn(0, 0);
     EXPECT_EQ(FS_NO_ERROR, fs_init(0));
     EXPECT_EQ(FS_NO_ERROR, fs_mount(0, &fs));
     EXPECT_EQ(FS_NO_ERROR, fs_format(fs));
@@ -276,7 +270,6 @@ TEST_F(FsTest, DeletedFileNoLongerExists)
     };
     uint8_t wr_user_flags = 0x7;
 
-    syshal_flash_init_ExpectAndReturn(0, 0);
     EXPECT_EQ(FS_NO_ERROR, fs_init(0));
     EXPECT_EQ(FS_NO_ERROR, fs_mount(0, &fs));
     EXPECT_EQ(FS_NO_ERROR, fs_format(fs));
@@ -299,7 +292,6 @@ TEST_F(FsTest, CannotExceedMaxFilesOnFileSystem)
     };
     uint8_t wr_user_flags = 0x7;
 
-    syshal_flash_init_ExpectAndReturn(0, 0);
     EXPECT_EQ(FS_NO_ERROR, fs_init(0));
     EXPECT_EQ(FS_NO_ERROR, fs_mount(0, &fs));
     EXPECT_EQ(FS_NO_ERROR, fs_format(fs));
@@ -323,7 +315,6 @@ TEST_F(FsTest, CannotCreateFileThatAlreadyExists)
     };
     uint8_t wr_user_flags = 0x7;
 
-    syshal_flash_init_ExpectAndReturn(0, 0);
     EXPECT_EQ(FS_NO_ERROR, fs_init(0));
     EXPECT_EQ(FS_NO_ERROR, fs_mount(0, &fs));
     EXPECT_EQ(FS_NO_ERROR, fs_format(fs));
@@ -340,7 +331,6 @@ TEST_F(FsTest, CannotExceedMaxFileHandles)
     fs_handle_t handle[FS_PRIV_MAX_HANDLES + 1];
     uint8_t wr_user_flags = 0x7;
 
-    syshal_flash_init_ExpectAndReturn(0, 0);
     EXPECT_EQ(FS_NO_ERROR, fs_init(0));
     EXPECT_EQ(FS_NO_ERROR, fs_mount(0, &fs));
     EXPECT_EQ(FS_NO_ERROR, fs_format(fs));
@@ -360,7 +350,6 @@ TEST_F(FsTest, FileWriteAppend)
     };
     char buf[256];
 
-    syshal_flash_init_ExpectAndReturn(0, 0);
     EXPECT_EQ(FS_NO_ERROR, fs_init(0));
     EXPECT_EQ(FS_NO_ERROR, fs_mount(0, &fs));
     EXPECT_EQ(FS_NO_ERROR, fs_format(fs));
@@ -384,7 +373,6 @@ TEST_F(FsTest, OpenNonExistentFileExpectFileNotFound)
     fs_t fs;
     fs_handle_t handle;
 
-    syshal_flash_init_ExpectAndReturn(0, 0);
     EXPECT_EQ(FS_NO_ERROR, fs_init(0));
     EXPECT_EQ(FS_NO_ERROR, fs_mount(0, &fs));
     EXPECT_EQ(FS_NO_ERROR, fs_format(fs));
@@ -396,7 +384,6 @@ TEST_F(FsTest, DeleteNonExistentFileExpectFileNotFound)
 {
     fs_t fs;
 
-    syshal_flash_init_ExpectAndReturn(0, 0);
     EXPECT_EQ(FS_NO_ERROR, fs_init(0));
     EXPECT_EQ(FS_NO_ERROR, fs_mount(0, &fs));
     EXPECT_EQ(FS_NO_ERROR, fs_format(fs));
@@ -408,7 +395,6 @@ TEST_F(FsTest, StatNonExistentFileExpectFileNotFound)
 {
     fs_t fs;
 
-    syshal_flash_init_ExpectAndReturn(0, 0);
     EXPECT_EQ(FS_NO_ERROR, fs_init(0));
     EXPECT_EQ(FS_NO_ERROR, fs_mount(0, &fs));
     EXPECT_EQ(FS_NO_ERROR, fs_format(fs));
@@ -420,7 +406,6 @@ TEST_F(FsTest, ProtectNonExistentFileExpectFileNotFound)
 {
     fs_t fs;
 
-    syshal_flash_init_ExpectAndReturn(0, 0);
     EXPECT_EQ(FS_NO_ERROR, fs_init(0));
     EXPECT_EQ(FS_NO_ERROR, fs_mount(0, &fs));
     EXPECT_EQ(FS_NO_ERROR, fs_format(fs));
@@ -432,7 +417,6 @@ TEST_F(FsTest, UnprotectNonExistentFileExpectFileNotFound)
 {
     fs_t fs;
 
-    syshal_flash_init_ExpectAndReturn(0, 0);
     EXPECT_EQ(FS_NO_ERROR, fs_init(0));
     EXPECT_EQ(FS_NO_ERROR, fs_mount(0, &fs));
     EXPECT_EQ(FS_NO_ERROR, fs_format(fs));
@@ -445,7 +429,6 @@ TEST_F(FsTest, StatEmptyFileSystemExpectMaxCapacityFree)
     fs_t fs;
     fs_stat_t stat;
 
-    syshal_flash_init_ExpectAndReturn(0, 0);
     EXPECT_EQ(FS_NO_ERROR, fs_init(0));
     EXPECT_EQ(FS_NO_ERROR, fs_mount(0, &fs));
     EXPECT_EQ(FS_NO_ERROR, fs_format(fs));
@@ -462,7 +445,6 @@ TEST_F(FsTest, ProtectedFileCannotBeWritten)
             "Hello World",
     };
 
-    syshal_flash_init_ExpectAndReturn(0, 0);
     EXPECT_EQ(FS_NO_ERROR, fs_init(0));
     EXPECT_EQ(FS_NO_ERROR, fs_mount(0, &fs));
     EXPECT_EQ(FS_NO_ERROR, fs_format(fs));
@@ -484,7 +466,6 @@ TEST_F(FsTest, ProtectedFileCanBeRead)
     };
     char buf[256];
 
-    syshal_flash_init_ExpectAndReturn(0, 0);
     EXPECT_EQ(FS_NO_ERROR, fs_init(0));
     EXPECT_EQ(FS_NO_ERROR, fs_mount(0, &fs));
     EXPECT_EQ(FS_NO_ERROR, fs_format(fs));
@@ -511,7 +492,6 @@ TEST_F(FsTest, ToggledFileProtectionAllowsWrite)
     };
     char buf[256];
 
-    syshal_flash_init_ExpectAndReturn(0, 0);
     EXPECT_EQ(FS_NO_ERROR, fs_init(0));
     EXPECT_EQ(FS_NO_ERROR, fs_mount(0, &fs));
     EXPECT_EQ(FS_NO_ERROR, fs_format(fs));
@@ -542,7 +522,6 @@ TEST_F(FsTest, FileCannotExceedFileSystemSize)
     };
     uint8_t wr_user_flags = 0x7;
 
-    syshal_flash_init_ExpectAndReturn(0, 0);
     EXPECT_EQ(FS_NO_ERROR, fs_init(0));
     EXPECT_EQ(FS_NO_ERROR, fs_mount(0, &fs));
     EXPECT_EQ(FS_NO_ERROR, fs_format(fs));
@@ -563,7 +542,6 @@ TEST_F(FsTest, WriteSmallChunksThatExceedMaxSessions)
     };
     uint8_t wr_user_flags = 0x7;
 
-    syshal_flash_init_ExpectAndReturn(0, 0);
     EXPECT_EQ(FS_NO_ERROR, fs_init(0));
     EXPECT_EQ(FS_NO_ERROR, fs_mount(0, &fs));
     EXPECT_EQ(FS_NO_ERROR, fs_format(fs));
@@ -584,7 +562,6 @@ TEST_F(FsTest, FlushesNotLimitedIfNoDataWritten)
     fs_handle_t handle;
     uint8_t wr_user_flags = 0x7;
 
-    syshal_flash_init_ExpectAndReturn(0, 0);
     EXPECT_EQ(FS_NO_ERROR, fs_init(0));
     EXPECT_EQ(FS_NO_ERROR, fs_mount(0, &fs));
     EXPECT_EQ(FS_NO_ERROR, fs_format(fs));
@@ -607,7 +584,6 @@ TEST_F(FsTest, MultiFileIO)
     };
     char buf[256];
 
-    syshal_flash_init_ExpectAndReturn(0, 0);
     EXPECT_EQ(FS_NO_ERROR, fs_init(0));
     EXPECT_EQ(FS_NO_ERROR, fs_mount(0, &fs));
     EXPECT_EQ(FS_NO_ERROR, fs_format(fs));
@@ -647,7 +623,6 @@ TEST_F(FsTest, FlashSectorWearLevellingIsApplied)
         SetSectorAllocCounter(i, wear_count[i]);
     }
 
-    syshal_flash_init_ExpectAndReturn(0, 0);
     EXPECT_EQ(FS_NO_ERROR, fs_init(0));
     EXPECT_EQ(FS_NO_ERROR, fs_mount(0, &fs));
 
@@ -686,7 +661,6 @@ TEST_F(FsTest, StatEmptyFileShouldHaveZeroBytes)
     fs_stat_t stat;
     uint8_t wr_user_flags = 0x7;
 
-    syshal_flash_init_ExpectAndReturn(0, 0);
     EXPECT_EQ(FS_NO_ERROR, fs_init(0));
     EXPECT_EQ(FS_NO_ERROR, fs_mount(0, &fs));
     EXPECT_EQ(FS_NO_ERROR, fs_open(fs, &handle, 0, FS_MODE_CREATE, &wr_user_flags));
@@ -703,7 +677,6 @@ TEST_F(FsTest, ReadEmptyFileShouldReturnEndOfFileError)
     char buf[256];
     uint32_t rd;
 
-    syshal_flash_init_ExpectAndReturn(0, 0);
     EXPECT_EQ(FS_NO_ERROR, fs_init(0));
     EXPECT_EQ(FS_NO_ERROR, fs_mount(0, &fs));
     EXPECT_EQ(FS_NO_ERROR, fs_open(fs, &handle, 0, FS_MODE_CREATE, &wr_user_flags));
@@ -719,7 +692,6 @@ TEST_F(FsTest, LargeFileDataIntegrityCheck)
     uint8_t wr_user_flags = 0x7;
     uint32_t wr, rd;
 
-    syshal_flash_init_ExpectAndReturn(0, 0);
     EXPECT_EQ(FS_NO_ERROR, fs_init(0));
     EXPECT_EQ(FS_NO_ERROR, fs_mount(0, &fs));
     EXPECT_EQ(FS_NO_ERROR, fs_open(fs, &handle, 0, FS_MODE_CREATE, &wr_user_flags));
@@ -755,7 +727,6 @@ TEST_F(FsTest, CircularFileCanOverwriteAndReadBack)
     char buf[256];
     uint8_t wr_user_flags = 0x7, rd_user_flags;
 
-    syshal_flash_init_ExpectAndReturn(0, 0);
     EXPECT_EQ(FS_NO_ERROR, fs_init(0));
     EXPECT_EQ(FS_NO_ERROR, fs_mount(0, &fs));
     EXPECT_EQ(FS_NO_ERROR, fs_format(fs));

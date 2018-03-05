@@ -840,9 +840,6 @@ int fs_init(uint32_t device)
     if (device >= FS_PRIV_MAX_DEVICES)
         return FS_ERROR_BAD_DEVICE;
 
-    if (syshal_flash_init(device))
-        return FS_ERROR_FLASH_MEDIA;
-
     /* Mark all handles as free */
     for (unsigned int i = 0; i < FS_PRIV_MAX_HANDLES; i++)
         free_handle(&fs_priv_handle_list[i]);
@@ -868,8 +865,8 @@ int fs_term(uint32_t device)
     if (device >= FS_PRIV_MAX_DEVICES)
         return FS_ERROR_BAD_DEVICE;
 
-    if (syshal_flash_term(device))
-        return FS_ERROR_FLASH_MEDIA;
+    /* No action needed at present */
+
     return FS_NO_ERROR;
 }
 

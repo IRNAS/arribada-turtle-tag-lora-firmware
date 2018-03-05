@@ -19,11 +19,22 @@
 #ifndef _SYSHAL_SPI_H_
 #define _SYSHAL_SPI_H_
 
-#include "bsp.h"
+/* Constants */
 
-void syshal_spi_init(SPI_t instance);
-void syshal_spi_term(SPI_t instance);
-void syshal_spi_transfer(SPI_t instance, uint8_t * data, uint32_t size);
-uint32_t syshal_spi_receive(SPI_t instance, uint8_t * data, uint32_t size); // returns size of data read in bytes
+#define SYSHAL_SPI_NO_ERROR                0
+#define SYSHAL_SPI_ERROR_INVALID_INSTANCE -1
+#define SYSHAL_SPI_ERROR_BUSY             -2
+#define SYSHAL_SPI_ERROR_TIMEOUT          -3
+#define SYSHAL_SPI_ERROR_DEVICE           -4
+
+/* Macros */
+
+/* Types */
+
+/* Functions */
+
+int syshal_spi_init(uint32_t instance);
+int syshal_spi_term(uint32_t instance);
+int syshal_spi_transfer(uint32_t instance, uint8_t *tx_data, uint8_t *rx_data, uint16_t size);
 
 #endif /* _SYSHAL_SPI_H_ */

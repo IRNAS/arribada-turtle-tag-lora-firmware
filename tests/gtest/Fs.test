@@ -1,6 +1,6 @@
 #!/bin/bash
 
-source ${SRCDIR}/tests/verifUtils.sh
+source verifUtils.sh
 
 filename=$0
 filename="${filename%.*}"

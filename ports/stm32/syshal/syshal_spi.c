@@ -28,92 +28,63 @@
 #include "syshal_spi.h"
 #include "debug.h"
 
-// Private variables
-static SPI_HandleTypeDef hspi1;
-static SPI_HandleTypeDef hspi2;
+/* Private variables */
+static SPI_HandleTypeDef hspi[SPI_TOTAL_NUMBER];
+
+/* HAL to SYSHAL error code mapping table */
+static int hal_error_map[] = {
+    SYSHAL_SPI_NO_ERROR,
+    SYSHAL_SPI_ERROR_DEVICE,
+    SYSHAL_SPI_ERROR_BUSY,
+    SYSHAL_SPI_ERROR_TIMEOUT,
+};
 
 /**
  * @brief      Initialise the given SPI instance
  *
  * @param[in]  instance  The SPI instance
  */
-void syshal_spi_init(SPI_t instance)
+int syshal_spi_init(uint32_t instance)
 {
-    if (SPI_1 == instance)
-    {
-        // Populate internal handlers
-        hspi1.Instance = SPI_Inits[SPI_1].Instance;
-        hspi1.Init = SPI_Inits[SPI_1].Init;
+    HAL_StatusTypeDef status;
 
-        HAL_SPI_Init(&hspi1);
-    }
+    if (instance >= SPI_TOTAL_NUMBER)
+        return SYSHAL_SPI_ERROR_INVALID_INSTANCE;
 
-    if (SPI_2 == instance)
-    {
-        // Populate internal handlers
-        hspi2.Instance = SPI_Inits[SPI_2].Instance;
-        hspi2.Init = SPI_Inits[SPI_2].Init;
+    status = HAL_SPI_Init(&hspi[instance]);
 
-        HAL_SPI_Init(&hspi2);
-    }
+    return hal_error_map[status];
 }
 
 /**
  * @brief      Transfer the given data on SPI
  *
+ * The API will block the caller until the requisite amount of data
+ * bytes has been sent and received.
+ *
  * @param[in]  instance  The SPI instance
  * @param[in]  data      The data buffer to be sent
  * @param[in]  size      The size of the data buffer in bytes
+ *
+ * @return SYSHAL_SPI_ERROR_DEVICE on HAL error.
+ * @return SYSHAL_SPI_ERROR_BUSY if the HW is busy.
+ * @return SYSHAL_SPI_ERROR_TIMEOUT if a timeout occurred.
  */
-void syshal_spi_transfer(SPI_t instance, uint8_t * data, uint32_t size)
+int syshal_spi_transfer(uint32_t instance, uint8_t *tx_data, uint8_t *rx_data, uint16_t size)
 {
     HAL_StatusTypeDef status = HAL_ERROR;
 
-    if (SPI_1 == instance)
-        status = HAL_SPI_Transmit(&hspi1, data, size, SPI_TIMEOUT);
+    if (instance >= SPI_TOTAL_NUMBER)
+        return SYSHAL_SPI_ERROR_INVALID_INSTANCE;
 
-    if (SPI_2 == instance)
-        status = HAL_SPI_Transmit(&hspi2, data, size, SPI_TIMEOUT);
+    status = HAL_SPI_TransmitReceive(&hspi[instance], tx_data, rx_data, size, SPI_TIMEOUT);
 
-    if (HAL_OK != status)
-    {
-        DEBUG_PR_ERROR("%s failed with %d", __FUNCTION__, status);
-    }
-}
-
-/**
- * @brief      Receive data from SPI
- *
- * @param[in]  instance  The SPI instance
- * @param[out] data      The data buffer to be read into
- * @param[in]  size      The size of the data to be read in bytes
- *
- * @return     { description_of_the_return_value }
- */
-uint32_t syshal_spi_receive(SPI_t instance, uint8_t * data, uint32_t size)
-{
-    HAL_StatusTypeDef status = HAL_ERROR;
-
-    if (SPI_1 == instance)
-        status = HAL_SPI_Receive(&hspi1, data, size, SPI_TIMEOUT);
-
-    if (SPI_2 == instance)
-        status = HAL_SPI_Receive(&hspi2, data, size, SPI_TIMEOUT);
-
-    // return number of bytes read as best we can tell
-    if (HAL_OK != status)
-    {
-        DEBUG_PR_ERROR("%s failed with %d", __FUNCTION__, status);
-        return 0;
-    }
-
-    return size;
+    return hal_error_map[status];
 }
 
 // Implement MSP hooks that are called by stm32f0xx_hal_spi
 void HAL_SPI_MspInit(SPI_HandleTypeDef * hspi)
 {
-
     if (hspi->Instance == SPI1)
     {
         // Peripheral clock enable
