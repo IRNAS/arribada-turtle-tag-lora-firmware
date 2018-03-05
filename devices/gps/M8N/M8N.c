@@ -48,6 +48,9 @@ void syshal_gps_init(void)
     gps_locked_last = false;
     time_to_first_fix = 0;
     memset(&lastReadLocation, 0, sizeof(lastReadLocation)); // Clear structure
+
+    // Make sure device is awake
+    syshal_gps_wake_up();
 }
 
 /**
