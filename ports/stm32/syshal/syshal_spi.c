@@ -27,6 +27,7 @@
 #include "syshal_gpio.h"
 #include "syshal_spi.h"
 #include "debug.h"
+#include "bsp.h"
 
 /* Private variables */
 static SPI_HandleTypeDef hspi[SPI_TOTAL_NUMBER];
@@ -52,6 +53,23 @@ int syshal_spi_init(uint32_t instance)
         return SYSHAL_SPI_ERROR_INVALID_INSTANCE;
 
     status = HAL_SPI_Init(&hspi[instance]);
+
+    return hal_error_map[status];
+}
+
+/**
+ * @brief      Deinitialise the given SPI instance
+ *
+ * @param[in]  instance  The SPI instance
+ */
+int syshal_spi_term(uint32_t instance)
+{
+    HAL_StatusTypeDef status;
+
+    if (instance >= SPI_TOTAL_NUMBER)
+        return SYSHAL_SPI_ERROR_INVALID_INSTANCE;
+
+    status = HAL_SPI_DeInit(&hspi[instance]);
 
     return hal_error_map[status];
 }

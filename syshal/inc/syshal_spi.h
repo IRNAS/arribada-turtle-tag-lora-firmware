@@ -19,6 +19,8 @@
 #ifndef _SYSHAL_SPI_H_
 #define _SYSHAL_SPI_H_
 
+#include <stdint.h>
+
 /* Constants */
 
 #define SYSHAL_SPI_NO_ERROR                0
