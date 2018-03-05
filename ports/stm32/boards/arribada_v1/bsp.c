@@ -17,7 +17,7 @@
 #include "bsp.h"
 
 ///////////////////////////////// GPIO definitions ////////////////////////////////
-const GPIO_InitTypeDefAndPort_t GPIO_Inits[GPIO_TOTAL_NUMBER] =
+GPIO_InitTypeDefAndPort_t GPIO_Inits[GPIO_TOTAL_NUMBER] =
 {
     // Port, Pin, Mode, Pull, Speed, Alternate
     {GPIOB, {GPIO_PIN_3,  GPIO_MODE_OUTPUT_PP, GPIO_PULLUP, GPIO_SPEED_FREQ_HIGH, 0}},               // GPIO_LED3

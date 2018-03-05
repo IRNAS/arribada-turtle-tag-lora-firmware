@@ -27,6 +27,7 @@ static int syshal_gps_parse_rx_buffer_priv(UBX_Packet_t * packet);
 static void syshal_gps_process_nav_status_priv(UBX_Packet_t * packet);
 static void syshal_gps_process_nav_posllh_priv(UBX_Packet_t * packet);
 static void syshal_gps_set_checksum_priv(UBX_Packet_t * packet);
+static void syshal_gps_send_packet_priv(UBX_Packet_t * ubx_packet);
 
 bool gps_locked = false; // Do we currently have a GPS lock
 bool gps_locked_last = false;
@@ -58,16 +59,6 @@ __attribute__((weak)) void syshal_gps_callback(syshal_gps_event_t event)
 {
     UNUSED(event);
     DEBUG_PR_WARN("%s Not implemented", __FUNCTION__);
-}
-
-void syshal_gps_send_packet_priv(UBX_Packet_t * ubx_packet)
-{
-    syshal_gps_set_checksum_priv(ubx_packet);
-
-    // The packet is not arranged contiguously in RAM, so we have to transmit
-    // it using two passes i.e., header then payload + CRC
-    syshal_uart_transfer(GPS_UART, (uint8_t *) ubx_packet, UBX_HEADER_LENGTH);
-    syshal_uart_transfer(GPS_UART, ubx_packet->payloadAndCrc, ubx_packet->msgLength + UBX_CRC_LENGTH);
 }
 
 /**
@@ -178,6 +169,16 @@ void syshal_gps_tick(void)
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////// Private functions //////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+static void syshal_gps_send_packet_priv(UBX_Packet_t * ubx_packet)
+{
+    syshal_gps_set_checksum_priv(ubx_packet);
+
+    // The packet is not arranged contiguously in RAM, so we have to transmit
+    // it using two passes i.e., header then payload + CRC
+    syshal_uart_transfer(GPS_UART, (uint8_t *) ubx_packet, UBX_HEADER_LENGTH);
+    syshal_uart_transfer(GPS_UART, ubx_packet->payloadAndCrc, ubx_packet->msgLength + UBX_CRC_LENGTH);
+}
+
 static void syshal_gps_process_nav_status_priv(UBX_Packet_t * packet)
 {
     uint8_t gpsFix = UBX_PAYLOAD(packet, UBX_NAV_STATUS)->gpsFix;

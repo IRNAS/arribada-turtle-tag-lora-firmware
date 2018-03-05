@@ -38,7 +38,7 @@ void syshal_gps_callback(syshal_gps_event_t event)
     switch (event)
     {
         case SYSHAL_GPS_EVENT_LOCK_MADE:
-            DEBUG_PR_SYS("GPS lock made in %u ms", syshal_gps_time_till_first_fix());
+            DEBUG_PR_SYS("GPS lock made in %lu ms", syshal_gps_time_till_first_fix());
             break;
         case SYSHAL_GPS_EVENT_LOCK_LOST:
             DEBUG_PR_SYS("GPS lock lost");
@@ -49,7 +49,7 @@ void syshal_gps_callback(syshal_gps_event_t event)
             uint32_t iTOW;
             int32_t longitude, latitude, height;
             syshal_gps_get_location(&iTOW, &longitude, &latitude, &height);
-            DEBUG_PR_INFO("New Location - time: %u ms, Long: %dE-7 deg, Lat: %dE-7 deg, Height: %d mm", iTOW, longitude, latitude, height);
+            DEBUG_PR_INFO("New Location - time: %lu ms, Long: %ldE-7 deg, Lat: %ldE-7 deg, Height: %ld mm", iTOW, longitude, latitude, height);
             break;
     }
 }
@@ -85,9 +85,9 @@ int main(void)
 
         uint32_t timeElapsed = syshal_time_get_ticks_ms() - deltaTime;
 
-        if (timeElapsed > 5000)
+        if (timeElapsed > 5500)
         {
-            deltaTime += 5000;
+            deltaTime += 5500;
             if (gpsAwake)
             {
                 syshal_gps_shutdown();

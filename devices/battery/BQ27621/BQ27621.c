@@ -79,7 +79,7 @@ static int BQ27621_cfgupdate(bool active)
     }
 
     if (limit - try > 3)
-            DEBUG_PR_WARN("Cfgupdate %d, retries %d\n", active, limit - try);
+            DEBUG_PR_WARN("Cfgupdate %d, retries %lu\n", active, limit - try);
 
     return 0;
 }

@@ -67,9 +67,9 @@ void syshal_i2c_init(uint32_t instance)
  * @param[in]  data          The data buffer to be sent
  * @param[in]  size          The size of the data buffer in bytes
  */
-void syshal_i2c_transfer(uint32_t instance, uint8_t slaveAddress, const uint8_t * data, uint32_t size)
+void syshal_i2c_transfer(uint32_t instance, uint8_t slaveAddress, uint8_t * data, uint32_t size)
 {
-    HAL_StatusTypeDef status;
+    HAL_StatusTypeDef status = HAL_ERROR;
 
     if (I2C_1 == instance)
         status = HAL_I2C_Master_Transmit(&hi2c1, slaveAddress, data, size, I2C_TIMEOUT);
@@ -95,7 +95,7 @@ void syshal_i2c_transfer(uint32_t instance, uint8_t slaveAddress, const uint8_t 
  */
 uint32_t syshal_i2c_receive(uint32_t instance, uint8_t slaveAddress, uint8_t * data, uint32_t size)
 {
-    HAL_StatusTypeDef status;
+    HAL_StatusTypeDef status = HAL_ERROR;
 
     if (I2C_1 == instance)
         status = HAL_I2C_Master_Receive(&hi2c1, slaveAddress, data, size, I2C_TIMEOUT);
@@ -126,7 +126,7 @@ uint32_t syshal_i2c_receive(uint32_t instance, uint8_t slaveAddress, uint8_t * d
  */
 uint32_t syshal_i2c_read_reg(uint32_t instance, uint8_t slaveAddress, uint8_t regAddress, uint8_t * data, uint32_t size)
 {
-    HAL_StatusTypeDef status;
+    HAL_StatusTypeDef status = HAL_ERROR;
 
     if (I2C_1 == instance)
         status = HAL_I2C_Mem_Read(&hi2c1, slaveAddress, regAddress, size, data, 1, I2C_TIMEOUT);
@@ -153,9 +153,9 @@ uint32_t syshal_i2c_read_reg(uint32_t instance, uint8_t slaveAddress, uint8_t re
  * @param[in]  data          The data buffer to be sent
  * @param[in]  size          The size of the data buffer in bytes
  */
-void syshal_i2c_write_reg(uint32_t instance, uint8_t slaveAddress, uint8_t regAddress, const uint8_t * data, uint32_t size)
+void syshal_i2c_write_reg(uint32_t instance, uint8_t slaveAddress, uint8_t regAddress, uint8_t * data, uint32_t size)
 {
-    HAL_StatusTypeDef status;
+    HAL_StatusTypeDef status = HAL_ERROR;
 
     if (I2C_1 == instance)
         status = HAL_I2C_Mem_Write(&hi2c1, slaveAddress, regAddress, size, data, size, I2C_TIMEOUT);

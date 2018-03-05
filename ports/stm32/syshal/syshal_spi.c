@@ -67,7 +67,7 @@ void syshal_spi_init(SPI_t instance)
  */
 void syshal_spi_transfer(SPI_t instance, uint8_t * data, uint32_t size)
 {
-    HAL_StatusTypeDef status;
+    HAL_StatusTypeDef status = HAL_ERROR;
 
     if (SPI_1 == instance)
         status = HAL_SPI_Transmit(&hspi1, data, size, SPI_TIMEOUT);
@@ -92,7 +92,7 @@ void syshal_spi_transfer(SPI_t instance, uint8_t * data, uint32_t size)
  */
 uint32_t syshal_spi_receive(SPI_t instance, uint8_t * data, uint32_t size)
 {
-    HAL_StatusTypeDef status;
+    HAL_StatusTypeDef status = HAL_ERROR;
 
     if (SPI_1 == instance)
         status = HAL_SPI_Receive(&hspi1, data, size, SPI_TIMEOUT);

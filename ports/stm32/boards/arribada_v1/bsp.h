@@ -53,7 +53,7 @@ typedef struct
     GPIO_InitTypeDef Init;
 } GPIO_InitTypeDefAndPort_t;
 
-extern const GPIO_InitTypeDefAndPort_t GPIO_Inits[GPIO_TOTAL_NUMBER];
+extern GPIO_InitTypeDefAndPort_t GPIO_Inits[GPIO_TOTAL_NUMBER];
 
 ///////////////////////////////// SPI definitions /////////////////////////////////
 #define SPI_TIMEOUT 1000
