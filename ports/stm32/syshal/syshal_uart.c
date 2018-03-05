@@ -74,7 +74,7 @@ void syshal_uart_init(UART_t instance)
  * @return byte read
  * @see usart_data_available()
  */
-static inline uint8_t usart_getc(UART_t instance)
+static inline uint8_t usart_getc_priv(UART_t instance)
 {
     return rb_remove(&rx_buffer[instance]); // Remove and return the first item from a ring buffer.
 }
@@ -107,7 +107,7 @@ uint32_t syshal_uart_receive(UART_t instance, uint8_t * data, uint32_t size)
 
     for (uint32_t i = 0; i < size; ++i)
     {
-        *data++ = usart_getc(instance);
+        *data++ = usart_getc_priv(instance);
     }
 
     return size;

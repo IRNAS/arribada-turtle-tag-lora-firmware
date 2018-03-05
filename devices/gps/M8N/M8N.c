@@ -23,9 +23,10 @@
 #include "debug.h"
 
 // Private functions
-static int syshal_gps_parseRxBuffer_priv(UBX_Packet_t * packet);
+static int syshal_gps_parse_rx_buffer_priv(UBX_Packet_t * packet);
 static void syshal_gps_process_nav_status_priv(UBX_Packet_t * packet);
 static void syshal_gps_process_nav_posllh_priv(UBX_Packet_t * packet);
+static void syshal_gps_set_checksum_priv(UBX_Packet_t * packet);
 
 bool gps_locked = false; // Do we currently have a GPS lock
 bool gps_locked_last = false;
@@ -57,6 +58,16 @@ __attribute__((weak)) void syshal_gps_callback(syshal_gps_event_t event)
     DEBUG_PR_WARN("%s Not implemented", __FUNCTION__);
 }
 
+void syshal_gps_send_packet_priv(UBX_Packet_t * ubx_packet)
+{
+    syshal_gps_set_checksum_priv(ubx_packet);
+
+    // The packet is not arranged contiguously in RAM, so we have to transmit
+    // it using two passes i.e., header then payload + CRC
+    syshal_uart_transfer(GPS_UART, (uint8_t *) ubx_packet, UBX_HEADER_LENGTH);
+    syshal_uart_transfer(GPS_UART, ubx_packet->payloadAndCrc, ubx_packet->msgLength + UBX_CRC_LENGTH);
+}
+
 /**
  * @brief      Get the most recent location from the GPS
  *
@@ -75,26 +86,40 @@ void syshal_gps_get_location(uint32_t * iTOW, int32_t * longitude, int32_t * lat
     *height = lastReadLocation.height;
 }
 
-/*void syshal_gps_shutdown(void)
+void syshal_gps_shutdown(void)
 {
-    DEBUG_PR_TRACE("Shutdown GPS "__FUNCTION__);
+    DEBUG_PR_TRACE("Shutdown GPS %s", __FUNCTION__);
 
     UBX_Packet_t ubx_packet;
     UBX_SET_PACKET_HEADER(&ubx_packet, UBX_MSG_CLASS_RXM, UBX_MSG_ID_RXM_PMREQ, sizeof(UBX_RXM_PMREQ2_t));
     UBX_PAYLOAD(&ubx_packet, UBX_RXM_PMREQ2)->version = UBX_RXM_PMREQ_VERSION;
     UBX_PAYLOAD(&ubx_packet, UBX_RXM_PMREQ2)->duration = 0; // Duration of the requested task, set to zero for infinite duration
     UBX_PAYLOAD(&ubx_packet, UBX_RXM_PMREQ2)->flags = UBX_RXM_PMREQ_FLAGS_BACKUP | UBX_RXM_PMREQ_FLAGS_FORCE; // The receiver goes into backup mode for a time period defined by duration
-    UBX_PAYLOAD(&ubx_packet, UBX_RXM_PMREQ2)->wakeupSources = wakeupSources; // Configure pins to wakeup the receiver. The receiver wakes up if there is either a falling or a rising edge on one of the configured pins
+    UBX_PAYLOAD(&ubx_packet, UBX_RXM_PMREQ2)->wakeupSources = UBX_RXM_PMREQ_WAKEUP_UARTRX; // Configure pins to wakeup the receiver on a UART RX pin edge
     // No ACK is expected for this message
-    send_ubx_packet();
-}*/
+    syshal_gps_send_packet_priv(&ubx_packet);
+
+    // We're sleeping so we don't have a gps lock
+    gps_locked = false;
+    gps_locked_last = false;
+    syshal_gps_callback(SYSHAL_GPS_EVENT_LOCK_LOST);
+}
+
+void syshal_gps_wake_up(void)
+{
+    DEBUG_PR_TRACE("Wakeup GPS %s", __FUNCTION__);
+
+    // We can send anything to wake the device
+    uint8_t data = 0xAA;
+    syshal_uart_transfer(GPS_UART, &data, 1);
+}
 
 void syshal_gps_tick(void)
 {
     UBX_Packet_t ubx_packet;
     int error;
 
-    error = syshal_gps_parseRxBuffer_priv(&ubx_packet);
+    error = syshal_gps_parse_rx_buffer_priv(&ubx_packet);
 
     if (GPS_UART_ERROR_CHECKSUM == error)
     {
@@ -179,7 +204,7 @@ static void syshal_gps_process_nav_posllh_priv(UBX_Packet_t * packet)
     }
 }
 
-static void syshal_gps_computeChecksum_priv(UBX_Packet_t * packet, uint8_t ck[2])
+static void syshal_gps_compute_checksum_priv(UBX_Packet_t * packet, uint8_t ck[2])
 {
     ck[0] = ck[1] = 0;
     uint8_t * buffer = &packet->msgClass;
@@ -201,28 +226,28 @@ static void syshal_gps_computeChecksum_priv(UBX_Packet_t * packet, uint8_t ck[2]
     }
 }
 
-void syshal_gps_setChecksum_priv(UBX_Packet_t * packet)
+void syshal_gps_set_checksum_priv(UBX_Packet_t * packet)
 {
     uint8_t ck[2];
 
     //assert(packet->msgLength <= UBX_MAX_PACKET_LENGTH);
-    syshal_gps_computeChecksum_priv(packet, ck);
+    syshal_gps_compute_checksum_priv(packet, ck);
     packet->payloadAndCrc[packet->msgLength]   = ck[0];
     packet->payloadAndCrc[packet->msgLength + 1] = ck[1];
 }
 
 // Return 0 on CRC match
-int syshal_gps_checkChecksum_priv(UBX_Packet_t * packet)
+int syshal_gps_check_checksum_priv(UBX_Packet_t * packet)
 {
     uint8_t ck[2];
 
     //assert(packet->msgLength <= UBX_MAX_PACKET_LENGTH);
-    syshal_gps_computeChecksum_priv(packet, ck);
+    syshal_gps_compute_checksum_priv(packet, ck);
     return (ck[0] == packet->payloadAndCrc[packet->msgLength] &&
             ck[1] == packet->payloadAndCrc[packet->msgLength + 1]) ? 0 : -1;
 }
 
-static int syshal_gps_parseRxBuffer_priv(UBX_Packet_t * packet)
+static int syshal_gps_parse_rx_buffer_priv(UBX_Packet_t * packet)
 {
 
     // Discard everything up until first sync word
@@ -302,7 +327,7 @@ label_sync_start:
         return GPS_UART_ERROR_INSUFFICIENT_BYTES;
 
     // Compute CRC and return
-    if (syshal_gps_checkChecksum_priv(packet) != 0)
+    if (syshal_gps_check_checksum_priv(packet) != 0)
         return GPS_UART_ERROR_CHECKSUM;
 
     return GPS_UART_NO_ERROR;

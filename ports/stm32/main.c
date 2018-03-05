@@ -32,7 +32,7 @@
 // Private function prototypes -----------------------------------------------
 void SystemClock_Config(void);
 
-// Callback function overrides
+// Callback function overrides -----------------------------------------------
 void syshal_gps_callback(syshal_gps_event_t event)
 {
     switch (event)
@@ -45,6 +45,7 @@ void syshal_gps_callback(syshal_gps_event_t event)
             break;
         case SYSHAL_GPS_EVENT_NEW_DATA:
             __NOP(); // Labels can only be followed by statements
+            syshal_gpio_set_output_toggle(GPIO_LED3);
             uint32_t iTOW;
             int32_t longitude, latitude, height;
             syshal_gps_get_location(&iTOW, &longitude, &latitude, &height);
@@ -76,39 +77,28 @@ int main(void)
     DEBUG_PR_SYS("Version:  %s", GIT_VERSION);
     DEBUG_PR_SYS("Compiled: %s %s With %s", COMPILE_DATE, COMPILE_TIME, COMPILER_NAME);
 
+    uint32_t deltaTime = syshal_time_get_ticks_ms();
+    bool gpsAwake = true;
+
     while (1)
     {
 
-        /*if (syshal_gps_locked())
-            GPS_lock_state = true;
-        else
-            GPS_lock_state = false;
+        uint32_t timeElapsed = syshal_time_get_ticks_ms() - deltaTime;
 
-        // GPS state has changed
-        if (GPS_last_state != GPS_lock_state)
+        if (timeElapsed > 5000)
         {
-            // If gps was locked
-            if (GPS_lock_state)
+            deltaTime += 5000;
+            if (gpsAwake)
             {
-                DEBUG_PR_SYS("GPS lock made");
+                syshal_gps_shutdown();
+                gpsAwake = false;
             }
             else
             {
-                DEBUG_PR_SYS("GPS lock lost");
+                syshal_gps_wake_up();
+                gpsAwake = true;
             }
         }
-
-        GPS_last_state = GPS_lock_state;
-
-        if (GPS_lock_state && syshal_gps_location_available())
-        {
-            uint32_t iTOW;
-            int32_t longitude, latitude, height;
-            syshal_gps_get_location(&iTOW, &longitude, &latitude, &height);
-            DEBUG_PR_INFO("New Location - time: %u ms, Long: %dE-7 deg, Lat: %dE-7 deg, Height: %d mm", iTOW, longitude, latitude, height);
-
-            syshal_gpio_set_output_toggle(GPIO_LED3);
-        }*/
 
         syshal_gps_tick();
 
