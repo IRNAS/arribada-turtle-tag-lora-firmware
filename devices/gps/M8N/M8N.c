@@ -29,26 +29,8 @@ static void syshal_gps_process_nav_posllh_priv(UBX_Packet_t * packet);
 static void syshal_gps_set_checksum_priv(UBX_Packet_t * packet);
 static void syshal_gps_send_packet_priv(UBX_Packet_t * ubx_packet);
 
-bool gps_locked = false; // Do we currently have a GPS lock
-bool gps_locked_last = false;
-uint32_t time_to_first_fix; // Time to first GPS fix in ms
-
-struct
-{
-    uint32_t iTOW;   // GPS time of week of the navigation epoch
-    int32_t  lon;    // Longitude
-    int32_t  lat;    // Latitude
-    int32_t  height; // Height above ellipsoid
-    int32_t  hMSL;   // Height above mean sea level
-} lastReadLocation; // Last known location
-
 void syshal_gps_init(void)
 {
-    gps_locked = false;
-    gps_locked_last = false;
-    time_to_first_fix = 0;
-    memset(&lastReadLocation, 0, sizeof(lastReadLocation)); // Clear structure
-
     // Make sure device is awake
     syshal_gps_wake_up();
 }
@@ -64,29 +46,6 @@ __attribute__((weak)) void syshal_gps_callback(syshal_gps_event_t event)
     DEBUG_PR_WARN("%s Not implemented", __FUNCTION__);
 }
 
-/**
- * @brief      Get the most recent location from the GPS
- *
- * @param      iTOW       The tow
- * @param      longitude  The longitude
- * @param      latitude   The latitude
- * @param      height     The height
- *
- * @return     Returns true if the location received has been previously unread
- */
-void syshal_gps_get_location(uint32_t * iTOW, int32_t * longitude, int32_t * latitude, int32_t * height)
-{
-    *iTOW = lastReadLocation.iTOW;
-    *longitude = lastReadLocation.lon;
-    *latitude = lastReadLocation.lat;
-    *height = lastReadLocation.height;
-}
-
-uint32_t syshal_gps_time_till_first_fix(void)
-{
-    return time_to_first_fix;
-}
-
 void syshal_gps_shutdown(void)
 {
     DEBUG_PR_TRACE("Shutdown GPS %s", __FUNCTION__);
@@ -99,14 +58,6 @@ void syshal_gps_shutdown(void)
     UBX_PAYLOAD(&ubx_packet, UBX_RXM_PMREQ2)->wakeupSources = UBX_RXM_PMREQ_WAKEUP_UARTRX; // Configure pins to wakeup the receiver on a UART RX pin edge
     // No ACK is expected for this message
     syshal_gps_send_packet_priv(&ubx_packet);
-
-    // We're sleeping so we don't have a gps lock
-    if (gps_locked)
-    {
-        gps_locked = false;
-        gps_locked_last = false;
-        syshal_gps_callback(SYSHAL_GPS_EVENT_LOCK_LOST);
-    }
 }
 
 void syshal_gps_wake_up(void)
@@ -184,39 +135,22 @@ static void syshal_gps_send_packet_priv(UBX_Packet_t * ubx_packet)
 
 static void syshal_gps_process_nav_status_priv(UBX_Packet_t * packet)
 {
-    uint8_t gpsFix = UBX_PAYLOAD(packet, UBX_NAV_STATUS)->gpsFix;
-    time_to_first_fix = UBX_PAYLOAD(packet, UBX_NAV_STATUS)->ttff;
+    // Populate the event and pass it to the main application
+    syshal_gps_event_t event;
+    event.event_id = SYSHAL_GPS_EVENT_STATUS;
+    memcpy(&event.event_data.status, &packet->UBX_NAV_STATUS, sizeof(syshal_gps_event_status_t));
 
-    // Do we have a GPS fix?
-    if ( (gpsFix > UBX_NAV_STATUS_GPSFIX_NOFIX) && (gpsFix <= UBX_NAV_STATUS_GPSFIX_TIME_ONLY) )
-        gps_locked = true;
-    else
-        gps_locked = false;
-
-    // Has our connection state changed from last time, if so notify the user application
-    if (gps_locked_last != gps_locked)
-    {
-        if (gps_locked)
-            syshal_gps_callback(SYSHAL_GPS_EVENT_LOCK_MADE);
-        else
-            syshal_gps_callback(SYSHAL_GPS_EVENT_LOCK_LOST);
-    }
-
-    gps_locked_last = gps_locked;
+    syshal_gps_callback(event);
 }
 
 static void syshal_gps_process_nav_posllh_priv(UBX_Packet_t * packet)
 {
-    if (gps_locked)
-    {
-        lastReadLocation.iTOW = UBX_PAYLOAD(packet, UBX_NAV_POSLLH)->iTOW;
-        lastReadLocation.lon = UBX_PAYLOAD(packet, UBX_NAV_POSLLH)->lon;
-        lastReadLocation.lat = UBX_PAYLOAD(packet, UBX_NAV_POSLLH)->lat;
-        lastReadLocation.height = UBX_PAYLOAD(packet, UBX_NAV_POSLLH)->height;
-        lastReadLocation.hMSL = UBX_PAYLOAD(packet, UBX_NAV_POSLLH)->hMSL;
+    // Populate the event and pass it to the main application
+    syshal_gps_event_t event;
+    event.event_id = SYSHAL_GPS_EVENT_POSLLH;
+    memcpy(&event.event_data.location, &packet->UBX_NAV_POSLLH, sizeof(syshal_gps_event_pos_llh_t));
 
-        syshal_gps_callback(SYSHAL_GPS_EVENT_NEW_DATA); // Notify the user application that there is new data pending
-    }
+    syshal_gps_callback(event);
 }
 
 static void syshal_gps_compute_checksum_priv(UBX_Packet_t * packet, uint8_t ck[2])

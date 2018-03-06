@@ -24,16 +24,45 @@
 
 typedef enum
 {
-    SYSHAL_GPS_EVENT_LOCK_MADE,
-    SYSHAL_GPS_EVENT_LOCK_LOST,
-    SYSHAL_GPS_EVENT_NEW_DATA
+    SYSHAL_GPS_EVENT_POSLLH,
+    SYSHAL_GPS_EVENT_STATUS
+} syshal_gps_event_id_t;
+
+typedef struct
+{
+    uint32_t iTOW;
+    uint8_t  gpsFix;
+    uint8_t  flags;
+    uint8_t  fixStat;
+    uint8_t  flags2;
+    uint32_t ttff;
+    uint32_t msss;
+} syshal_gps_event_status_t;
+
+typedef struct
+{
+    uint32_t iTOW;   // GPS time of week of the navigation epoch
+    int32_t  lon;    // Longitude
+    int32_t  lat;    // Latitude
+    int32_t  height; // Height above ellipsoid
+    int32_t  hMSL;   // Height above mean sea level
+    uint32_t hAcc;   // Horizontal accuracy estimate
+    uint32_t vAcc;   // Vertical accuracy estimate
+} syshal_gps_event_pos_llh_t;
+
+typedef struct
+{
+    syshal_gps_event_id_t event_id;
+    union
+    {
+        syshal_gps_event_status_t  status;
+        syshal_gps_event_pos_llh_t location;
+    } event_data;
 } syshal_gps_event_t;
 
 void syshal_gps_init(void);
 void syshal_gps_shutdown(void);
 void syshal_gps_wake_up(void);
-uint32_t syshal_gps_time_till_first_fix(void);
-void syshal_gps_get_location(uint32_t * iTOW, int32_t * longitude, int32_t * latitude, int32_t * height);
 void syshal_gps_tick(void);
 
 void syshal_gps_callback(syshal_gps_event_t event);

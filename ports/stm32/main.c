@@ -35,21 +35,16 @@ void SystemClock_Config(void);
 // Callback function overrides -----------------------------------------------
 void syshal_gps_callback(syshal_gps_event_t event)
 {
-    switch (event)
+    switch (event.event_id)
     {
-        case SYSHAL_GPS_EVENT_LOCK_MADE:
-            DEBUG_PR_SYS("GPS lock made in %lu ms", syshal_gps_time_till_first_fix());
+        case SYSHAL_GPS_EVENT_STATUS:
+            DEBUG_PR_SYS("SYSHAL_GPS_EVENT_STATUS");
             break;
-        case SYSHAL_GPS_EVENT_LOCK_LOST:
-            DEBUG_PR_SYS("GPS lock lost");
+        case SYSHAL_GPS_EVENT_POSLLH:
+            DEBUG_PR_SYS("SYSHAL_GPS_EVENT_POSLLH");
             break;
-        case SYSHAL_GPS_EVENT_NEW_DATA:
-            __NOP(); // Labels can only be followed by statements
-            syshal_gpio_set_output_toggle(GPIO_LED3);
-            uint32_t iTOW;
-            int32_t longitude, latitude, height;
-            syshal_gps_get_location(&iTOW, &longitude, &latitude, &height);
-            DEBUG_PR_INFO("New Location - time: %lu ms, Long: %ldE-7 deg, Lat: %ldE-7 deg, Height: %ld mm", iTOW, longitude, latitude, height);
+        default:
+            DEBUG_PR_WARN("Unknown GPS event in %s : %d", __FUNCTION__, event.event_id);
             break;
     }
 }
@@ -77,13 +72,13 @@ int main(void)
     DEBUG_PR_SYS("Version:  %s", GIT_VERSION);
     DEBUG_PR_SYS("Compiled: %s %s With %s", COMPILE_DATE, COMPILE_TIME, COMPILER_NAME);
 
-    uint32_t deltaTime = syshal_time_get_ticks_ms();
-    bool gpsAwake = true;
+    //uint32_t deltaTime = syshal_time_get_ticks_ms();
+    //bool gpsAwake = true;
 
     while (1)
     {
 
-        uint32_t timeElapsed = syshal_time_get_ticks_ms() - deltaTime;
+        /*uint32_t timeElapsed = syshal_time_get_ticks_ms() - deltaTime;
 
         if (timeElapsed > 5500)
         {
@@ -98,7 +93,7 @@ int main(void)
                 syshal_gps_wake_up();
                 gpsAwake = true;
             }
-        }
+        }*/
 
         syshal_gps_tick();
 
