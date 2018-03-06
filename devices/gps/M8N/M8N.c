@@ -46,6 +46,9 @@ __attribute__((weak)) void syshal_gps_callback(syshal_gps_event_t event)
     DEBUG_PR_WARN("%s Not implemented", __FUNCTION__);
 }
 
+/**
+ * @brief      Turn the GPS off
+ */
 void syshal_gps_shutdown(void)
 {
     DEBUG_PR_TRACE("Shutdown GPS %s", __FUNCTION__);
@@ -60,6 +63,9 @@ void syshal_gps_shutdown(void)
     syshal_gps_send_packet_priv(&ubx_packet);
 }
 
+/**
+ * @brief      Wake up the GPS device from a shutdown
+ */
 void syshal_gps_wake_up(void)
 {
     DEBUG_PR_TRACE("Wakeup GPS %s", __FUNCTION__);
@@ -69,55 +75,62 @@ void syshal_gps_wake_up(void)
     syshal_uart_transfer(GPS_UART, &data, 1);
 }
 
+/**
+ * @brief      Process the UART Rx buffer looking for any and all packets, if
+ *             any are valid process them and generate a callback event
+ */
 void syshal_gps_tick(void)
 {
     UBX_Packet_t ubx_packet;
     int error;
 
-    error = syshal_gps_parse_rx_buffer_priv(&ubx_packet);
+    do
+    {
+        error = syshal_gps_parse_rx_buffer_priv(&ubx_packet);
 
-    if (GPS_UART_ERROR_CHECKSUM == error)
-    {
-        DEBUG_PR_TRACE("GPS Checksum error");
-        return;
-    }
-    else if (GPS_UART_ERROR_MSG_TOO_BIG == error)
-    {
-        DEBUG_PR_TRACE("GPS Message too big");
-        return;
-    }
-    else if (GPS_UART_ERROR_INSUFFICIENT_BYTES == error)
-    {
-        //DEBUG_PR_TRACE("GPS Uart insufficient bytes");
-        return;
-    }
-    else if (GPS_UART_ERROR_MISSING_SYNC1 == error)
-    {
-        DEBUG_PR_TRACE("GPS missing Sync1");
-        return;
-    }
-    else if (GPS_UART_ERROR_MISSING_SYNC2 == error)
-    {
-        DEBUG_PR_TRACE("GPS missing Sync2");
-        return;
-    }
-    else if (GPS_UART_ERROR_MSG_PENDING == error)
-    {
-        //DEBUG_PR_TRACE("GPS message not fully received");
-        return;
-    }
-    else if (GPS_UART_NO_ERROR != error)
-    {
-        DEBUG_PR_TRACE("GPS Generic comm error");
-        return;
-    }
+        if (GPS_UART_ERROR_CHECKSUM == error)
+        {
+            DEBUG_PR_TRACE("GPS Checksum error");
+        }
+        else if (GPS_UART_ERROR_MSG_TOO_BIG == error)
+        {
+            DEBUG_PR_TRACE("GPS Message too big");
+        }
+        else if (GPS_UART_ERROR_INSUFFICIENT_BYTES == error)
+        {
+            //DEBUG_PR_TRACE("GPS Uart insufficient bytes");
+        }
+        else if (GPS_UART_ERROR_MISSING_SYNC1 == error)
+        {
+            DEBUG_PR_TRACE("GPS missing Sync1");
+        }
+        else if (GPS_UART_ERROR_MISSING_SYNC2 == error)
+        {
+            DEBUG_PR_TRACE("GPS missing Sync2");
+        }
+        else if (GPS_UART_ERROR_MSG_PENDING == error)
+        {
+            //DEBUG_PR_TRACE("GPS message not fully received");
+        }
+        else if (GPS_UART_NO_ERROR != error)
+        {
+            DEBUG_PR_TRACE("GPS Generic comm error");
+        }
 
-    if (UBX_IS_MSG(&ubx_packet, UBX_MSG_CLASS_NAV, UBX_MSG_ID_NAV_STATUS))
-        syshal_gps_process_nav_status_priv(&ubx_packet);
-    else if (UBX_IS_MSG(&ubx_packet, UBX_MSG_CLASS_NAV, UBX_MSG_ID_NAV_POSLLH))
-        syshal_gps_process_nav_posllh_priv(&ubx_packet);
-    else
-        DEBUG_PR_WARN("Unexpected GPS message class: (0x%02X) id: (0x%02X)", ubx_packet.msgClass, ubx_packet.msgId);
+        // Correct packet so process it
+        if (GPS_UART_NO_ERROR == error)
+        {
+            if (UBX_IS_MSG(&ubx_packet, UBX_MSG_CLASS_NAV, UBX_MSG_ID_NAV_STATUS))
+                syshal_gps_process_nav_status_priv(&ubx_packet);
+            else if (UBX_IS_MSG(&ubx_packet, UBX_MSG_CLASS_NAV, UBX_MSG_ID_NAV_POSLLH))
+                syshal_gps_process_nav_posllh_priv(&ubx_packet);
+            else
+                DEBUG_PR_WARN("Unexpected GPS message class: (0x%02X) id: (0x%02X)", ubx_packet.msgClass, ubx_packet.msgId);
+        }
+
+    }
+    while ( error != GPS_UART_NO_ERROR ); // Repeat this for every packet correctly received
+
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
