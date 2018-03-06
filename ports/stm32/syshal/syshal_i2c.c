@@ -29,6 +29,15 @@
 #include "bsp.h"
 #include "debug.h"
 
+// HAL to SYSHAL error code mapping table
+static int hal_error_map[] =
+{
+    SYSHAL_I2C_NO_ERROR,
+    SYSHAL_I2C_ERROR_DEVICE,
+    SYSHAL_I2C_ERROR_BUSY,
+    SYSHAL_I2C_ERROR_TIMEOUT,
+};
+
 // Private variables
 static I2C_HandleTypeDef hi2c[I2C_TOTAL_NUMBER];
 
@@ -36,14 +45,26 @@ static I2C_HandleTypeDef hi2c[I2C_TOTAL_NUMBER];
  * @brief      Initialise the given I2C instance
  *
  * @param[in]  instance  The I2C instance
+ *
+ * @return SYSHAL_I2C_ERROR_INVALID_INSTANCE if instance doesn't exist.
+ * @return SYSHAL_I2C_ERROR_DEVICE on HAL error.
+ * @return SYSHAL_I2C_ERROR_BUSY if the HW is busy.
+ * @return SYSHAL_I2C_ERROR_TIMEOUT if a timeout occurred.
  */
-void syshal_i2c_init(uint32_t instance)
+int syshal_i2c_init(uint32_t instance)
 {
+    HAL_StatusTypeDef status;
+
+    if (instance >= I2C_TOTAL_NUMBER)
+        return SYSHAL_I2C_ERROR_INVALID_INSTANCE;
+
     // Populate internal handlers from bsp
     hi2c[instance].Instance = I2C_Inits[I2C_1].Instance;
     hi2c[instance].Init = I2C_Inits[I2C_1].Init;
 
-    HAL_I2C_Init(&hi2c[instance]);
+    status = HAL_I2C_Init(&hi2c[instance]);
+
+    return hal_error_map[status];
 }
 
 /**

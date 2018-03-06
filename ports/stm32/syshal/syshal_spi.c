@@ -48,14 +48,14 @@ static int hal_error_map[] =
  */
 int syshal_spi_init(uint32_t instance)
 {
-    // Populate internal handlers from bsp
-    hspi[instance].Instance = SPI_Inits[instance].Instance;
-    hspi[instance].Init = SPI_Inits[instance].Init;
-
     HAL_StatusTypeDef status;
 
     if (instance >= SPI_TOTAL_NUMBER)
         return SYSHAL_SPI_ERROR_INVALID_INSTANCE;
+
+    // Populate internal handlers from bsp
+    hspi[instance].Instance = SPI_Inits[instance].Instance;
+    hspi[instance].Init = SPI_Inits[instance].Init;
 
     status = HAL_SPI_Init(&hspi[instance]);
 

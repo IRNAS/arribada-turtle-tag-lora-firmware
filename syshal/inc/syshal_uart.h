@@ -21,11 +21,19 @@
 
 #include "bsp.h"
 
-void syshal_uart_init(UART_t instance);
-void syshal_uart_term(UART_t instance);
-void syshal_uart_transfer(UART_t instance, uint8_t * data, uint32_t size);
-uint32_t syshal_uart_receive(UART_t instance, uint8_t * data, uint32_t size);
-bool syshal_uart_peek_at(UART_t instance, uint8_t * byte, uint32_t location);
-uint32_t syshal_uart_available(UART_t instance);
+// Constants
+#define SYSHAL_UART_NO_ERROR                0
+#define SYSHAL_UART_ERROR_INVALID_SIZE	   -1
+#define SYSHAL_UART_ERROR_INVALID_INSTANCE -2
+#define SYSHAL_UART_ERROR_BUSY             -3
+#define SYSHAL_UART_ERROR_TIMEOUT          -4
+#define SYSHAL_UART_ERROR_DEVICE           -5
+
+int syshal_uart_init(uint32_t instance);
+int syshal_uart_term(uint32_t instance);
+int syshal_uart_transfer(uint32_t instance, uint8_t * data, uint32_t size);
+int syshal_uart_receive(uint32_t instance, uint8_t * data, uint32_t size);
+bool syshal_uart_peek_at(uint32_t instance, uint8_t * byte, uint32_t location);
+uint32_t syshal_uart_available(uint32_t instance);
 
 #endif /* _SYSHAL_UART_H_ */

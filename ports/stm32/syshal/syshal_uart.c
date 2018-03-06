@@ -21,6 +21,15 @@
 #include "ring_buffer.h"
 #include "debug.h"
 
+// HAL to SYSHAL error code mapping table
+static int hal_error_map[] =
+{
+    SYSHAL_UART_NO_ERROR,
+    SYSHAL_UART_ERROR_DEVICE,
+    SYSHAL_UART_ERROR_BUSY,
+    SYSHAL_UART_ERROR_TIMEOUT,
+};
+
 // Private variables
 static UART_HandleTypeDef huart[UART_TOTAL_NUMBER];
 
@@ -28,8 +37,23 @@ static UART_HandleTypeDef huart[UART_TOTAL_NUMBER];
 static ring_buffer_t rx_buffer[UART_TOTAL_NUMBER];
 static uint8_t rx_data[UART_TOTAL_NUMBER][UART_RX_BUF_SIZE];
 
-void syshal_uart_init(UART_t instance)
+/**
+ * @brief      Initialise the given UART instance
+ *
+ * @param[in]  instance  The UART instance
+ *
+ * @return SYSHAL_UART_ERROR_INVALID_INSTANCE if instance doesn't exist.
+ * @return SYSHAL_UART_ERROR_DEVICE on HAL error.
+ * @return SYSHAL_UART_ERROR_BUSY if the HW is busy.
+ * @return SYSHAL_UART_ERROR_TIMEOUT if a timeout occurred.
+ */
+int syshal_uart_init(uint32_t instance)
 {
+    HAL_StatusTypeDef status;
+
+    if (instance >= UART_TOTAL_NUMBER)
+        return SYSHAL_UART_ERROR_INVALID_INSTANCE;
+
     // Populate internal handlers from bsp
     huart[instance].Instance = UART_Inits[instance].Instance;
     huart[instance].Init = UART_Inits[instance].Init;
@@ -45,7 +69,31 @@ void syshal_uart_init(UART_t instance)
         setvbuf(stderr, NULL, _IONBF, 0);
     }
 
-    HAL_UART_Init(&huart[instance]);
+    status = HAL_UART_Init(&huart[instance]);
+
+    return hal_error_map[status];
+}
+
+/**
+ * @brief      Deinitialise the given UART instance
+ *
+ * @param[in]  instance  The UART instance
+ *
+ * @return SYSHAL_UART_ERROR_INVALID_INSTANCE if instance doesn't exist.
+ * @return SYSHAL_UART_ERROR_DEVICE on HAL error.
+ * @return SYSHAL_UART_ERROR_BUSY if the HW is busy.
+ * @return SYSHAL_UART_ERROR_TIMEOUT if a timeout occurred.
+ */
+int syshal_uart_term(uint32_t instance)
+{
+    HAL_StatusTypeDef status;
+
+    if (instance >= UART_TOTAL_NUMBER)
+        return SYSHAL_UART_ERROR_INVALID_INSTANCE;
+
+    status = HAL_UART_DeInit(&huart[instance]);
+
+    return hal_error_map[status];
 }
 
 /**
@@ -70,7 +118,7 @@ static inline uint8_t usart_getc_priv(UART_t instance)
  *
  * @return     Number of bytes in serial port's RX buffer.
  */
-uint32_t syshal_uart_available(UART_t instance)
+uint32_t syshal_uart_available(uint32_t instance)
 {
     return rb_full_count(&rx_buffer[instance]); // Return the number of elements stored in the ring buffer
 }
@@ -82,7 +130,7 @@ uint32_t syshal_uart_available(UART_t instance)
  * @param size Maximum number of bytes to store
  * @return Number of bytes received
  */
-uint32_t syshal_uart_receive(UART_t instance, uint8_t * data, uint32_t size)
+int syshal_uart_receive(uint32_t instance, uint8_t * data, uint32_t size)
 {
     uint32_t count = rb_full_count(&rx_buffer[instance]);
 
@@ -98,7 +146,7 @@ uint32_t syshal_uart_receive(UART_t instance, uint8_t * data, uint32_t size)
 }
 
 // Peek at character at location at nth depth in rx buffer (0 being the oldest/top value of the FIFO). Return true on success
-bool syshal_uart_peek_at(UART_t instance, uint8_t * byte, uint32_t location)
+bool syshal_uart_peek_at(uint32_t instance, uint8_t * byte, uint32_t location)
 {
     *byte = rb_peek_at(&rx_buffer[instance], location);//rb_peek(&rx_buffer[instance]);//rb_peek_at(&rx_buffer[instance], location);
 
@@ -108,23 +156,21 @@ bool syshal_uart_peek_at(UART_t instance, uint8_t * byte, uint32_t location)
         return true;
 }
 
-void syshal_uart_transfer(UART_t instance, uint8_t * data, uint32_t size)
+int syshal_uart_transfer(uint32_t instance, uint8_t * data, uint32_t size)
 {
 
     if (!size)
-        return;
+        return SYSHAL_UART_ERROR_INVALID_SIZE;
 
     HAL_StatusTypeDef status;
 
     // Wait for UART to be free
     while (HAL_UART_GetState(&huart[instance]) != HAL_UART_STATE_READY)
     {}
+
     status = HAL_UART_Transmit(&huart[instance], data, size, UART_TIMEOUT);
 
-    if (HAL_OK != status)
-    {
-        DEBUG_PR_ERROR("%s failed with %d", __FUNCTION__, status);
-    }
+    return hal_error_map[status];
 }
 
 // Implement MSP hooks that are called by stm32f0xx_hal_uart
