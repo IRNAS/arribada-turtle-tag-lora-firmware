@@ -206,7 +206,7 @@ $(BUILD_DIR):
 
 flash:
 	$(MAKE) all
-	$(OPENOCD) -s $(OPENOCDSCRIPTS) -f STM32F042K6_OpenOCD.cfg -c "init" -c "reset halt" -c "flash write_image erase $(BUILD_DIR)/$(TARGET).elf" -c "verify_image $(BUILD_DIR)/$(TARGET).elf" -c "reset run" -c "shutdown"
+	$(OPENOCD) -s $(OPENOCDSCRIPTS) -f board/stm32f0discovery.cfg -c "init" -c "reset halt" -c "sleep 100" -c "wait_halt 2" -c "flash write_image erase $(BUILD_DIR)/$(TARGET).elf" -c "sleep 100" -c "verify_image $(BUILD_DIR)/$(TARGET).elf" -c "reset run" -c "shutdown"
 
 #######################################
 # clean up

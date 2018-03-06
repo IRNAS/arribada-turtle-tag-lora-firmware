@@ -63,7 +63,7 @@ int main(void)
     syshal_gpio_init(GPIO_LED4);
     syshal_gpio_init(GPIO_LED5);
     syshal_gpio_init(GPIO_LED6);
-    //syshal_uart_init(UART_1);
+    syshal_uart_init(UART_1);
     //syshal_uart_init(UART_2);
     //syshal_spi_init(SPI_1);
     //syshal_i2c_init(I2C_1);

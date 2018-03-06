@@ -30,6 +30,8 @@
 #ifndef _ring_buffer_H_
 #define _ring_buffer_H_
 
+#include <stdint.h>
+
 /**
  * Ring buffer type.
  *
@@ -129,7 +131,6 @@ static inline uint8_t rb_remove(ring_buffer_t * rb)
  * @brief Return the first item from a ring buffer, without removing it
  * @param rb Buffer to remove from, must contain at least one element.
  */
-
 static inline int rb_peek(ring_buffer_t * rb)
 {
     if (rb->head == rb->tail)
