@@ -33,7 +33,8 @@
 static SPI_HandleTypeDef hspi[SPI_TOTAL_NUMBER];
 
 /* HAL to SYSHAL error code mapping table */
-static int hal_error_map[] = {
+static int hal_error_map[] =
+{
     SYSHAL_SPI_NO_ERROR,
     SYSHAL_SPI_ERROR_DEVICE,
     SYSHAL_SPI_ERROR_BUSY,
@@ -47,6 +48,10 @@ static int hal_error_map[] = {
  */
 int syshal_spi_init(uint32_t instance)
 {
+    // Populate internal handlers from bsp
+    hspi[instance].Instance = SPI_Inits[instance].Instance;
+    hspi[instance].Init = SPI_Inits[instance].Init;
+
     HAL_StatusTypeDef status;
 
     if (instance >= SPI_TOTAL_NUMBER)
@@ -120,9 +125,9 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef * hspi)
         __HAL_RCC_SPI2_CLK_ENABLE();
 
         // SPI2 GPIO Configuration
-        // syshal_gpio_init(GPIO_SPI2_MOSI); // TODO needs implementing
-        // syshal_gpio_init(GPIO_SPI2_MISO); // TODO needs implementing
-        // syshal_gpio_init(GPIO_SPI2_SCK);  // TODO needs implementing
+        syshal_gpio_init(GPIO_SPI2_MOSI);
+        syshal_gpio_init(GPIO_SPI2_MISO);
+        syshal_gpio_init(GPIO_SPI2_SCK);
     }
 
 }
@@ -147,9 +152,9 @@ void HAL_SPI_MspDeInit(SPI_HandleTypeDef * hspi)
         __HAL_RCC_SPI2_CLK_DISABLE();
 
         // SPI2 GPIO Configuration
-        // syshal_gpio_term(GPIO_SPI2_MOSI); // TODO needs implementing
-        // syshal_gpio_term(GPIO_SPI2_MISO); // TODO needs implementing
-        // syshal_gpio_term(GPIO_SPI2_SCK);  // TODO needs implementing
+        syshal_gpio_term(GPIO_SPI2_MOSI);
+        syshal_gpio_term(GPIO_SPI2_MISO);
+        syshal_gpio_term(GPIO_SPI2_SCK);
     }
 
 }

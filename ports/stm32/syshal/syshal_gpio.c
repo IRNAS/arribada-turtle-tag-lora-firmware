@@ -40,6 +40,9 @@ void syshal_gpio_init(uint32_t pin)
     if (GPIOB == GPIO_Inits[pin].Port)
         __HAL_RCC_GPIOB_CLK_ENABLE();
 
+    if (GPIOC == GPIO_Inits[pin].Port)
+        __HAL_RCC_GPIOC_CLK_ENABLE();
+
     if (GPIOF == GPIO_Inits[pin].Port)
         __HAL_RCC_GPIOF_CLK_ENABLE();
 

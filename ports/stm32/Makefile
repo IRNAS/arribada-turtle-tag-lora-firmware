@@ -22,7 +22,7 @@ TARGET = ArribadaSTM32
 # debug build?
 DEBUG = 1
 # optimization
-OPT = -Og
+OPT = -O3
 
 BOARD = arribada_v1
 
@@ -78,7 +78,7 @@ main.c
 
 # ASM sources
 ASM_SOURCES =  \
-startup_stm32f042x6.s
+startup_stm32f072xb.s
 
 
 ######################################
@@ -120,7 +120,7 @@ AS_DEFS =
 # C defines
 C_DEFS =  \
 -DUSE_HAL_DRIVER \
--DSTM32F042x6 \
+-DSTM32F072xB \
 -DDEBUG_COLOR \
 -DGIT_VERSION=\"$(G_VERSION)\"
 
@@ -148,7 +148,7 @@ ASFLAGS = $(MCU) $(AS_DEFS) $(AS_INCLUDES) $(OPT) -Wall -Werror -fdata-sections 
 CFLAGS = $(MCU) $(C_DEFS) $(C_INCLUDES) $(OPT) -Wall -Werror -fdata-sections -ffunction-sections
 
 ifeq ($(DEBUG), 1)
-CFLAGS += -g -gdwarf-2
+CFLAGS += -g
 endif
 
 
@@ -160,7 +160,7 @@ CFLAGS += -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@:%.o=%.d)"
 # LDFLAGS
 #######################################
 # link script
-LDSCRIPT = STM32F042K6Tx_FLASH.ld
+LDSCRIPT = STM32F072RBTx_FLASH.ld
 
 # libraries
 LIBS = -lc -lm -lnosys 

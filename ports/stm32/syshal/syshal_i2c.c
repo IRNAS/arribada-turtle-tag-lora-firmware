@@ -30,8 +30,7 @@
 #include "debug.h"
 
 // Private variables
-static I2C_HandleTypeDef hi2c1;
-//static I2C_HandleTypeDef hi2c2;
+static I2C_HandleTypeDef hi2c[I2C_TOTAL_NUMBER];
 
 /**
  * @brief      Initialise the given I2C instance
@@ -40,23 +39,11 @@ static I2C_HandleTypeDef hi2c1;
  */
 void syshal_i2c_init(uint32_t instance)
 {
-    if (I2C_1 == instance)
-    {
-        // Populate internal handlers
-        hi2c1.Instance = I2C_Inits[I2C_1].Instance;
-        hi2c1.Init = I2C_Inits[I2C_1].Init;
+    // Populate internal handlers from bsp
+    hi2c[instance].Instance = I2C_Inits[I2C_1].Instance;
+    hi2c[instance].Init = I2C_Inits[I2C_1].Init;
 
-        HAL_I2C_Init(&hi2c1);
-    }
-
-    /*if (I2C_2 == instance)
-    {
-        // Populate internal handlers
-        hi2c2.Instance = I2C_Inits[I2C_2].Instance;
-        hi2c2.Init = I2C_Inits[I2C_2].Init;
-
-        HAL_I2C_Init(&hi2c2);
-    }*/
+    HAL_I2C_Init(&hi2c[instance]);
 }
 
 /**
@@ -71,11 +58,7 @@ void syshal_i2c_transfer(uint32_t instance, uint8_t slaveAddress, uint8_t * data
 {
     HAL_StatusTypeDef status = HAL_ERROR;
 
-    if (I2C_1 == instance)
-        status = HAL_I2C_Master_Transmit(&hi2c1, slaveAddress, data, size, I2C_TIMEOUT);
-
-    /*if (I2C_2 == instance)
-        status = HAL_I2C_Master_Transmit(&hi2c2, slaveAddress, data, size, I2C_TIMEOUT);*/
+    status = HAL_I2C_Master_Transmit(&hi2c[instance], slaveAddress, data, size, I2C_TIMEOUT);
 
     if (HAL_OK != status)
     {
@@ -97,11 +80,7 @@ uint32_t syshal_i2c_receive(uint32_t instance, uint8_t slaveAddress, uint8_t * d
 {
     HAL_StatusTypeDef status = HAL_ERROR;
 
-    if (I2C_1 == instance)
-        status = HAL_I2C_Master_Receive(&hi2c1, slaveAddress, data, size, I2C_TIMEOUT);
-
-    /*if (I2C_2 == instance)
-        status = HAL_I2C_Master_Receive(&hi2c2, slaveAddress, data, size, I2C_TIMEOUT);*/
+    status = HAL_I2C_Master_Receive(&hi2c[instance], slaveAddress, data, size, I2C_TIMEOUT);
 
     // return number of bytes read as best we can tell
     if (HAL_OK != status)
@@ -128,11 +107,7 @@ uint32_t syshal_i2c_read_reg(uint32_t instance, uint8_t slaveAddress, uint8_t re
 {
     HAL_StatusTypeDef status = HAL_ERROR;
 
-    if (I2C_1 == instance)
-        status = HAL_I2C_Mem_Read(&hi2c1, slaveAddress, regAddress, size, data, 1, I2C_TIMEOUT);
-
-    /*if (I2C_2 == instance)
-        status = HAL_I2C_Mem_Read(&hi2c2, slaveAddress, regAddress, size, data, 1, I2C_TIMEOUT);*/
+    status = HAL_I2C_Mem_Read(&hi2c[instance], slaveAddress, regAddress, size, data, 1, I2C_TIMEOUT);
 
     // return number of bytes read as best we can tell
     if (HAL_OK != status)
@@ -157,11 +132,7 @@ void syshal_i2c_write_reg(uint32_t instance, uint8_t slaveAddress, uint8_t regAd
 {
     HAL_StatusTypeDef status = HAL_ERROR;
 
-    if (I2C_1 == instance)
-        status = HAL_I2C_Mem_Write(&hi2c1, slaveAddress, regAddress, size, data, size, I2C_TIMEOUT);
-
-    /*if (I2C_2 == instance)
-        status = HAL_I2C_Mem_Write(&hi2c2, slaveAddress, regAddress, size, data, size, I2C_TIMEOUT);*/
+    status = HAL_I2C_Mem_Write(&hi2c[instance], slaveAddress, regAddress, size, data, size, I2C_TIMEOUT);
 
     if (HAL_OK != status)
     {
@@ -183,15 +154,15 @@ void HAL_I2C_MspInit(I2C_HandleTypeDef * hi2c)
         __HAL_RCC_I2C1_CLK_ENABLE();
 
     }
-    /*if (hi2c->Instance == I2C2)
+    if (hi2c->Instance == I2C2)
     {
         // I2C2 GPIO Configuration
-        // syshal_gpio_init(GPIO_I2C2_SDA); // TODO needs implementing
-        // syshal_gpio_init(GPIO_I2C2_SCL); // TODO needs implementing
+        syshal_gpio_init(GPIO_I2C2_SDA);
+        syshal_gpio_init(GPIO_I2C2_SCL);
 
         // Peripheral clock enable
         __HAL_RCC_I2C2_CLK_ENABLE();
-    }*/
+    }
 
 }
 
@@ -207,14 +178,14 @@ void HAL_I2C_MspDeInit(I2C_HandleTypeDef * hi2c)
         syshal_gpio_term(GPIO_I2C1_SDA);
         syshal_gpio_term(GPIO_I2C1_SCL);
     }
-    /*if (hi2c->Instance == I2C2)
+    if (hi2c->Instance == I2C2)
     {
         // Peripheral clock disable
         __HAL_RCC_I2C2_CLK_DISABLE();
 
         // I2C2 GPIO Configuration
-        // syshal_gpio_term(GPIO_I2C2_SDA); // TODO needs implementing
-        // syshal_gpio_term(GPIO_I2C2_SCL); // TODO needs implementing
-    }*/
+        syshal_gpio_term(GPIO_I2C2_SDA);
+        syshal_gpio_term(GPIO_I2C2_SCL);
+    }
 
 }

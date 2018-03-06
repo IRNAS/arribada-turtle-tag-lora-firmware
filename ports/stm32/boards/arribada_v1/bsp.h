@@ -33,16 +33,27 @@
 ///////////////////////////////// GPIO definitions ////////////////////////////////
 typedef enum
 {
+    GPIO_BUTTON1,
     GPIO_LED3,
+    GPIO_LED4,
+    GPIO_LED5,
+    GPIO_LED6,
     GPIO_UART1_TX,
     GPIO_UART1_RX,
-    GPIO_UART2_TX,
-    GPIO_UART2_RX,
+    GPIO_UART3_TX,
+    GPIO_UART3_RX,
+    GPIO_UART4_TX,
+    GPIO_UART4_RX,
     GPIO_I2C1_SCL,
     GPIO_I2C1_SDA,
+    GPIO_I2C2_SCL,
+    GPIO_I2C2_SDA,
     GPIO_SPI1_SCK,
     GPIO_SPI1_MISO,
     GPIO_SPI1_MOSI,
+    GPIO_SPI2_SCK,
+    GPIO_SPI2_MISO,
+    GPIO_SPI2_MOSI,
     GPIO_TOTAL_NUMBER
 } GPIO_Pins_t;
 
@@ -79,7 +90,7 @@ extern const SPI_InitTypeDefAndInst_t SPI_Inits[SPI_TOTAL_NUMBER];
 typedef enum
 {
     I2C_1,
-//    I2C_2,
+    I2C_2,
     I2C_TOTAL_NUMBER
 } I2C_t;
 
@@ -93,14 +104,16 @@ extern const I2C_InitTypeDefAndInst_t I2C_Inits[I2C_TOTAL_NUMBER];
 
 ///////////////////////////////// UART definitions ////////////////////////////////
 #define UART_TIMEOUT 1000
-#define UART_SAFE_INSERT // Don't overwrite values we've received if the buffer overflows
+#define UART_SAFE_INSERT // Don't overwrite values we've received if the rx buffer overflows
 
 #define UART_RX_BUF_SIZE 256
 
 typedef enum
 {
     UART_1,
-    UART_2,
+//    UART_2,
+    UART_3,
+    UART_4,
     UART_TOTAL_NUMBER
 } UART_t;
 
@@ -112,7 +125,9 @@ typedef struct
 
 extern const UART_InitTypeDefAndInst_t UART_Inits[UART_TOTAL_NUMBER];
 
+#define PRINTF_UART UART_1
+
 ///////////////////////////////// GPS definitions /////////////////////////////////
-#define GPS_UART UART_1
+#define GPS_UART UART_3
 
 #endif /* _BSP_H_ */
