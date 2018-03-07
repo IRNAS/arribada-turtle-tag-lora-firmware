@@ -1,3 +1,8 @@
 ports/stm32/Build/
 *.sublime-project
 *.sublime-workspace
+*.gcda
+*.gcno
+*-results.xml
+*.o
+*.log
