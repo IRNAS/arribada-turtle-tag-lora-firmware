@@ -65,6 +65,9 @@ void syshal_gps_shutdown(void);
 void syshal_gps_wake_up(void);
 void syshal_gps_tick(void);
 
+int syshal_gps_send_raw(uint8_t * data, uint32_t size);
+int syshal_gps_receive_raw(uint8_t * data, uint32_t size);
+
 void syshal_gps_callback(syshal_gps_event_t event);
 
 #endif /* _SYSHAL_GPS_H_ */

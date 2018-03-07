@@ -133,6 +133,33 @@ void syshal_gps_tick(void)
 
 }
 
+/**
+ * @brief      Sends raw unedited data to the GPS module
+ *
+ * @param[in]  data  The data to be transmitted
+ * @param[in]  size  The size of the data in bytes
+ *
+ * @return     Error code
+ */
+int syshal_gps_send_raw(uint8_t * data, uint32_t size)
+{
+    return syshal_uart_transfer(GPS_UART, data, size);
+}
+
+/**
+ * @brief      Receives raw unedited data to the GPS module. syshal_gps_tick()
+ *             should not be called when the user is expecting a raw message
+ *
+ * @param[in]  data  The received data
+ * @param[in]  size  The size of the data to be read in bytes
+ *
+ * @return     Error code
+ */
+int syshal_gps_receive_raw(uint8_t * data, uint32_t size)
+{
+    return syshal_uart_receive(GPS_UART, data, size);
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////// Private functions //////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
