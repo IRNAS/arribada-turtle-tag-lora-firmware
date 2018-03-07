@@ -30,10 +30,10 @@
     p->h.sync  = CMD_SYNCWORD; \
     p->h.cmd   = i;
 
-typedef struct
+typedef struct __attribute__((__packed__))
 {
-    uint32_t sync; // Start of command synchronization byte
-    uint32_t cmd;
+    uint8_t sync; // Start of command synchronization byte
+    uint8_t cmd;
 } cmd_hdr_t;
 
 typedef enum
@@ -54,10 +54,10 @@ typedef enum
     CMD_GPS_WRITE_REQ,      // Send UBX commands directly to the GPS module
     CMD_GPS_READ_REQ,       // Receive UBX command responses directly from the GPS module
     CMD_GPS_RESP,           // The response from the GPS module
-    CMD_GPS_IRQ_CONFIG_REQ, // Allow a GPS IRQ events to be generated and sent over the USB interrupt endpoint.  This shall be used to indicate that data is available to be read from the internal FIFO
+    CMD_GPS_CONFIG_REQ,     // Allow a GPS IRQ events to be generated and sent over the USB interrupt endpoint.  This shall be used to indicate that data is available to be read from the internal FIFO
 
     ////////////////// BLE Bridge ///////////////////
-    CMD_BLE_IRQ_CONFIG_REQ, // Allow BLE IRQ events to be generated and sent over the USB interrupt endpoint
+    CMD_BLE_CONFIG_REQ,     // Allow BLE IRQ events to be generated and sent over the USB interrupt endpoint
     CMD_BLE_WRITE_REQ,      // Initiate a write to the BLE module at Address with data of Length
     CMD_BLE_READ_REQ,       // Initiate a read from the BLE module from Address for data of Length
 
@@ -82,75 +82,75 @@ typedef enum
 } cmd_id_t;
 
 // Generic response message
-typedef struct
+typedef struct __attribute__((__packed__))
 {
     uint8_t error_code;
 } cmd_generic_resp_t;
 
 ///////////////// Configuration /////////////////
-typedef struct
+typedef struct __attribute__((__packed__))
 {
     uint16_t configuration_tag;
 } cmd_cfg_read_req_t;
 
-typedef struct
+typedef struct __attribute__((__packed__))
 {
     uint32_t length;
 } cmd_cfg_write_req_t;
 
-typedef struct
+typedef struct __attribute__((__packed__))
 {
     uint16_t configuration_tag;
 } cmd_cfg_erase_req_t;
 
-typedef struct
+typedef struct __attribute__((__packed__))
 {
     uint8_t error_code;
     uint32_t length
 } cmd_cfg_read_resp_t;
 
 ////////////////// GPS Bridge ///////////////////
-typedef struct
+typedef struct __attribute__((__packed__))
 {
     uint32_t length;
 } cmd_gps_write_req_t;
 
-typedef struct
+typedef struct __attribute__((__packed__))
 {
     uint32_t length;
 } cmd_gps_read_req_t;
 
-typedef struct
+typedef struct __attribute__((__packed__))
 {
     uint8_t error_code;
     uint32_t length;
 } cmd_gps_resp_t;
 
-typedef struct
+typedef struct __attribute__((__packed__))
 {
     uint8_t enable;
-} cmd_gps_irq_config_req_t;
+} cmd_gps_config_req_t;
 
 ////////////////// BLE Bridge ///////////////////
-typedef struct
+typedef struct __attribute__((__packed__))
 {
     uint8_t enable;
-} cmd_ble_irq_config_req_t;
+} cmd_ble_config_req_t;
 
-typedef struct
+typedef struct __attribute__((__packed__))
 {
     uint8_t address;
     uint16_t length;
 } cmd_ble_write_req_t;
 
-typedef struct
+typedef struct __attribute__((__packed__))
 {
     uint8_t address;
     uint16_t length;
 } cmd_ble_read_req_t;
 
 //////////////////// System /////////////////////
-typedef struct
+typedef struct __attribute__((__packed__))
 {
     uint8_t error_code;
     uint32_t firmware_version;
@@ -158,30 +158,30 @@ typedef struct
     uint32_t configuration_format_version;
 } cmd_status_resp_t;
 
-typedef struct
+typedef struct __attribute__((__packed__))
 {
     uint8_t image_type;
     uint32_t length;
     uint32_t CRC;
 } cmd_fw_send_image_req_t;
 
-typedef struct
+typedef struct __attribute__((__packed__))
 {
     uint8_t error_code;
 } cmd_fw_send_image_complete_ind_t;
 
-typedef struct
+typedef struct __attribute__((__packed__))
 {
     uint8_t image_type;
 } cmd_fw_apply_image_req_t;
 
-typedef struct
+typedef struct __attribute__((__packed__))
 {
     uint8_t reset_type;
 } cmd_reset_req_t;
 
 //////////////////// Battery /////////////////////
-typedef struct
+typedef struct __attribute__((__packed__))
 {
     uint8_t error_code;
     uint8_t charging_indicator;
@@ -189,20 +189,20 @@ typedef struct
 } cmd_battery_status_resp_t;
 
 //////////////////// Logging /////////////////////
-typedef struct
+typedef struct __attribute__((__packed__))
 {
     uint8_t mode;
     uint8_t sync_enable;
     uint8_t max_file_size;
 } cmd_log_create_req_t;
 
-typedef struct
+typedef struct __attribute__((__packed__))
 {
     uint32_t start_offset;
     uint32_t length;
 } cmd_log_read_req_t;
 
-typedef struct
+typedef struct __attribute__((__packed__))
 {
     uint8_t error_code;
     uint32_t length;
