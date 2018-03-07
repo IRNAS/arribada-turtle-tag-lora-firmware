@@ -47,6 +47,13 @@ Flash_CPPFLAGS = $(AM_CPPFLAGS) -I$(devices_srcdir)/flash/S25FL128
 
 TESTS += Flash.test
 
+check_PROGRAMS += Ring_Buffer
+nodist_Ring_Buffer_SOURCES = $(gtest_srcdir)/Ring_Buffer.cpp
+
+Ring_Buffer_LDADD = $(COMMON_LDADD)
+Ring_Buffer_CPPFLAGS = $(AM_CPPFLAGS) -I$(core_srcdir)/ring_buffer
+TESTS += Ring_Buffer.test
+
 LINT_FLAGS  = -"A(C++2010)"
 LINT_FLAGS += -e537 # Ignore repeated includes
 LINT_FLAGS += -e160 # Allow GNU statement expression extension

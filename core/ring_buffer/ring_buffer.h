@@ -44,9 +44,9 @@
 typedef struct
 {
     volatile uint8_t * buf; /**< Buffer items are stored into */
-    volatile uint16_t head;         /**< Index of the next item to remove */
-    volatile uint16_t tail;         /**< Index where the next item will get inserted */
-    volatile uint16_t size;         /**< Buffer capacity minus one */
+    volatile uint16_t head; /**< Index of the next item to remove */
+    volatile uint16_t tail; /**< Index where the next item will get inserted */
+    volatile uint16_t size; /**< Buffer capacity minus one */
 } ring_buffer_t;
 
 /**
@@ -67,6 +67,15 @@ static inline void rb_init(ring_buffer_t * rb, uint16_t size, uint8_t * buf)
     rb->tail = 0;
     rb->size = size - 1;
     rb->buf = buf;
+}
+
+/**
+ * @brief Return the max number of elements that can be stored in the ring buffer.
+ * @param rb Buffer whose elements to count.
+ */
+static inline uint16_t rb_capacity(ring_buffer_t * rb)
+{
+    return rb->size;
 }
 
 /**

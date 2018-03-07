@@ -6,3 +6,4 @@ ports/stm32/Build/
 *-results.xml
 *.o
 *.log
+tests/gtest/.deps/
