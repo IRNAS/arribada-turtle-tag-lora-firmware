@@ -56,6 +56,8 @@ uint8_t USBD_Vendor_SetRxBuffer(USBD_HandleTypeDef * pdev, uint8_t * pbuff);
 uint8_t USBD_Vendor_TransmitPacket(USBD_HandleTypeDef * pdev);
 uint8_t USBD_Vendor_ReceivePacket(USBD_HandleTypeDef * pdev);
 
+void USBD_Vendor_Receive_Callback(uint8_t * data, uint32_t size);
+
 extern USBD_ClassTypeDef USBD_VENDOR;
 #define USBD_VENDOR_CLASS &USBD_VENDOR
 

@@ -263,6 +263,21 @@ static uint8_t USBD_Vendor_DataIn(USBD_HandleTypeDef * pdev, uint8_t epnum)
 }
 
 /**
+ * @brief      USB callback stub, should be overriden by the user application
+ *             This is called whenever
+ *
+ * @param      data  The data that was received
+ * @param[in]  size  The size of that data in bytes
+ */
+__attribute__((weak)) void USBD_Vendor_Receive_Callback(uint8_t * data, uint32_t size)
+{
+    // See https://community.st.com/thread/34173-usb-cdc-example-cube for discussion on this callback
+    UNUSED(data);
+    UNUSED(size);
+    DEBUG_PR_WARN("%s Not implemented", __FUNCTION__);
+}
+
+/**
   * @brief      Data received on non-control Out endpoint
   *
   * @param      pdev   device instance
@@ -283,6 +298,7 @@ static uint8_t USBD_Vendor_DataOut(USBD_HandleTypeDef * pdev, uint8_t epnum)
     if (pdev->pClassData == NULL)
         return USBD_FAIL;
 
+    USBD_Vendor_Receive_Callback(&hVendor->RxBuffer[0], hVendor->RxLength); // Call user function with data received
     USBD_Vendor_SetRxBuffer(pdev, &hVendor->RxBuffer[0]); // Potentially unnecessary?
     USBD_Vendor_ReceivePacket(pdev);
     return (USBD_OK);
