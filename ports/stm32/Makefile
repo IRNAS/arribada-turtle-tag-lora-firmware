@@ -22,7 +22,7 @@ TARGET = ArribadaSTM32
 # debug build?
 DEBUG = 1
 # optimization
-OPT = -O3
+OPT = -O2
 
 BOARD = arribada_v1
 
@@ -32,6 +32,7 @@ BOARD = arribada_v1
 # source path
 STMHAL_DIR = drivers/STM32F0xx_HAL_Driver
 CMSIS_DIR = drivers/CMSIS
+USB_DIR = drivers/STM32_USB_Device_Library
 CORE_DIR = ../../core
 DEVICE_DIR = ../../devices
 
@@ -43,37 +44,46 @@ BUILD_DIR = build
 ######################################
 # C sources
 C_SOURCES =  \
-$(STMHAL_DIR)/Src/stm32f0xx_hal_pwr_ex.c \
-$(STMHAL_DIR)/Src/stm32f0xx_hal_uart_ex.c \
-$(STMHAL_DIR)/Src/stm32f0xx_hal_dma.c \
-$(STMHAL_DIR)/Src/stm32f0xx_hal_tim_ex.c \
-$(STMHAL_DIR)/Src/stm32f0xx_hal_cortex.c \
-$(STMHAL_DIR)/Src/stm32f0xx_hal_spi.c \
-$(STMHAL_DIR)/Src/stm32f0xx_hal_i2c.c \
-$(STMHAL_DIR)/Src/stm32f0xx_hal_tim.c \
-$(STMHAL_DIR)/Src/stm32f0xx_hal_flash_ex.c \
-$(STMHAL_DIR)/Src/stm32f0xx_hal_rcc.c \
-$(STMHAL_DIR)/Src/stm32f0xx_hal_gpio.c \
-$(STMHAL_DIR)/Src/stm32f0xx_hal.c \
-$(STMHAL_DIR)/Src/stm32f0xx_hal_flash.c \
-$(STMHAL_DIR)/Src/stm32f0xx_hal_pwr.c \
-$(STMHAL_DIR)/Src/stm32f0xx_hal_rcc_ex.c \
-$(STMHAL_DIR)/Src/stm32f0xx_hal_spi_ex.c \
-$(STMHAL_DIR)/Src/stm32f0xx_hal_uart.c \
-$(STMHAL_DIR)/Src/stm32f0xx_hal_i2c_ex.c \
 $(CORE_DIR)/debug/debug.c \
-boards/$(BOARD)/bsp.c \
 $(DEVICE_DIR)/battery/BQ27621/BQ27621.c \
 $(DEVICE_DIR)/gps/M8N/M8N.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_cortex.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_dma.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_flash.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_flash_ex.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_gpio.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_i2c.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_i2c_ex.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_pcd.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_pcd_ex.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_pwr.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_pwr_ex.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_rcc.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_rcc_ex.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_spi.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_spi_ex.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_tim.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_tim_ex.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_uart.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_uart_ex.c \
+$(USB_DIR)/Core/Src/usbd_core.c \
+$(USB_DIR)/Core/Src/usbd_ctlreq.c \
+$(USB_DIR)/Core/Src/usbd_ioreq.c \
+usb/usbd_conf.c \
+usb/usbd_desc.c \
+usb/usbd_vendor.c \
 syshal/syshal_gpio.c \
 syshal/syshal_i2c.c \
 syshal/syshal_pmu.c \
 syshal/syshal_spi.c \
 syshal/syshal_time.c \
 syshal/syshal_uart.c \
+syshal/syshal_usb.c \
+boards/$(BOARD)/bsp.c \
 stm32f0xx_hal_msp.c \
-system_stm32f0xx.c \
 stm32f0xx_it.c \
+system_stm32f0xx.c \
 main.c
 
 # ASM sources
@@ -129,18 +139,20 @@ AS_INCLUDES =
 
 # C includes
 C_INCLUDES =  \
--I. \
--Iboards/$(BOARD) \
--I../../syshal/inc \
+-I$(CMSIS_DIR)/Device/ST/STM32F0xx/Include \
+-I$(CMSIS_DIR)/Include \
 -I$(CORE_DIR)/config \
 -I$(CORE_DIR)/debug \
 -I$(CORE_DIR)/ring_buffer \
+-I$(DEVICE_DIR)/battery/BQ27621/ \
+-I$(DEVICE_DIR)/gps/M8N/ \
 -I$(STMHAL_DIR)/Inc \
 -I$(STMHAL_DIR)/Inc/Legacy \
--I$(CMSIS_DIR)/Device/ST/STM32F0xx/Include \
--I$(CMSIS_DIR)/Include \
--I$(DEVICE_DIR)/battery/BQ27621/ \
--I$(DEVICE_DIR)/gps/M8N/
+-I$(USB_DIR)/Core/Inc \
+-I../../syshal/inc \
+-Iboards/$(BOARD) \
+-Iusb \
+-I.
 
 # compile gcc flags
 ASFLAGS = $(MCU) $(AS_DEFS) $(AS_INCLUDES) $(OPT) -Wall -Werror -fdata-sections -ffunction-sections

@@ -61,6 +61,7 @@ int syshal_uart_init(uint32_t instance)
     // Setup rx buffer
     rb_init(&rx_buffer[instance], UART_RX_BUF_SIZE, &rx_data[instance][0]);
 
+#ifdef PRINTF_UART
     // Turn off buffers. This ensure printf prints immediately
     if (instance == PRINTF_UART)
     {
@@ -68,6 +69,7 @@ int syshal_uart_init(uint32_t instance)
         setvbuf(stdout, NULL, _IONBF, 0);
         setvbuf(stderr, NULL, _IONBF, 0);
     }
+#endif
 
     status = HAL_UART_Init(&huart[instance]);
 

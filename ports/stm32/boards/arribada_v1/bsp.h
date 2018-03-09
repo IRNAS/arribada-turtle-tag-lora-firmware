@@ -125,7 +125,7 @@ typedef struct
 
 extern const UART_InitTypeDefAndInst_t UART_Inits[UART_TOTAL_NUMBER];
 
-#define PRINTF_UART UART_1
+//#define PRINTF_UART UART_1 // Leave undefined if unused
 
 ///////////////////////////////// GPS definitions /////////////////////////////////
 #define GPS_UART UART_3

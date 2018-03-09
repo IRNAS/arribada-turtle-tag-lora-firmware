@@ -19,6 +19,10 @@
 #ifndef _SYSHAL_USB_H_
 #define _SYSHAL_USB_H_
 
+#include <stdint.h>
 
+int syshal_usb_init(void);
+int syshal_usb_transfer(uint8_t * data, uint32_t size);
+int syshal_usb_receive(uint8_t * data, uint32_t size);
 
 #endif /* _SYSHAL_USB_H_ */

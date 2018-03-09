@@ -24,6 +24,7 @@
 #include "syshal_uart.h"
 #include "syshal_batt.h"
 #include "syshal_gps.h"
+#include "syshal_usb.h"
 #include "version.h"
 #include <string.h>
 
@@ -64,25 +65,23 @@ int main(void)
     syshal_gpio_init(GPIO_LED5);
     syshal_gpio_init(GPIO_LED6);
     syshal_uart_init(UART_1);
-    //syshal_uart_init(UART_2);
-    //syshal_spi_init(SPI_1);
-    //syshal_i2c_init(I2C_1);
+    //syshal_uart_init(UART_3);
+    //syshal_uart_init(UART_4);
+    syshal_spi_init(SPI_1);
+    syshal_spi_init(SPI_2);
+    syshal_i2c_init(I2C_1);
+    syshal_i2c_init(I2C_2);
     //syshal_batt_init(I2C_1);
     //syshal_gps_init();
+    syshal_usb_init();
 
     // Print General System Info
     DEBUG_PR_SYS("Arribada Tracker Device");
     DEBUG_PR_SYS("Version:  %s", GIT_VERSION);
     DEBUG_PR_SYS("Compiled: %s %s With %s", COMPILE_DATE, COMPILE_TIME, COMPILER_NAME);
 
-    //uint32_t deltaTime = syshal_time_get_ticks_ms();
-    //bool gpsAwake = true;
-
     while (1)
     {
-
-        //HAL_GPIO_TogglePin(LD3_GPIO_Port, LD3_Pin);
-        //HAL_Delay(100);
 
         syshal_gpio_set_output_toggle(GPIO_LED3);
         syshal_time_delay_ms(100);
@@ -92,23 +91,6 @@ int main(void)
         syshal_time_delay_ms(100);
         syshal_gpio_set_output_toggle(GPIO_LED6);
         syshal_time_delay_ms(100);
-
-        /*uint32_t timeElapsed = syshal_time_get_ticks_ms() - deltaTime;
-
-        if (timeElapsed > 5500)
-        {
-            deltaTime += 5500;
-            if (gpsAwake)
-            {
-                syshal_gps_shutdown();
-                gpsAwake = false;
-            }
-            else
-            {
-                syshal_gps_wake_up();
-                gpsAwake = true;
-            }
-        }*/
 
         //syshal_gps_tick();
 
