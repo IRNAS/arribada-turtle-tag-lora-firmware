@@ -53,10 +53,10 @@
 #include "usbd_conf.h"
 
 // Private defines
-#define USBD_VID                      (483)
+#define USBD_VID                      (0x0483)
 #define USBD_LANGID_STRING            (0x0809)
 #define USBD_MANUFACTURER_STRING      "Arribada"
-#define USBD_PID_FS                   (1)
+#define USBD_PID_FS                   (0x0100)
 #define USBD_PRODUCT_STRING_FS        "GPS Tracker"
 #define USBD_SERIALNUMBER_STRING_FS   "00000000001A"
 

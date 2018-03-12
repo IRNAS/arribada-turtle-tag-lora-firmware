@@ -62,6 +62,7 @@
 #include "stm32f0xx.h"
 #include "stm32f0xx_hal.h"
 #include "usbd_def.h"
+#include "debug.h"
 
 /*---------- -----------*/
 #define USBD_MAX_NUM_INTERFACES     1
@@ -100,25 +101,20 @@
 /* DEBUG macros */
 
 #if (USBD_DEBUG_LEVEL > 0)
-#define USBD_UsrLog(...)    printf(__VA_ARGS__);\
-                            printf("\n");
+#define USBD_UsrLog(...)    DEBUG_PR_INFO(__VA_ARGS__);
 #else
 #define USBD_UsrLog(...)
 #endif
 
 #if (USBD_DEBUG_LEVEL > 1)
 
-#define USBD_ErrLog(...)    printf("ERROR: ") ;\
-                            printf(__VA_ARGS__);\
-                            printf("\n");
+#define USBD_ErrLog(...)    DEBUG_PR_ERROR(__VA_ARGS__);
 #else
 #define USBD_ErrLog(...)
 #endif
 
 #if (USBD_DEBUG_LEVEL > 2)
-#define USBD_DbgLog(...)    printf("DEBUG : ") ;\
-                            printf(__VA_ARGS__);\
-                            printf("\n");
+#define USBD_DbgLog(...)    DEBUG_PR_TRACE(__VA_ARGS__);
 #else
 #define USBD_DbgLog(...)
 #endif

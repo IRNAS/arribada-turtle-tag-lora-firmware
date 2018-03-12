@@ -22,7 +22,7 @@
 #include "usbd_vendor.h"
 
 static USBD_HandleTypeDef hUsbDeviceFS; // USB Device Core handle declaration
-extern PCD_HandleTypeDef hpcd_USB_FS; // Pulled in from usbd_conf.c FIXME: STM32cubeMx generated not using extern via header
+extern PCD_HandleTypeDef hpcd_USB_FS; // Pulled in from usbd_conf.c FIXME: STM32cubeMx generated not using extern passed via header
 
 int syshal_usb_init(void)
 {

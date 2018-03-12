@@ -64,12 +64,12 @@
 
 ////////////////////////////
 
-static uint8_t USBD_Vendor_Init (USBD_HandleTypeDef * pdev, uint8_t cfgidx);
-static uint8_t USBD_Vendor_DeInit (USBD_HandleTypeDef * pdev, uint8_t cfgidx);
-static uint8_t USBD_Vendor_Setup (USBD_HandleTypeDef * pdev, USBD_SetupReqTypedef * req);
-static uint8_t * USBD_Vendor_GetCfgDesc (uint16_t * length);
-static uint8_t USBD_Vendor_DataIn (USBD_HandleTypeDef * pdev, uint8_t epnum);
-static uint8_t USBD_Vendor_DataOut (USBD_HandleTypeDef * pdev, uint8_t epnum);
+static uint8_t USBD_Vendor_Init(USBD_HandleTypeDef * pdev, uint8_t cfgidx);
+static uint8_t USBD_Vendor_DeInit(USBD_HandleTypeDef * pdev, uint8_t cfgidx);
+static uint8_t USBD_Vendor_Setup(USBD_HandleTypeDef * pdev, USBD_SetupReqTypedef * req);
+static uint8_t * USBD_Vendor_GetCfgDesc(uint16_t * length);
+static uint8_t USBD_Vendor_DataIn(USBD_HandleTypeDef * pdev, uint8_t epnum);
+static uint8_t USBD_Vendor_DataOut(USBD_HandleTypeDef * pdev, uint8_t epnum);
 
 uint8_t UserRxBufferFS[APP_RX_DATA_SIZE]; // Received data over USB is stored in this buffer
 uint8_t UserTxBufferFS[APP_TX_DATA_SIZE]; // Data to be sent over USB is stored in this buffer
@@ -80,8 +80,8 @@ USBD_ClassTypeDef USBD_VENDOR =
     USBD_Vendor_Init, // This callback is called when the device receives the set configuration request
     USBD_Vendor_DeInit, // This callback is called when the clear configuration request has been received
     USBD_Vendor_Setup, // This callback is called to handle the specific class setup requests
-    NULL, // This callback is called when the send status is finished
-    NULL, // This callback is called when the receive status is finished
+    NULL, // EP0_TxSent This callback is called when the send status is finished
+    NULL, // EP0_RxSent This callback is called when the receive status is finished
     USBD_Vendor_DataIn, // This callback is called to perform the data in stage relative to the non-control endpoints
     USBD_Vendor_DataOut, // This callback is called to perform the data out stage relative to the non-control endpoints
     NULL, // This callback is called when a SOF interrupt is received
@@ -133,7 +133,6 @@ __ALIGN_BEGIN static uint8_t USBD_Vendor_CfgDesc[USB_VENDOR_CONFIG_DESC_SIZE]  _
     LOBYTE(VENDOR_ENDPOINT_PACKET_SIZE), HIBYTE(VENDOR_ENDPOINT_PACKET_SIZE), // Maximum Packet Size this endpoint is capable of sending
     0x00, // Interval for polling endpoint data transfers, Ignored for Bulk Endpoints
 };
-
 
 /////////////////////////////// Private Functions ///////////////////////////////
 
@@ -257,6 +256,8 @@ static uint8_t USBD_Vendor_DataIn(USBD_HandleTypeDef * pdev, uint8_t epnum)
 
     if (pdev->pClassData == NULL)
         return USBD_FAIL;
+
+    DEBUG_PR_TRACE("%s called", __FUNCTION__);
 
     hVendor->TxState = 0; // Set TX state flag to sent
     return USBD_OK;
