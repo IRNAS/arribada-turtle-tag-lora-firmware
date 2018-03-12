@@ -127,6 +127,10 @@ extern const UART_InitTypeDefAndInst_t UART_Inits[UART_TOTAL_NUMBER];
 
 #define PRINTF_UART UART_1 // Leave undefined if unused
 
+///////////////////////////////// USB definitions /////////////////////////////////
+#define USB_SAFE_INSERT // Don't overwrite values we've received if the rx buffer overflows
+#define USB_RX_BUF_SIZE 512
+
 ///////////////////////////////// GPS definitions /////////////////////////////////
 #define GPS_UART UART_3
 

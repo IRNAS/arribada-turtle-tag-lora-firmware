@@ -257,8 +257,6 @@ static uint8_t USBD_Vendor_DataIn(USBD_HandleTypeDef * pdev, uint8_t epnum)
     if (pdev->pClassData == NULL)
         return USBD_FAIL;
 
-    DEBUG_PR_TRACE("%s called", __FUNCTION__);
-
     hVendor->TxState = 0; // Set TX state flag to sent
     return USBD_OK;
 }

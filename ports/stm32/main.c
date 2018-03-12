@@ -50,18 +50,6 @@ void syshal_gps_callback(syshal_gps_event_t event)
     }
 }
 
-// Echo all USB data received back
-void USBD_Vendor_Receive_Callback(uint8_t * data, uint32_t size)
-{
-    //syshal_usb_transfer(data, size);
-    printf("Data Received: ");
-    for(uint32_t i = 0; i < size; ++i)
-        printf("%c", data[i]);
-    printf("\n\r");
-
-    syshal_usb_transfer(data, size);
-}
-
 int main(void)
 {
 
@@ -94,18 +82,31 @@ int main(void)
 
     while (1)
     {
-        //DEBUG_PR_SYS("Arribada Tracker Device");
         syshal_gpio_set_output_toggle(GPIO_LED3);
-        syshal_time_delay_ms(100);
-        syshal_gpio_set_output_toggle(GPIO_LED4);
-        syshal_time_delay_ms(100);
-        syshal_gpio_set_output_toggle(GPIO_LED5);
-        syshal_time_delay_ms(100);
-        syshal_gpio_set_output_toggle(GPIO_LED6);
-        syshal_time_delay_ms(100);
+        //syshal_time_delay_ms(100);
+        //syshal_gpio_set_output_toggle(GPIO_LED4);
+        //syshal_time_delay_ms(100);
+        //syshal_gpio_set_output_toggle(GPIO_LED5);
+        //syshal_time_delay_ms(100);
+        //syshal_gpio_set_output_toggle(GPIO_LED6);
+        //syshal_time_delay_ms(100);
 
-        //uint8_t testString[] = "Test";
-        //syshal_usb_transfer(testString, sizeof(testString));
+        uint32_t dataReceivedBytes = 0;
+        uint8_t dataReceived[500];
+
+        if (syshal_usb_available())
+        {
+            dataReceivedBytes = syshal_usb_receive(dataReceived, sizeof(dataReceived));
+
+            printf("Data Received: ");
+            for (uint32_t i = 0; i < dataReceivedBytes; ++i)
+                printf("%c", dataReceived[i]);
+            printf("\n\r");
+
+            syshal_usb_transfer(dataReceived, dataReceivedBytes); // Echo data back
+        }
+
+        //DEBUG_PR_INFO("%d",syshal_usb_transfer(dataReceived, sizeof(dataReceived)));
 
         //syshal_gps_tick();
     }

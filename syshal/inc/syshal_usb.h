@@ -21,8 +21,16 @@
 
 #include <stdint.h>
 
+// Constants
+#define SYSHAL_USB_NO_ERROR            0
+#define SYSHAL_USB_ERROR_BUSY         -1
+#define SYSHAL_USB_ERROR_FAIL         -2
+#define SYSHAL_USB_ERROR_DISCONNECTED -3
+
 int syshal_usb_init(void);
+int syshal_usb_term(void);
 int syshal_usb_transfer(uint8_t * data, uint32_t size);
 int syshal_usb_receive(uint8_t * data, uint32_t size);
+int syshal_usb_available(void);
 
 #endif /* _SYSHAL_USB_H_ */
