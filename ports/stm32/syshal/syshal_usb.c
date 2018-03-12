@@ -18,6 +18,7 @@
 
 #include "bsp.h"
 #include "syshal_usb.h"
+#include "usbd_conf.h"
 #include "usbd_core.h"
 #include "usbd_desc.h"
 #include "usbd_vendor.h"
@@ -35,7 +36,6 @@ static int hal_error_map[] =
 };
 
 static USBD_HandleTypeDef hUsbDeviceFS; // USB Device Core handle declaration
-extern PCD_HandleTypeDef hpcd_USB_FS; // Pulled in from usbd_conf.c FIXME: STM32cubeMx generated not using extern passed via header
 
 static ring_buffer_t rx_buffer;
 static uint8_t rx_data[USB_RX_BUF_SIZE];
