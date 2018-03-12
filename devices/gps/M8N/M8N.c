@@ -134,6 +134,16 @@ void syshal_gps_tick(void)
 }
 
 /**
+ * @brief      Change the baudrate used to communicate with the GPS module
+ *
+ * @param[in]  baudrate  The baudrate to change to
+ */
+void syshal_gps_set_baud(uint32_t baudrate)
+{
+    syshal_uart_change_baud(GPS_UART, baudrate);
+}
+
+/**
  * @brief      Sends raw unedited data to the GPS module
  *
  * @param[in]  data  The data to be transmitted

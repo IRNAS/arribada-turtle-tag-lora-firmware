@@ -77,6 +77,34 @@ int syshal_uart_init(uint32_t instance)
 }
 
 /**
+ * @brief      Change the baudrate of a UART instance
+ *
+ * @param[in]  instance  The UART instance
+ * @param[in]  baudrate  The baudrate to change to
+ *
+ * @return     SYSHAL_UART_ERROR_INVALID_INSTANCE if instance doesn't exist.
+ * @return     SYSHAL_UART_ERROR_DEVICE on HAL error.
+ * @return     SYSHAL_UART_ERROR_BUSY if the HW is busy.
+ * @return     SYSHAL_UART_ERROR_TIMEOUT if a timeout occurred.
+ */
+int syshal_uart_change_baud(uint32_t instance, uint32_t baudrate)
+{
+    if (instance >= UART_TOTAL_NUMBER)
+        return SYSHAL_UART_ERROR_INVALID_INSTANCE;
+
+    HAL_StatusTypeDef status;
+
+    // Populate internal handlers from bsp
+    huart[instance].Instance = UART_Inits[instance].Instance;
+    huart[instance].Init = UART_Inits[instance].Init;
+    huart[instance].Init.BaudRate = baudrate;
+
+    status = HAL_UART_Init(&huart[instance]);
+
+    return hal_error_map[status];
+}
+
+/**
  * @brief      Deinitialise the given UART instance
  *
  * @param[in]  instance  The UART instance
