@@ -151,9 +151,9 @@ int syshal_gps_send_raw(uint8_t * data, uint32_t size)
  *             should not be called when the user is expecting a raw message
  *
  * @param[in]  data  The received data
- * @param[in]  size  The size of the data to be read in bytes
+ * @param[in]  size  The max size of the data to be read in bytes
  *
- * @return     Error code
+ * @return     Actual number of bytes read
  */
 int syshal_gps_receive_raw(uint8_t * data, uint32_t size)
 {
