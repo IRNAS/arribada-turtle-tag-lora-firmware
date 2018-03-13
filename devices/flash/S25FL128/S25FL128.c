@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <assert.h>
 #include <string.h>
 #include <stdint.h>
 
@@ -36,7 +37,7 @@
 /* Keep track of the SPI device number for a given
  * logical flash drive.
  */
-static uint32_t spi_device[S25FL128_MAX_DEVICES];
+static uint32_t spi_devices[S25FL128_MAX_DEVICES];
 
 /* Local buffers for building SPI commands.  We
  * provision for 4 extra bytes to allow for the
@@ -46,6 +47,14 @@ static uint8_t  spi_tx_buf[S25FL128_PAGE_SIZE + 4];
 static uint8_t  spi_rx_buf[S25FL128_PAGE_SIZE + 4];
 
 /* Static Functions */
+
+static uint32_t get_logical_drive_from_spi_device(uint32_t spi_device)
+{
+    for (uint32_t i = 0; i < S25FL128_MAX_DEVICES; i++)
+        if (spi_devices[i] == spi_device)
+            return i;
+    assert(0);
+}
 
 /*! \brief Obtain flash device's status register.
  *
@@ -106,15 +115,33 @@ static int S25FL128_erase_sector(uint32_t spi_device, uint32_t addr)
     if (ret) return ret;
 
     /* Busy wait until the sector has erased */
-    do
+    ret = S25FL128_status(spi_device, &status);
+    while ((status & RDSR_BUSY) && !ret)
     {
+        syshal_flash_busy_handler(get_logical_drive_from_spi_device(spi_device));
         ret = S25FL128_status(spi_device, &status);
-    } while ((status & RDSR_BUSY) && !ret);
+    }
 
     return ret;
 }
 
 /* Exported Functions */
+
+/*! \brief Flash busy handler
+ *
+ * This handler function can be used to perform useful work
+ * whilst busy-waiting on a flash busy condition e.g.,
+ * during erase operations this can lock out processing
+ * for a significant period of time.
+ *
+ * \param drive[in] Logical drive number.
+ *
+ */
+__attribute__((weak)) void syshal_flash_busy_handler(uint32_t drive)
+{
+    (void)drive;
+    /* Do not modify -- override with your own handler function */
+}
 
 /*! \brief Initialize flash drive.
  *
@@ -134,7 +161,7 @@ int syshal_flash_init(uint32_t drive, uint32_t device)
     if (drive >= S25FL128_MAX_DEVICES)
         return SYSHAL_FLASH_ERROR_INVALID_DRIVE;
 
-    spi_device[drive] = device;
+    spi_devices[drive] = device;
 
     if (syshal_spi_init(device))
         return SYSHAL_FLASH_ERROR_DEVICE;
@@ -159,7 +186,7 @@ int syshal_flash_term(uint32_t drive)
     if (drive >= S25FL128_MAX_DEVICES)
         return SYSHAL_FLASH_ERROR_INVALID_DRIVE;
 
-    if (syshal_spi_term(spi_device[drive]))
+    if (syshal_spi_term(spi_devices[drive]))
         return SYSHAL_FLASH_ERROR_DEVICE;
 
     return SYSHAL_FLASH_NO_ERROR;
@@ -184,13 +211,13 @@ int syshal_flash_erase(uint32_t drive, uint32_t address, uint32_t size)
         return SYSHAL_FLASH_ERROR_INVALID_DRIVE;
 
     /* Enable writes */
-    if (S25FL128_wren(spi_device[drive]))
+    if (S25FL128_wren(spi_devices[drive]))
         return SYSHAL_FLASH_ERROR_DEVICE;
 
     /* Iteratively erase sectors */
     for (uint32_t i = 0; i < size; i += S25FL128_SECTOR_SIZE)
     {
-        if (S25FL128_erase_sector(spi_device[drive], address))
+        if (S25FL128_erase_sector(spi_devices[drive], address))
             return SYSHAL_FLASH_ERROR_DEVICE;
         address += S25FL128_SECTOR_SIZE;
     }
@@ -220,7 +247,7 @@ int syshal_flash_write(uint32_t drive, const void *src, uint32_t address, uint32
         return SYSHAL_FLASH_ERROR_INVALID_DRIVE;
 
     /* Enable writes */
-    if (S25FL128_wren(spi_device[drive]))
+    if (S25FL128_wren(spi_devices[drive]))
         return SYSHAL_FLASH_ERROR_DEVICE;
 
     while (size > 0)
@@ -232,7 +259,7 @@ int syshal_flash_write(uint32_t drive, const void *src, uint32_t address, uint32
 
         uint16_t wr_size = MIN(size, S25FL128_PAGE_SIZE);
         memcpy(&spi_tx_buf[4], src, wr_size);
-        if (syshal_spi_transfer(spi_device[drive], spi_tx_buf, spi_rx_buf, wr_size + 4))
+        if (syshal_spi_transfer(spi_devices[drive], spi_tx_buf, spi_rx_buf, wr_size + 4))
             return SYSHAL_FLASH_ERROR_DEVICE;
         size -= wr_size;
         address += wr_size;
@@ -240,7 +267,7 @@ int syshal_flash_write(uint32_t drive, const void *src, uint32_t address, uint32
         /* Busy wait until the sector has erased */
         do
         {
-            if (S25FL128_status(spi_device[drive], &status))
+            if (S25FL128_status(spi_devices[drive], &status))
                 return SYSHAL_FLASH_ERROR_DEVICE;
         } while (status & RDSR_BUSY);
     }
@@ -279,7 +306,7 @@ int syshal_flash_read(uint32_t drive, void *dest, uint32_t address, uint32_t siz
 
         uint16_t rd_size = MIN(size, S25FL128_PAGE_SIZE);
 
-        if (syshal_spi_transfer(spi_device[drive], spi_tx_buf, spi_rx_buf, rd_size + 4))
+        if (syshal_spi_transfer(spi_devices[drive], spi_tx_buf, spi_rx_buf, rd_size + 4))
             return SYSHAL_FLASH_ERROR_DEVICE;
 
         size -= rd_size;
