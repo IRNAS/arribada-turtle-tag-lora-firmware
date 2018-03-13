@@ -19,12 +19,13 @@
 #ifndef _CMD_H_
 #define _CMD_H_
 
-#define CMD_MAX_PAYLOAD     ((20 * 1024) - sizeof(cmd_hdr_t))
-#define CMD_SYNCWORD        0x55555555
-#define CMD_MAX_BUFFER      (16 * 1024)
+#define CMD_MAX_PAYLOAD     (512 - sizeof(cmd_hdr_t))
+#define CMD_SYNCWORD        (0x7E)
 
-#define CMD_MIN_SIZE        sizeof(cmd_hdr_t)
-#define CMD_MAX_SIZE        (20 * 1024)
+#define CMD_MIN_SIZE        (sizeof(cmd_hdr_t))
+#define CMD_MAX_SIZE        (512)
+
+#define CMD_CFG_TAG_ALL 0xFFFF // A special tag to denote a read of all configuration values from RAM
 
 #define CMD_SET_HDR(p, i, l)  \
     p->h.sync  = CMD_SYNCWORD; \
@@ -80,6 +81,18 @@ typedef enum
     LOG_READ_RESP,  // Response for a read request
 
 } cmd_id_t;
+
+// Error codes
+typedef enum
+{
+    CMD_NO_ERROR,                   // Successful completion of the command.
+    CMD_ERROR_FILE_NOT_FOUND,       // File associated with the operation could not be found.
+    CMD_ERROR_FILE_ALREADY_EXISTS,  // Unable to create a file that already exists.
+    CMD_ERROR_INVALID_CONFIG_TAG,   // Invalid configuration tag found in the tag stream.
+    CMD_ERROR_GPS_COMMS,            // GPS module communications error e.g., attempt to do a GPS read/write when not bridging.
+    CMD_ERROR_TIMEOUT,              // A timeout happened waiting on the byte stream to be received.
+    CMD_ERROR_CONFIG_PROTECTED,     //Configuration operation not permitted as it is protected.
+} cmd_error_t;
 
 // Generic response message
 typedef struct __attribute__((__packed__))
@@ -213,28 +226,28 @@ typedef struct __attribute__((__packed__))
     cmd_hdr_t h;
     union
     {
-        uint8_t                             bytes[CMD_MAX_PAYLOAD];
-        cmd_generic_resp_t                  generic_resp;
-        cmd_cfg_read_req_t                  cfg_read_req;
-        cmd_cfg_write_req_t                 cfg_write_req;
-        cmd_cfg_erase_req_t                 cfg_erase_req;
-        cmd_cfg_read_resp_t                 cfg_read_resp;
-        cmd_gps_write_req_t                 gps_write_req;
-        cmd_gps_read_req_t                  gps_read_req;
-        cmd_gps_resp_t                      gps_resp;
-        cmd_gps_irq_config_req_t            gps_irq_config_req;
-        cmd_ble_irq_config_req_t            ble_irq_config_req;
-        cmd_ble_write_req_t                 ble_write_req;
-        cmd_ble_read_req_t                  ble_read_req;
-        cmd_status_resp_t                   status_resp;
-        cmd_fw_send_image_req_t             fw_send_image_req;
-        cmd_fw_send_image_complete_ind_t    fw_send_image_complete_ind;
-        cmd_fw_apply_image_req_t            fw_apply_image_req;
-        cmd_reset_req_t                     reset_req;
-        cmd_battery_status_resp_t           battery_status_resp;
-        cmd_log_create_req_t                log_create_req;
-        cmd_log_read_req_t                  log_read_req;
-        cmd_log_read_resp_t                 log_read_resp;
+        uint8_t                             cmd_bytes[CMD_MAX_PAYLOAD];
+        cmd_generic_resp_t                  cmd_generic_resp;
+        cmd_cfg_read_req_t                  cmd_cfg_read_req;
+        cmd_cfg_write_req_t                 cmd_cfg_write_req;
+        cmd_cfg_erase_req_t                 cmd_cfg_erase_req;
+        cmd_cfg_read_resp_t                 cmd_cfg_read_resp;
+        cmd_gps_write_req_t                 cmd_gps_write_req;
+        cmd_gps_read_req_t                  cmd_gps_read_req;
+        cmd_gps_resp_t                      cmd_gps_resp;
+        cmd_gps_irq_config_req_t            cmd_gps_irq_config_req;
+        cmd_ble_irq_config_req_t            cmd_ble_irq_config_req;
+        cmd_ble_write_req_t                 cmd_ble_write_req;
+        cmd_ble_read_req_t                  cmd_ble_read_req;
+        cmd_status_resp_t                   cmd_status_resp;
+        cmd_fw_send_image_req_t             cmd_fw_send_image_req;
+        cmd_fw_send_image_complete_ind_t    cmd_fw_send_image_complete_ind;
+        cmd_fw_apply_image_req_t            cmd_fw_apply_image_req;
+        cmd_reset_req_t                     cmd_reset_req;
+        cmd_battery_status_resp_t           cmd_battery_status_resp;
+        cmd_log_create_req_t                cmd_log_create_req;
+        cmd_log_read_req_t                  cmd_log_read_req;
+        cmd_log_read_resp_t                 cmd_log_read_resp;
     } p;
 } cmd_t;
 
