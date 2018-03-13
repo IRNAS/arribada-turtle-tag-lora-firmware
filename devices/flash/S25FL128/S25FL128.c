@@ -279,7 +279,7 @@ int syshal_flash_read(uint32_t drive, void *dest, uint32_t address, uint32_t siz
 
         uint16_t rd_size = MIN(size, S25FL128_PAGE_SIZE);
 
-        if (syshal_spi_transfer(spi_device, spi_tx_buf, spi_rx_buf, rd_size + 4))
+        if (syshal_spi_transfer(spi_device[drive], spi_tx_buf, spi_rx_buf, rd_size + 4))
             return SYSHAL_FLASH_ERROR_DEVICE;
 
         size -= rd_size;

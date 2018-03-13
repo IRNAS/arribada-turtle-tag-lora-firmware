@@ -65,7 +65,7 @@ public:
 
         if (tx_buf_wr == tx_buf_rd)
         {
-            printf("[%u] Unexpected transfer: %u\n", tx_buf_rd);
+            printf("[%u] Unexpected transfer\n", tx_buf_rd);
             assert(0);
         }
 
@@ -101,7 +101,7 @@ public:
     }
 
     void ExpectSectorErase(uint32_t addr) {
-        uint8_t sector_erase[] = { SE, addr >> 16, addr >> 8, addr };
+        uint8_t sector_erase[] = { SE, (uint8_t)(addr >> 16), (uint8_t)(addr >> 8), (uint8_t)addr };
         ExpectSpiTransfer(sector_erase, NULL, 4);
     }
 
