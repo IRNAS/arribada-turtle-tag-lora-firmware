@@ -71,14 +71,14 @@ typedef enum
     CMD_RESET_REQ,                  // Request to reset the system
 
     //////////////////// Battery /////////////////////
-    BATTERY_STATUS_REQ,  // Request battery status
-    BATTERY_STATUS_RESP, // Error response carrying the battery status information
+    CMD_BATTERY_STATUS_REQ,  // Request battery status
+    CMD_BATTERY_STATUS_RESP, // Error response carrying the battery status information
 
     //////////////////// Logging /////////////////////
-    LOG_CREATE_REQ, // Request to create a log file of the specified operation mode and length
-    LOG_ERASE_REQ,  // Request to erase the current log file
-    LOG_READ_REQ,   // Read the log file from the starting offset for the given number of bytes
-    LOG_READ_RESP,  // Response for a read request
+    CMD_LOG_CREATE_REQ, // Request to create a log file of the specified operation mode and length
+    CMD_LOG_ERASE_REQ,  // Request to erase the current log file
+    CMD_LOG_READ_REQ,   // Read the log file from the starting offset for the given number of bytes
+    CMD_LOG_READ_RESP,  // Response for a read request
 
 } cmd_id_t;
 
@@ -91,7 +91,7 @@ typedef enum
     CMD_ERROR_INVALID_CONFIG_TAG,   // Invalid configuration tag found in the tag stream.
     CMD_ERROR_GPS_COMMS,            // GPS module communications error e.g., attempt to do a GPS read/write when not bridging.
     CMD_ERROR_TIMEOUT,              // A timeout happened waiting on the byte stream to be received.
-    CMD_ERROR_CONFIG_PROTECTED,     //Configuration operation not permitted as it is protected.
+    CMD_ERROR_CONFIG_PROTECTED,     // Configuration operation not permitted as it is protected.
 } cmd_error_t;
 
 // Generic response message
