@@ -249,7 +249,6 @@ int syshal_gps_check_checksum_priv(UBX_Packet_t * packet)
 static int syshal_gps_parse_rx_buffer_priv(UBX_Packet_t * packet)
 {
 
-    // Discard everything up until first sync word
     uint32_t bytesInRxBuffer = syshal_uart_available(GPS_UART);
 
     // Check for minimum allowed message size

@@ -120,6 +120,10 @@ int syshal_usb_transfer(uint8_t * data, uint32_t size)
  */
 int syshal_usb_receive(uint8_t * data, uint32_t size)
 {
+
+    if (size == 0)
+        return 0;
+
     uint32_t count = rb_full_count(&rx_buffer);
 
     if (size > count)
@@ -129,6 +133,8 @@ int syshal_usb_receive(uint8_t * data, uint32_t size)
     {
         *data++ = rb_remove(&rx_buffer); // Remove and return the top item from the ring buffer
     }
+
+    USBD_Vendor_HandleTypeDef_t * hVendor = (USBD_Vendor_HandleTypeDef_t *)hUsbDeviceFS.pClassData;
 
     // If we currently are not pending a new transfer because our receive buffer is full
     // check to see if we have room then queue another one is there is room
@@ -145,6 +151,25 @@ int syshal_usb_receive(uint8_t * data, uint32_t size)
     }
 
     return size;
+}
+
+/**
+ * @brief      Peek at character at location at nth depth in rx buffer (0 being
+ *             the oldest/top value of the FIFO)
+ *
+ * @param[out] byte      The byte read
+ * @param[in]  location  The location to read
+ *
+ * @return     Return true on success
+ */
+bool syshal_usb_peek_at(uint8_t * byte, uint32_t location)
+{
+    *byte = rb_peek_at(&rx_buffer, location);
+
+    if (-1 == *byte)
+        return false;
+    else
+        return true;
 }
 
 /**
@@ -212,12 +237,24 @@ void USBD_Vendor_Receive_Callback(uint8_t * data, uint32_t size)
         }
     }
 
-    // Do we have capacity to store another packet from USB. If so queue one
-    if ( (rb_capacity(&rx_buffer) - rb_full_count(&rx_buffer)) >= VENDOR_ENDPOINT_PACKET_SIZE )
-    {
-        USBD_Vendor_HandleTypeDef_t * hVendor = (USBD_Vendor_HandleTypeDef_t *)hUsbDeviceFS.pClassData;
+    USBD_Vendor_HandleTypeDef_t * hVendor = (USBD_Vendor_HandleTypeDef_t *)hUsbDeviceFS.pClassData;
 
-        USBD_Vendor_SetRxBuffer(&hUsbDeviceFS, &hVendor->RxBuffer[0]); // Potentially unnecessary?
-        USBD_Vendor_ReceivePacket(&hUsbDeviceFS);
+    // If we currently are not pending a new transfer because our receive buffer is full
+    // check to see if we have room then queue another one is there is room
+    if (!hVendor->RxPending)
+    {
+        // Do we have capacity to store another packet from USB. If so queue one
+        if ( (rb_capacity(&rx_buffer) - rb_full_count(&rx_buffer)) >= VENDOR_ENDPOINT_PACKET_SIZE )
+        {
+            USBD_Vendor_HandleTypeDef_t * hVendor = (USBD_Vendor_HandleTypeDef_t *)hUsbDeviceFS.pClassData;
+
+            USBD_Vendor_SetRxBuffer(&hUsbDeviceFS, &hVendor->RxBuffer[0]); // Potentially unnecessary?
+            USBD_Vendor_ReceivePacket(&hUsbDeviceFS);
+        }
+        else
+        {
+            DEBUG_PR_WARN("USB RX buffer full. Not accepting any new data");
+        }
     }
+
 }

@@ -19,6 +19,8 @@
 #ifndef _CMD_H_
 #define _CMD_H_
 
+#include <stdint.h>
+
 #define CMD_MAX_PAYLOAD     (512 - sizeof(cmd_hdr_t))
 #define CMD_SYNCWORD        (0x7E)
 
@@ -27,7 +29,7 @@
 
 #define CMD_CFG_TAG_ALL 0xFFFF // A special tag to denote a read of all configuration values from RAM
 
-#define CMD_SET_HDR(p, i, l)  \
+#define CMD_SET_HDR(p, i)  \
     p->h.sync  = CMD_SYNCWORD; \
     p->h.cmd   = i;
 
@@ -50,11 +52,12 @@ typedef enum
     CMD_CFG_PROTECT_REQ,   // Protect the configuration file in flash memory
     CMD_CFG_UNPROTECT_REQ, // Unprotect the configuration file in flash memory
     CMD_CFG_READ_RESP,
+    CMD_CFG_WRITE_CNF,     // Confirmation message sent after the entire CFG_WRITE_REQ payload has been received
 
     ////////////////// GPS Bridge ///////////////////
     CMD_GPS_WRITE_REQ,      // Send UBX commands directly to the GPS module
     CMD_GPS_READ_REQ,       // Receive UBX command responses directly from the GPS module
-    CMD_GPS_RESP,           // The response from the GPS module
+    CMD_GPS_READ_RESP,      // The response from the GPS module
     CMD_GPS_CONFIG_REQ,     // Allow a GPS IRQ events to be generated and sent over the USB interrupt endpoint.  This shall be used to indicate that data is available to be read from the internal FIFO
 
     ////////////////// BLE Bridge ///////////////////
@@ -65,8 +68,8 @@ typedef enum
     //////////////////// System /////////////////////
     CMD_STATUS_REQ,                 // Request firmware status
     CMD_STATUS_RESP,                // Firmware status response
-    CMD_FW_SEND_IMAGE_REQ,          // Request to send a new firmware imag and store temporarily in local flash memory
-    CMD_FW_SEND_IMAGE_COMPLETE_IND, // This shall be sent by the server to the client to indicate all bytes have been received and stored
+    CMD_FW_SEND_IMAGE_REQ,          // Request to send a new firmware image and store temporarily in local flash memory
+    CMD_FW_SEND_IMAGE_COMPLETE_CNF, // This shall be sent by the server to the client to indicate all bytes have been received and stored
     CMD_FW_APPLY_IMAGE_REQ,         // Request to apply an existing firmware image in temporary storage to the target
     CMD_RESET_REQ,                  // Request to reset the system
 
@@ -94,6 +97,9 @@ typedef enum
     CMD_ERROR_CONFIG_PROTECTED,     // Configuration operation not permitted as it is protected.
 } cmd_error_t;
 
+// Exposed functions
+uint32_t cmd_size_of_command(cmd_id_t command);
+
 // Generic response message
 typedef struct __attribute__((__packed__))
 {
@@ -119,8 +125,13 @@ typedef struct __attribute__((__packed__))
 typedef struct __attribute__((__packed__))
 {
     uint8_t error_code;
-    uint32_t length
+    uint32_t length;
 } cmd_cfg_read_resp_t;
+
+typedef struct __attribute__((__packed__))
+{
+    uint8_t error_code;
+} cmd_cfg_write_cnf_t;
 
 ////////////////// GPS Bridge ///////////////////
 typedef struct __attribute__((__packed__))
@@ -137,7 +148,7 @@ typedef struct __attribute__((__packed__))
 {
     uint8_t error_code;
     uint32_t length;
-} cmd_gps_resp_t;
+} cmd_gps_read_resp_t;
 
 typedef struct __attribute__((__packed__))
 {
@@ -175,13 +186,13 @@ typedef struct __attribute__((__packed__))
 {
     uint8_t image_type;
     uint32_t length;
-    uint32_t CRC;
+    uint32_t CRC32;
 } cmd_fw_send_image_req_t;
 
 typedef struct __attribute__((__packed__))
 {
     uint8_t error_code;
-} cmd_fw_send_image_complete_ind_t;
+} cmd_fw_send_image_complete_cnf_t;
 
 typedef struct __attribute__((__packed__))
 {
@@ -232,16 +243,17 @@ typedef struct __attribute__((__packed__))
         cmd_cfg_write_req_t                 cmd_cfg_write_req;
         cmd_cfg_erase_req_t                 cmd_cfg_erase_req;
         cmd_cfg_read_resp_t                 cmd_cfg_read_resp;
+        cmd_cfg_write_cnf_t                 cmd_cfg_write_cnf;
         cmd_gps_write_req_t                 cmd_gps_write_req;
         cmd_gps_read_req_t                  cmd_gps_read_req;
-        cmd_gps_resp_t                      cmd_gps_resp;
-        cmd_gps_irq_config_req_t            cmd_gps_irq_config_req;
-        cmd_ble_irq_config_req_t            cmd_ble_irq_config_req;
+        cmd_gps_read_resp_t                 cmd_gps_read_resp;
+        cmd_gps_config_req_t                cmd_gps_config_req;
+        cmd_ble_config_req_t                cmd_ble_config_req;
         cmd_ble_write_req_t                 cmd_ble_write_req;
         cmd_ble_read_req_t                  cmd_ble_read_req;
         cmd_status_resp_t                   cmd_status_resp;
         cmd_fw_send_image_req_t             cmd_fw_send_image_req;
-        cmd_fw_send_image_complete_ind_t    cmd_fw_send_image_complete_ind;
+        cmd_fw_send_image_complete_cnf_t    cmd_fw_send_image_complete_cnf;
         cmd_fw_apply_image_req_t            cmd_fw_apply_image_req;
         cmd_reset_req_t                     cmd_reset_req;
         cmd_battery_status_resp_t           cmd_battery_status_resp;

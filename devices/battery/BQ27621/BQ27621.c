@@ -142,3 +142,14 @@ syshal_batt_state_t syshal_batt_state(void)
 
     return level;
 }
+
+/**
+ * @brief      Is the battery currently in a charging state?
+ *
+ * @return     True if charging, false if not
+ */
+bool syshal_batt_charging(void)
+{
+    DEBUG_PR_WARN("%s not implemented", __FUNCTION__);
+    return false;
+}

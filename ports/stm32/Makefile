@@ -44,7 +44,11 @@ BUILD_DIR = build
 ######################################
 # C sources
 C_SOURCES =  \
+$(CORE_DIR)/cexception/cexception.c \
+$(CORE_DIR)/config_if/cmd.c \
+$(CORE_DIR)/config_if/config_if.c \
 $(CORE_DIR)/debug/debug.c \
+$(CORE_DIR)/sm/sm.c \
 $(DEVICE_DIR)/battery/BQ27621/BQ27621.c \
 $(DEVICE_DIR)/gps/M8N/M8N.c \
 $(STMHAL_DIR)/Src/stm32f0xx_hal.c \
@@ -141,9 +145,12 @@ AS_INCLUDES =
 C_INCLUDES =  \
 -I$(CMSIS_DIR)/Device/ST/STM32F0xx/Include \
 -I$(CMSIS_DIR)/Include \
+-I$(CORE_DIR)/cexception \
 -I$(CORE_DIR)/config \
+-I$(CORE_DIR)/config_if \
 -I$(CORE_DIR)/debug \
 -I$(CORE_DIR)/ring_buffer \
+-I$(CORE_DIR)/sm \
 -I$(DEVICE_DIR)/battery/BQ27621/ \
 -I$(DEVICE_DIR)/gps/M8N/ \
 -I$(STMHAL_DIR)/Inc \

@@ -34,6 +34,8 @@ typedef enum
 void syshal_batt_init(uint32_t instance);
 uint16_t syshal_batt_temp(void);
 uint16_t syshal_batt_voltage(void);
+uint8_t syshal_batt_level(void);
 syshal_batt_state_t syshal_batt_state(void);
+bool syshal_batt_charging(void);
 
 #endif /* _SYSHAL_BATT_H_ */

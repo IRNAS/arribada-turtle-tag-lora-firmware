@@ -20,6 +20,7 @@
 #define _SYSHAL_USB_H_
 
 #include <stdint.h>
+#include <stdbool.h>
 
 // Constants
 #define SYSHAL_USB_NO_ERROR            0
@@ -31,6 +32,7 @@ int syshal_usb_init(void);
 int syshal_usb_term(void);
 int syshal_usb_transfer(uint8_t * data, uint32_t size);
 int syshal_usb_receive(uint8_t * data, uint32_t size);
+bool syshal_usb_peek_at(uint8_t * byte, uint32_t location);
 int syshal_usb_available(void);
 
 #endif /* _SYSHAL_USB_H_ */

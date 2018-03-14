@@ -18,6 +18,7 @@
 #include "main.h"
 #include "bsp.h"
 #include "debug.h"
+#include "sm.h"
 #include "syshal_gpio.h"
 #include "syshal_i2c.h"
 #include "syshal_spi.h"
@@ -59,60 +60,19 @@ int main(void)
     // Configure the system clock
     SystemClock_Config();
 
-    // Initialize all configured peripherals
-    syshal_gpio_init(GPIO_LED3);
-    syshal_gpio_init(GPIO_LED4);
-    syshal_gpio_init(GPIO_LED5);
-    syshal_gpio_init(GPIO_LED6);
-    syshal_uart_init(UART_1);
-    //syshal_uart_init(UART_3);
-    //syshal_uart_init(UART_4);
-    syshal_spi_init(SPI_1);
-    syshal_spi_init(SPI_2);
-    syshal_i2c_init(I2C_1);
-    syshal_i2c_init(I2C_2);
-    //syshal_batt_init(I2C_1);
-    //syshal_gps_init();
-    syshal_usb_init();
-
-    // Print General System Info
-    DEBUG_PR_SYS("Arribada Tracker Device");
-    DEBUG_PR_SYS("Version:  %s", GIT_VERSION);
-    DEBUG_PR_SYS("Compiled: %s %s With %s", COMPILE_DATE, COMPILE_TIME, COMPILER_NAME);
-
     while (1)
     {
-        syshal_gpio_set_output_toggle(GPIO_LED3);
-        //syshal_time_delay_ms(100);
-        //syshal_gpio_set_output_toggle(GPIO_LED4);
-        //syshal_time_delay_ms(100);
-        //syshal_gpio_set_output_toggle(GPIO_LED5);
-        //syshal_time_delay_ms(100);
-        //syshal_gpio_set_output_toggle(GPIO_LED6);
-        //syshal_time_delay_ms(100);
-
-        uint32_t dataReceivedBytes = 0;
-        uint8_t dataReceived[500];
-
-        if (syshal_usb_available())
-        {
-            dataReceivedBytes = syshal_usb_receive(dataReceived, sizeof(dataReceived));
-
-            printf("Data Received: ");
-            for (uint32_t i = 0; i < dataReceivedBytes; ++i)
-                printf("%c", dataReceived[i]);
-            printf("\n\r");
-
-            syshal_usb_transfer(dataReceived, dataReceivedBytes); // Echo data back
-        }
-
-        //DEBUG_PR_INFO("%d",syshal_usb_transfer(dataReceived, sizeof(dataReceived)));
-
-        //syshal_gps_tick();
+        sm_iterate();
     }
+
+    return 0;
 
 }
 
+/**
+ * @brief      Set up all internal clock prescalers and routing. Does not
+ *             include clock gating
+ */
 void SystemClock_Config(void)
 {
     RCC_OscInitTypeDef RCC_OscInitStruct;
@@ -166,7 +126,12 @@ void SystemClock_Config(void)
     HAL_NVIC_SetPriority(SysTick_IRQn, 0, 0);
 }
 
-// @brief  This function is executed in case of error occurrence
+//
+// @brief      This function is executed in case of error occurrence
+//
+// @param[in]  file  The file the error occured in
+// @param[in]  line  The line the error occured at
+//
 void _Error_Handler(char * file, int line)
 {
     // User can add his own implementation to report the HAL error return state
@@ -174,18 +139,3 @@ void _Error_Handler(char * file, int line)
     {
     }
 }
-
-#ifdef  USE_FULL_ASSERT
-/**
-  * @brief  Reports the name of the source file and the source line number
-  *         where the assert_param error has occurred.
-  * @param  file: pointer to the source file name
-  * @param  line: assert_param error line source number
-  * @retval None
-  */
-void assert_failed(uint8_t * file, uint32_t line)
-{
-    /* User can add his own implementation to report the file name and line number,
-       tex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
-}
-#endif

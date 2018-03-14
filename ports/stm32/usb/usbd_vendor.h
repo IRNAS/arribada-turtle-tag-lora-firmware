@@ -29,8 +29,9 @@
 #define _USB_VENDOR_H
 
 #include "usbd_ioreq.h"
+#include <stdbool.h>
 
-#define VENDOR_ENDPOINT_PACKET_SIZE (64) // Endpoint IN & OUT Packet size, Limited to 64 as a maximum due to only running on USB-FS
+#define VENDOR_ENDPOINT_PACKET_SIZE (USB_FS_MAX_PACKET_SIZE) // Endpoint IN & OUT Packet size, Limited to 64 as a maximum due to only running on USB-FS
 
 // Define size for the receive and transmit buffer over CDC
 #define APP_TX_DATA_SIZE  1000
