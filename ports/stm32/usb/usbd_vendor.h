@@ -30,7 +30,7 @@
 
 #include "usbd_ioreq.h"
 
-#define VENDOR_ENDPOINT_PACKET_SIZE (512) // Endpoint IN & OUT Packet size
+#define VENDOR_ENDPOINT_PACKET_SIZE (64) // Endpoint IN & OUT Packet size, Limited to 64 as a maximum due to only running on USB-FS
 
 // Define size for the receive and transmit buffer over CDC
 #define APP_TX_DATA_SIZE  1000
@@ -46,8 +46,8 @@ typedef struct
     uint32_t RxLength;
     uint32_t TxLength;
 
-    volatile uint32_t TxState;
-    volatile uint32_t RxState;
+    volatile bool TxPending;
+    volatile bool RxPending;
 }
 USBD_Vendor_HandleTypeDef_t;
 

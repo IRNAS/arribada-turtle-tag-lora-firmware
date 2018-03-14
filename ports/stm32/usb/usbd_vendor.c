@@ -163,14 +163,11 @@ static uint8_t USBD_Vendor_Init(USBD_HandleTypeDef * pdev, uint8_t cfgidx)
     USBD_Vendor_SetRxBuffer(pdev, UserRxBufferFS);
 
     // Init Xfer states
-    hVendor->TxState = 0;
-    hVendor->RxState = 0;
+    hVendor->TxPending = false;
+    hVendor->RxPending = false;
 
     // Prepare Out endpoint to receive next packet
-    USBD_LL_PrepareReceive(pdev,
-                           VENDOR_OUT_EP,
-                           hVendor->RxBuffer,
-                           VENDOR_ENDPOINT_PACKET_SIZE);
+    USBD_Vendor_ReceivePacket(pdev);
 
     return USBD_OK;
 }
@@ -257,7 +254,7 @@ static uint8_t USBD_Vendor_DataIn(USBD_HandleTypeDef * pdev, uint8_t epnum)
     if (pdev->pClassData == NULL)
         return USBD_FAIL;
 
-    hVendor->TxState = 0; // Set TX state flag to sent
+    hVendor->TxPending = false; // Set TX state flag to sent
     return USBD_OK;
 }
 
@@ -297,9 +294,9 @@ static uint8_t USBD_Vendor_DataOut(USBD_HandleTypeDef * pdev, uint8_t epnum)
     if (pdev->pClassData == NULL)
         return USBD_FAIL;
 
+    hVendor->RxPending = false;
+
     USBD_Vendor_Receive_Callback(&hVendor->RxBuffer[0], hVendor->RxLength); // Call user function with data received
-    USBD_Vendor_SetRxBuffer(pdev, &hVendor->RxBuffer[0]); // Potentially unnecessary?
-    USBD_Vendor_ReceivePacket(pdev);
     return (USBD_OK);
 }
 
@@ -359,11 +356,11 @@ uint8_t USBD_Vendor_TransmitPacket(USBD_HandleTypeDef * pdev)
     if (pdev->pClassData == NULL)
         return USBD_FAIL;
 
-    if (hVendor->TxState != 0)
+    if (hVendor->TxPending)
         return USBD_BUSY;
 
     // Queue a transfer
-    hVendor->TxState = 1;
+    hVendor->TxPending = true;
 
     // Transmit next packet
     USBD_LL_Transmit(pdev,
@@ -388,6 +385,11 @@ uint8_t USBD_Vendor_ReceivePacket(USBD_HandleTypeDef * pdev)
 
     if (pdev->pClassData == NULL)
         return USBD_FAIL;
+
+    if (hVendor->RxPending)
+        return USBD_BUSY;
+
+    hVendor->RxPending = true;
 
     // Prepare Out endpoint to receive next packet
     USBD_LL_PrepareReceive(pdev,

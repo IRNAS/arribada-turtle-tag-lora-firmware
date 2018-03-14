@@ -101,7 +101,7 @@ int syshal_usb_transfer(uint8_t * data, uint32_t size)
     if (USBD_STATE_CONFIGURED != hUsbDeviceFS.dev_state)
         return SYSHAL_USB_ERROR_DISCONNECTED;
 
-    if (hVendor->TxState != 0)
+    if (hVendor->TxPending)
         return SYSHAL_USB_ERROR_BUSY;
 
     USBD_Vendor_SetTxBuffer(&hUsbDeviceFS, data, size);
@@ -128,6 +128,20 @@ int syshal_usb_receive(uint8_t * data, uint32_t size)
     for (uint32_t i = 0; i < size; ++i)
     {
         *data++ = rb_remove(&rx_buffer); // Remove and return the top item from the ring buffer
+    }
+
+    // If we currently are not pending a new transfer because our receive buffer is full
+    // check to see if we have room then queue another one is there is room
+    if (!hVendor->RxPending)
+    {
+        // Do we have capacity to store another packet from USB. If so queue one
+        if ( (rb_capacity(&rx_buffer) - rb_full_count(&rx_buffer)) >= VENDOR_ENDPOINT_PACKET_SIZE )
+        {
+            USBD_Vendor_HandleTypeDef_t * hVendor = (USBD_Vendor_HandleTypeDef_t *)hUsbDeviceFS.pClassData;
+
+            USBD_Vendor_SetRxBuffer(&hUsbDeviceFS, &hVendor->RxBuffer[0]); // Potentially unnecessary?
+            USBD_Vendor_ReceivePacket(&hUsbDeviceFS);
+        }
     }
 
     return size;
@@ -189,8 +203,6 @@ void USB_IRQHandler(void)
  */
 void USBD_Vendor_Receive_Callback(uint8_t * data, uint32_t size)
 {
-#ifdef USB_SAFE_INSERT
-    // If the buffer is full and the user defines UART_SAFE_INSERT, ignore new bytes.
     for (uint32_t i = 0; i < size; ++i)
     {
         if (!rb_safe_insert(&rx_buffer, data[i]))
@@ -199,11 +211,13 @@ void USBD_Vendor_Receive_Callback(uint8_t * data, uint32_t size)
             break;
         }
     }
-#else
-    // If the buffer is full overwrite data
-    for (uint32_t i = 0; i < size; ++i)
+
+    // Do we have capacity to store another packet from USB. If so queue one
+    if ( (rb_capacity(&rx_buffer) - rb_full_count(&rx_buffer)) >= VENDOR_ENDPOINT_PACKET_SIZE )
     {
-        rb_push_insert(&rx_buffer, data[size]);
+        USBD_Vendor_HandleTypeDef_t * hVendor = (USBD_Vendor_HandleTypeDef_t *)hUsbDeviceFS.pClassData;
+
+        USBD_Vendor_SetRxBuffer(&hUsbDeviceFS, &hVendor->RxBuffer[0]); // Potentially unnecessary?
+        USBD_Vendor_ReceivePacket(&hUsbDeviceFS);
     }
-#endif
 }
