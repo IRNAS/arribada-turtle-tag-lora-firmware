@@ -32,7 +32,7 @@
 int syshal_uart_init(uint32_t instance);
 int syshal_uart_term(uint32_t instance);
 int syshal_uart_change_baud(uint32_t instance, uint32_t baudrate);
-int syshal_uart_transfer(uint32_t instance, uint8_t * data, uint32_t size);
+int syshal_uart_send(uint32_t instance, uint8_t * data, uint32_t size);
 int syshal_uart_receive(uint32_t instance, uint8_t * data, uint32_t size);
 bool syshal_uart_peek_at(uint32_t instance, uint8_t * byte, uint32_t location);
 uint32_t syshal_uart_available(uint32_t instance);

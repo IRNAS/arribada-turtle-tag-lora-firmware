@@ -21,31 +21,25 @@
 #include "syshal_usb.h"
 #include "debug.h"
 
-int (*config_if_transfer_priv)(uint8_t *, uint32_t);
+int (*config_if_send_priv)(uint8_t *, uint32_t);
 int (*config_if_receive_priv)(uint8_t *, uint32_t);
-bool (*config_if_peek_at_priv)(uint8_t *, uint32_t);
-int (*config_if_available_priv)(void);
 
 // Constants
-int config_if_init(config_if_interface_t interface)
+int config_if_init(config_if_backend_t backend)
 {
-    if (interface == CONFIG_IF_USB)
+    if (backend == CONFIG_IF_USB)
     {
-        config_if_transfer_priv = &syshal_usb_transfer;
+        config_if_send_priv = &syshal_usb_send;
         config_if_receive_priv = &syshal_usb_receive;
-        config_if_peek_at_priv = &syshal_usb_peek_at;
-        config_if_available_priv = &syshal_usb_available;
 
         return CONFIG_IF_NO_ERROR;
     }
-    else if (interface == CONFIG_IF_BLE)
+    else if (backend == CONFIG_IF_BLE)
     {
         DEBUG_PR_ERROR("BLE NOT IMPLEMENTED %s()", __FUNCTION__);
         /*
         config_if_transfer_priv = &syshal_ble_transfer;
         config_if_receive_priv = &syshal_ble_receive;
-        config_if_peek_at_priv = &syshal_ble_peek_at;
-        config_if_available_priv = &syshal_ble_available;
         */
 
         return CONFIG_IF_ERROR_INVALID_INSTANCE;
@@ -56,34 +50,64 @@ int config_if_init(config_if_interface_t interface)
     }
 }
 
-int config_if_transfer(uint8_t * data, uint32_t size)
+int config_if_term(void)
 {
-    if (config_if_transfer_priv == NULL)
+    config_if_send_priv = NULL;
+    config_if_receive_priv = NULL;
+
+    return CONFIG_IF_NO_ERROR;
+}
+
+int config_if_send(uint8_t * data, uint32_t size)
+{
+    if (config_if_send_priv == NULL)
         return CONFIG_IF_ERROR_INVALID_INSTANCE;
 
-    return config_if_transfer_priv(data, size);
+    return config_if_send_priv(data, size);
 }
 
 int config_if_receive(uint8_t * data, uint32_t size)
 {
-    if (config_if_transfer_priv == NULL)
+    if (config_if_receive_priv == NULL)
         return CONFIG_IF_ERROR_INVALID_INSTANCE;
 
     return config_if_receive_priv(data, size);
 }
 
-bool config_if_peek_at(uint8_t * byte, uint32_t location)
+/**
+ * @brief      This function is called whenever a event occurs on the configured
+ *             backend. This should be the user's application code to handle
+ *             communication events
+ *
+ * @param[out] event  The event
+ *
+ * @return     Return error code
+ */
+__attribute__((weak)) int config_if_event_handler(config_if_event_t * event)
 {
-    if (config_if_transfer_priv == NULL)
-        return CONFIG_IF_ERROR_INVALID_INSTANCE;
+    UNUSED(event);
+    DEBUG_PR_WARN("%s Not implemented", __FUNCTION__);
 
-    return config_if_peek_at_priv(byte, location);
+    return CONFIG_IF_NO_ERROR;
 }
 
-int config_if_available()
+/**
+ * @brief      This function is called whenever a event occurs on the USB bus.
+ *             This should be overriden by config_if.c
+ *
+ * @param[out] event  The event
+ *
+ * @return     Return error code
+ */
+int syshal_usb_event_handler(syshal_usb_event_t * event)
 {
-    if (config_if_transfer_priv == NULL)
-        return CONFIG_IF_ERROR_INVALID_INSTANCE;
+    // Do a manual member copy of the events. This is to avoid bugs arising from overlaying structures that later chance
+    config_if_event_t parsedEvent;
+    parsedEvent.id = event.id;
+    parsedEvent.buffer = event.buffer;
+    parsedEvent.size = event.size;
 
-    return config_if_available_priv();
+    config_if_event_handler( (config_if_event_t *) event);
+
+    return SYSHAL_USB_NO_ERROR;
 }

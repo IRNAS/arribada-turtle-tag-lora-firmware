@@ -84,7 +84,7 @@ int syshal_usb_term(void)
 }
 
 /**
- * @brief      Transfer the given buffer to our USB host
+ * @brief      Send the given buffer to our USB host
  *
  * @param[in]  data  The data buffer
  * @param[in]  size  The size of the data buffer in bytes
@@ -94,7 +94,7 @@ int syshal_usb_term(void)
  * @return     SYSHAL_USB_ERROR_FAIL if the transfer has failed
  * @return     SYSHAL_USB_ERROR_DISCONNECTED if the USB is disconnected
  */
-int syshal_usb_transfer(uint8_t * data, uint32_t size)
+int syshal_usb_send(uint8_t * data, uint32_t size)
 {
     USBD_Vendor_HandleTypeDef_t * hVendor = (USBD_Vendor_HandleTypeDef_t *)hUsbDeviceFS.pClassData;
 
@@ -118,68 +118,21 @@ int syshal_usb_transfer(uint8_t * data, uint32_t size)
  *
  * @return     Actual number of bytes received
  */
-int syshal_usb_receive(uint8_t * data, uint32_t size)
+int syshal_usb_receive(uint8_t * buffer, uint32_t size)
 {
-
-    if (size == 0)
-        return 0;
-
-    uint32_t count = rb_full_count(&rx_buffer);
-
-    if (size > count)
-        size = count;
-
-    for (uint32_t i = 0; i < size; ++i)
-    {
-        *data++ = rb_remove(&rx_buffer); // Remove and return the top item from the ring buffer
-    }
-
     USBD_Vendor_HandleTypeDef_t * hVendor = (USBD_Vendor_HandleTypeDef_t *)hUsbDeviceFS.pClassData;
 
-    // If we currently are not pending a new transfer because our receive buffer is full
-    // check to see if we have room then queue another one is there is room
-    if (!hVendor->RxPending)
-    {
-        // Do we have capacity to store another packet from USB. If so queue one
-        if ( (rb_capacity(&rx_buffer) - rb_full_count(&rx_buffer)) >= VENDOR_ENDPOINT_PACKET_SIZE )
-        {
-            USBD_Vendor_HandleTypeDef_t * hVendor = (USBD_Vendor_HandleTypeDef_t *)hUsbDeviceFS.pClassData;
+    // If we currently are not pending a new transfer
+    if (hVendor->RxPending)
+        return SYSHAL_USB_ERROR_BUSY;
 
-            USBD_Vendor_SetRxBuffer(&hUsbDeviceFS, &hVendor->RxBuffer[0]); // Potentially unnecessary?
-            USBD_Vendor_ReceivePacket(&hUsbDeviceFS);
-        }
-    }
+    if (size < VENDOR_ENDPOINT_PACKET_SIZE)
+        return SYSHAL_USB_BUFFER_TOO_SMALL;
 
-    return size;
-}
+    USBD_Vendor_SetRxBuffer(&hUsbDeviceFS, buffer); // Potentially unnecessary?
+    USBD_Vendor_ReceivePacket(&hUsbDeviceFS);
 
-/**
- * @brief      Peek at character at location at nth depth in rx buffer (0 being
- *             the oldest/top value of the FIFO)
- *
- * @param[out] byte      The byte read
- * @param[in]  location  The location to read
- *
- * @return     Return true on success
- */
-bool syshal_usb_peek_at(uint8_t * byte, uint32_t location)
-{
-    *byte = rb_peek_at(&rx_buffer, location);
-
-    if (-1 == *byte)
-        return false;
-    else
-        return true;
-}
-
-/**
- * @brief      Return the amount of data available in the USB RX buffer.
- *
- * @return     Number of bytes in USB RX buffer.
- */
-int syshal_usb_available(void)
-{
-    return rb_full_count(&rx_buffer); // Return the number of elements stored in the ring buffer
+    return SYSHAL_USB_NO_ERROR;
 }
 
 // Implement MSP hooks that are called by stm32f0xx_hal_pcd
@@ -219,42 +172,17 @@ void USB_IRQHandler(void)
 
 
 /**
- * @brief      This function is called whenever data is received on USB. It in
- *             turn appends it to the USB Rx ring buffer for later retrieval by
- *             syshal_usb_receive
+ * @brief      This function is called whenever a event occurs on the USB bus.
+ *             This should be overriden by config_if.c
  *
- * @param[in]  data  The data Received
- * @param[in]  size  The size of the data in bytes
+ * @param[out] event  The event
+ *
+ * @return     Return error code
  */
-void USBD_Vendor_Receive_Callback(uint8_t * data, uint32_t size)
+__attribute__((weak)) int syshal_usb_event_handler(syshal_usb_event_t * event)
 {
-    for (uint32_t i = 0; i < size; ++i)
-    {
-        if (!rb_safe_insert(&rx_buffer, data[i]))
-        {
-            DEBUG_PR_ERROR("Rx buffer USB full");
-            break;
-        }
-    }
+    UNUSED(event);
+    DEBUG_PR_WARN("%s Not implemented", __FUNCTION__);
 
-    USBD_Vendor_HandleTypeDef_t * hVendor = (USBD_Vendor_HandleTypeDef_t *)hUsbDeviceFS.pClassData;
-
-    // If we currently are not pending a new transfer because our receive buffer is full
-    // check to see if we have room then queue another one is there is room
-    if (!hVendor->RxPending)
-    {
-        // Do we have capacity to store another packet from USB. If so queue one
-        if ( (rb_capacity(&rx_buffer) - rb_full_count(&rx_buffer)) >= VENDOR_ENDPOINT_PACKET_SIZE )
-        {
-            USBD_Vendor_HandleTypeDef_t * hVendor = (USBD_Vendor_HandleTypeDef_t *)hUsbDeviceFS.pClassData;
-
-            USBD_Vendor_SetRxBuffer(&hUsbDeviceFS, &hVendor->RxBuffer[0]); // Potentially unnecessary?
-            USBD_Vendor_ReceivePacket(&hUsbDeviceFS);
-        }
-        else
-        {
-            DEBUG_PR_WARN("USB RX buffer full. Not accepting any new data");
-        }
-    }
-
+    return SYSHAL_USB_NO_ERROR;
 }

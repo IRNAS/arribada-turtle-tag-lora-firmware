@@ -50,6 +50,7 @@
 #include "usbd_vendor.h"
 #include "usbd_desc.h"
 #include "usbd_ctlreq.h"
+#include "syshal_usb.h"
 #include "debug.h"
 
 // Private defines
@@ -70,9 +71,6 @@ static uint8_t USBD_Vendor_Setup(USBD_HandleTypeDef * pdev, USBD_SetupReqTypedef
 static uint8_t * USBD_Vendor_GetCfgDesc(uint16_t * length);
 static uint8_t USBD_Vendor_DataIn(USBD_HandleTypeDef * pdev, uint8_t epnum);
 static uint8_t USBD_Vendor_DataOut(USBD_HandleTypeDef * pdev, uint8_t epnum);
-
-uint8_t UserRxBufferFS[APP_RX_DATA_SIZE]; // Received data over USB is stored in this buffer
-uint8_t UserTxBufferFS[APP_TX_DATA_SIZE]; // Data to be sent over USB is stored in this buffer
 
 // USBD_HID_Private_Variables
 USBD_ClassTypeDef USBD_VENDOR =
@@ -158,16 +156,9 @@ static uint8_t USBD_Vendor_Init(USBD_HandleTypeDef * pdev, uint8_t cfgidx)
     USBD_Vendor_HandleTypeDef_t * hVendor;
     hVendor = (USBD_Vendor_HandleTypeDef_t *) pdev->pClassData;
 
-    // Set Application Buffers
-    USBD_Vendor_SetTxBuffer(pdev, UserTxBufferFS, 0);
-    USBD_Vendor_SetRxBuffer(pdev, UserRxBufferFS);
-
     // Init Xfer states
     hVendor->TxPending = false;
     hVendor->RxPending = false;
-
-    // Prepare Out endpoint to receive next packet
-    USBD_Vendor_ReceivePacket(pdev);
 
     return USBD_OK;
 }
@@ -255,6 +246,13 @@ static uint8_t USBD_Vendor_DataIn(USBD_HandleTypeDef * pdev, uint8_t epnum)
         return USBD_FAIL;
 
     hVendor->TxPending = false; // Set TX state flag to sent
+
+    // Generate event for syshal_usb
+    syshal_usb_event_t event;
+    event.id = SYSHAL_USB_EVENT_SEND_COMPLETE;
+
+    syshal_usb_event_handler(&event);
+
     return USBD_OK;
 }
 
@@ -296,10 +294,15 @@ static uint8_t USBD_Vendor_DataOut(USBD_HandleTypeDef * pdev, uint8_t epnum)
 
     hVendor->RxPending = false;
 
-    USBD_Vendor_Receive_Callback(&hVendor->RxBuffer[0], hVendor->RxLength); // Call user function with data received
+    // Generate event for syshal_usb
+    syshal_usb_event_t event;
+    event.id = SYSHAL_USB_EVENT_RECEIVE_COMPLETE;
+    event.buffer = &hVendor->RxBuffer[0];
+    event.size = hVendor->RxLength;
+
+    syshal_usb_event_handler(&event);
     return (USBD_OK);
 }
-
 
 /////////////////////////////// Exposed Functions ///////////////////////////////
 

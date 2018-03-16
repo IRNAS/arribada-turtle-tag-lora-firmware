@@ -33,15 +33,8 @@
 
 #define VENDOR_ENDPOINT_PACKET_SIZE (USB_FS_MAX_PACKET_SIZE) // Endpoint IN & OUT Packet size, Limited to 64 as a maximum due to only running on USB-FS
 
-// Define size for the receive and transmit buffer over CDC
-#define APP_TX_DATA_SIZE  1000
-#define APP_RX_DATA_SIZE  1000
-
 typedef struct
 {
-    uint32_t data[VENDOR_ENDPOINT_PACKET_SIZE / 4]; // Force 32-bit alignment
-    uint8_t  CmdOpCode;
-    uint8_t  CmdLength;
     uint8_t * RxBuffer;
     uint8_t * TxBuffer;
     uint32_t RxLength;
@@ -56,8 +49,6 @@ uint8_t USBD_Vendor_SetTxBuffer(USBD_HandleTypeDef * pdev, uint8_t * pbuff, uint
 uint8_t USBD_Vendor_SetRxBuffer(USBD_HandleTypeDef * pdev, uint8_t * pbuff);
 uint8_t USBD_Vendor_TransmitPacket(USBD_HandleTypeDef * pdev);
 uint8_t USBD_Vendor_ReceivePacket(USBD_HandleTypeDef * pdev);
-
-void USBD_Vendor_Receive_Callback(uint8_t * data, uint32_t size);
 
 extern USBD_ClassTypeDef USBD_VENDOR;
 #define USBD_VENDOR_CLASS &USBD_VENDOR

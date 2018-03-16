@@ -210,6 +210,7 @@ void log_read_req()
 ////////////////////////////////////////////////////////////////////////////////
 
 // Process any incoming requests on TJet
+/*
 static void process_cmd_request(cmd_t * req)
 {
     switch (req->h.cmd)
@@ -289,19 +290,9 @@ static void process_cmd_request(cmd_t * req)
             status_req();
             break;
 
-        case CMD_STATUS_RESP:
-            DEBUG_PR_INFO("STATUS_RESP");
-            status_resp();
-            break;
-
         case CMD_FW_SEND_IMAGE_REQ:
             DEBUG_PR_INFO("FW_SEND_IMAGE_REQ");
             fw_send_image_req();
-            break;
-
-        case CMD_FW_SEND_IMAGE_COMPLETE_CNF:
-            DEBUG_PR_INFO("FW_SEND_IMAGE_COMPLETE_CNF");
-            fw_send_image_complete_cnf();
             break;
 
         case CMD_FW_APPLY_IMAGE_REQ:
@@ -339,67 +330,67 @@ static void process_cmd_request(cmd_t * req)
             // Don't return an error. Fail silent
             break;
     }
-}
+}*/
 
-static int parse_rx_buffer(void)
-{
-    uint32_t bytesInRxBuffer = config_if_available();
-
-    // Check for minimum allowed message size
-    if (bytesInRxBuffer < CMD_MIN_SIZE)
-        return PARSE_RX_ERROR_INSUFFICIENT_BYTES;
-
-    cmd_t request;
-
-    // Look for SYNC byte
-    for (uint32_t i = 0; i < bytesInRxBuffer; ++i)
-    {
-        if (!config_if_peek_at(&request.h.sync, 0))
-            return PARSE_RX_ERROR_INSUFFICIENT_BYTES;
-
-        if (CMD_SYNCWORD == request.h.sync)
-            goto label_sync_start;
-        else
-            config_if_receive(&request.h.sync, 1); // remove this character
-    }
-
-    // No SYNC found
-    return PARSE_RX_ERROR_MISSING_SYNC;
-
-label_sync_start: // Sync found
-
-    // Get the command
-    if (!config_if_peek_at(&request.h.cmd, 1))
-        return PARSE_RX_ERROR_INSUFFICIENT_BYTES;
-
-    // Get the expected size of this command
-    uint32_t expectedSize = cmd_size_of_command(request.h.cmd);
-
-    // Is this message too large
-    if (expectedSize > CMD_MAX_SIZE)
-    {
-        uint8_t dumpBuffer;
-
-        // Message is too big to store so throw it all away
-        while (config_if_available() > 0)
-            config_if_receive(&dumpBuffer, 1);
-
-        return PARSE_RX_ERROR_MSG_TOO_BIG;
-    }
-
-    // Do we currently hold the full command in our buffer?
-    if (config_if_available() < expectedSize)
-        return PARSE_RX_ERROR_MSG_PENDING;
-
-    // Message is okay, lets grab the lot and remove it from the read buffer
-    if (expectedSize != config_if_receive(&request.p.cmd_bytes[0], expectedSize))
-        return PARSE_RX_ERROR_INSUFFICIENT_BYTES;
-
-    process_cmd_request(&request); // Process our newly received request
-
-    return PARSE_RX_NO_ERROR;
-
-}
+//static int parse_rx_buffer(void)
+//{
+//    uint32_t bytesInRxBuffer = config_if_available();
+//
+//    // Check for minimum allowed message size
+//    if (bytesInRxBuffer < CMD_MIN_SIZE)
+//        return PARSE_RX_ERROR_INSUFFICIENT_BYTES;
+//
+//    cmd_t request;
+//
+//    // Look for SYNC byte
+//    for (uint32_t i = 0; i < bytesInRxBuffer; ++i)
+//    {
+//        if (!config_if_peek_at(&request.h.sync, 0))
+//            return PARSE_RX_ERROR_INSUFFICIENT_BYTES;
+//
+//        if (CMD_SYNCWORD == request.h.sync)
+//            goto label_sync_start;
+//        else
+//            config_if_receive(&request.h.sync, 1); // remove this character
+//    }
+//
+//    // No SYNC found
+//    return PARSE_RX_ERROR_MISSING_SYNC;
+//
+//label_sync_start: // Sync found
+//
+//    // Get the command
+//    if (!config_if_peek_at(&request.h.cmd, 1))
+//        return PARSE_RX_ERROR_INSUFFICIENT_BYTES;
+//
+//    // Get the expected size of this command
+//    uint32_t expectedSize = cmd_size_of_command(request.h.cmd);
+//
+//    // Is this message too large
+//    if (expectedSize > CMD_MAX_SIZE)
+//    {
+//        uint8_t dumpBuffer;
+//
+//        // Message is too big to store so throw it all away
+//        while (config_if_available() > 0)
+//            config_if_receive(&dumpBuffer, 1);
+//
+//        return PARSE_RX_ERROR_MSG_TOO_BIG;
+//    }
+//
+//    // Do we currently hold the full command in our buffer?
+//    if (config_if_available() < expectedSize)
+//        return PARSE_RX_ERROR_MSG_PENDING;
+//
+//    // Message is okay, lets grab the lot and remove it from the read buffer
+//    if (expectedSize != config_if_receive(&request.p.cmd_bytes[0], expectedSize))
+//        return PARSE_RX_ERROR_INSUFFICIENT_BYTES;
+//
+//    process_cmd_request(&request); // Process our newly received request
+//
+//    return PARSE_RX_NO_ERROR;
+//
+//}
 
 ////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////// STATE EXECUTION CODE /////////////////////////////
@@ -483,7 +474,7 @@ void standby_provisioning_needed_state()
         blinkTimer = syshal_time_get_ticks_ms();
     }
 
-    parse_rx_buffer();
+    //parse_rx_buffer();
 
     // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
     //if (syshal_batt_charging())
@@ -506,13 +497,13 @@ void provisioning_state(void)
 
 void operational_state(void)
 {
-    if (syshal_usb_available())
-    {
-        DEBUG_PR_INFO("USB message received");
-        uint8_t buffer[100];
-        uint32_t size = syshal_usb_receive(buffer, sizeof(buffer));
-        syshal_usb_transfer(buffer, size);
-    }
+//    if (syshal_usb_available())
+//    {
+//        DEBUG_PR_INFO("USB message received");
+//        uint8_t buffer[100];
+//        uint32_t size = syshal_usb_receive(buffer, sizeof(buffer));
+//        syshal_usb_transfer(buffer, size);
+//    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////

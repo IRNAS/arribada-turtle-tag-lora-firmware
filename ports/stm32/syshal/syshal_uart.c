@@ -186,7 +186,7 @@ bool syshal_uart_peek_at(uint32_t instance, uint8_t * byte, uint32_t location)
         return true;
 }
 
-int syshal_uart_transfer(uint32_t instance, uint8_t * data, uint32_t size)
+int syshal_uart_send(uint32_t instance, uint8_t * data, uint32_t size)
 {
 
     if (!size)

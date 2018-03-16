@@ -72,7 +72,7 @@ void syshal_gps_wake_up(void)
 
     // We can send anything to wake the device
     uint8_t data = 0xAA;
-    syshal_uart_transfer(GPS_UART, &data, 1);
+    syshal_uart_send(GPS_UART, &data, 1);
 }
 
 /**
@@ -153,7 +153,7 @@ void syshal_gps_set_baud(uint32_t baudrate)
  */
 int syshal_gps_send_raw(uint8_t * data, uint32_t size)
 {
-    return syshal_uart_transfer(GPS_UART, data, size);
+    return syshal_uart_send(GPS_UART, data, size);
 }
 
 /**
@@ -179,8 +179,8 @@ static void syshal_gps_send_packet_priv(UBX_Packet_t * ubx_packet)
 
     // The packet is not arranged contiguously in RAM, so we have to transmit
     // it using two passes i.e., header then payload + CRC
-    syshal_uart_transfer(GPS_UART, (uint8_t *) ubx_packet, UBX_HEADER_LENGTH);
-    syshal_uart_transfer(GPS_UART, ubx_packet->payloadAndCrc, ubx_packet->msgLength + UBX_CRC_LENGTH);
+    syshal_uart_send(GPS_UART, (uint8_t *) ubx_packet, UBX_HEADER_LENGTH);
+    syshal_uart_send(GPS_UART, ubx_packet->payloadAndCrc, ubx_packet->msgLength + UBX_CRC_LENGTH);
 }
 
 static void syshal_gps_process_nav_status_priv(UBX_Packet_t * packet)

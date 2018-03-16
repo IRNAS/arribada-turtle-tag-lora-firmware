@@ -27,12 +27,28 @@
 #define SYSHAL_USB_ERROR_BUSY         -1
 #define SYSHAL_USB_ERROR_FAIL         -2
 #define SYSHAL_USB_ERROR_DISCONNECTED -3
+#define SYSHAL_USB_BUFFER_TOO_SMALL   -4
+
+typedef enum
+{
+    SYSHAL_USB_EVENT_SEND_COMPLETE,
+    SYSHAL_USB_EVENT_RECEIVE_COMPLETE,
+    SYSHAL_USB_EVENT_CONNECTED,
+    SYSHAL_USB_EVENT_DISCONNECTED,
+} syshal_usb_event_id_t;
+
+typedef struct
+{
+    syshal_usb_event_id_t id;
+    uint8_t * buffer;
+    uint32_t size;
+} syshal_usb_event_t;
 
 int syshal_usb_init(void);
 int syshal_usb_term(void);
-int syshal_usb_transfer(uint8_t * data, uint32_t size);
-int syshal_usb_receive(uint8_t * data, uint32_t size);
-bool syshal_usb_peek_at(uint8_t * byte, uint32_t location);
-int syshal_usb_available(void);
+int syshal_usb_send(uint8_t * data, uint32_t size);
+int syshal_usb_receive(uint8_t * buffer, uint32_t size);
+
+int syshal_usb_event_handler(syshal_usb_event_t * event);
 
 #endif /* _SYSHAL_USB_H_ */

@@ -24,23 +24,33 @@
 #include <stdbool.h>
 
 // Constants
-#define CONFIG_IF_NO_ERROR                0
-#define CONFIG_IF_ERROR_INVALID_SIZE     -1
-#define CONFIG_IF_ERROR_INVALID_INSTANCE -2
-#define CONFIG_IF_ERROR_BUSY             -3
-#define CONFIG_IF_ERROR_TIMEOUT          -4
-#define CONFIG_IF_ERROR_DEVICE           -5
+#define CONFIG_IF_NO_ERROR           	 ( 0)
+#define CONFIG_IF_ERROR_BUSY         	 (-1)
+#define CONFIG_IF_ERROR_FAIL         	 (-2)
+#define CONFIG_IF_ERROR_DISCONNECTED 	 (-3)
+#define CONFIG_IF_BUFFER_TOO_SMALL   	 (-4)
+#define CONFIG_IF_ERROR_INVALID_SIZE     (-5)
+#define CONFIG_IF_ERROR_INVALID_INSTANCE (-6)
 
 typedef enum
 {
-    CONFIG_IF_USB,
-    CONFIG_IF_BLE,
-} config_if_interface_t;
+    CONFIG_IF_EVENT_SEND_COMPLETE, //  BLE or USB send complete
+    CONFIG_IF_EVENT_RECEIVE_COMPLETE, // BLE or USB receive complete, the length of data received should be passed back as part of config_if_event_t
+    CONFIG_IF_EVENT_CONNECTED, // maps to BLE connection or USB enumeration complete
+    CONFIG_IF_EVENT_DISCONNECTED, // maps to BLE disconnection or USB host disconnection
+} config_if_event_id_t;
 
-int config_if_init(config_if_interface_t interface);
-int config_if_transfer(uint8_t * data, uint32_t size);
+typedef struct
+{
+    config_if_event_id_t id;
+    uint8_t * buffer;
+    uint32_t size;
+} config_if_event_t;
+
+int config_if_init(config_if_backend_t backend);
+int config_if_term(void);
+int config_if_send(uint8_t * data, uint32_t size);
 int config_if_receive(uint8_t * data, uint32_t size);
-bool config_if_peek_at(uint8_t * byte, uint32_t location);
-int config_if_available();
+int config_if_event_handler(config_if_event_t * event);
 
 #endif /* _CONFIG_IF_H_ */
