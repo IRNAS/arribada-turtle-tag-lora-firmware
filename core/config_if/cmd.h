@@ -30,8 +30,10 @@
 #define CMD_CFG_TAG_ALL 0xFFFF // A special tag to denote a read of all configuration values from RAM
 
 #define CMD_SET_HDR(p, i)  \
-    p->h.sync  = CMD_SYNCWORD; \
-    p->h.cmd   = i;
+    p.h.sync  = CMD_SYNCWORD; \
+    p.h.cmd   = i;
+
+#define CMD_SIZE(i)  (sizeof(cmd_hdr_t) + sizeof(i))
 
 typedef struct __attribute__((__packed__))
 {

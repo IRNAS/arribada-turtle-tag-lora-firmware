@@ -48,6 +48,10 @@ static const char * sm_state_str[] =
 };
 
 static sm_state_t state = SM_STATE_BOOT; // Default starting state
+static uint8_t rx_buffer[CMD_MAX_SIZE];
+
+volatile bool config_if_tx_pending = false;
+volatile bool config_if_rx_pending = false;
 
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////// PROTOTYPES //////////////////////////////////
@@ -171,12 +175,42 @@ void fw_apply_image_req()
 
 void reset_req()
 {
-    DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
+
+    // Generate and send response
+    cmd_t resp;
+    CMD_SET_HDR(resp, CMD_GENERIC_RESP);
+
+    resp.p.cmd_generic_resp.error_code = CMD_NO_ERROR;
+
+    config_if_tx_pending = true;
+
+    config_if_send((uint8_t *) &resp, CMD_SIZE(cmd_generic_resp_t));
+
+    // Wait for response to have been sent
+    while (config_if_tx_pending)
+    {}
+
+#ifdef __CORTEX_M // FIXME: find and replace with the ARM macro
+    NVIC_SystemReset();
+#endif
+
+    // If a system reset isn't available then block until a watchdog reset
+    for (;;) {}
 }
 
 void battery_status_req()
 {
-    DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
+    DEBUG_PR_WARN("%s NOT IMPLEMENTED, responding with spoof data", __FUNCTION__);
+
+    // Generate and send response
+    cmd_t resp;
+    CMD_SET_HDR(resp, CMD_BATTERY_STATUS_RESP);
+
+    resp.p.cmd_battery_status_resp.error_code = CMD_NO_ERROR;
+    resp.p.cmd_battery_status_resp.charging_indicator = 1;
+    resp.p.cmd_battery_status_resp.charge_level = 100;
+
+    config_if_send((uint8_t *) &resp, CMD_SIZE(cmd_battery_status_resp_t));
 
     /*
     // Generate and send response
@@ -211,200 +245,163 @@ void log_read_req()
 
 int config_if_event_handler(config_if_event_t * event)
 {
-    DEBUG_PR_WARN("%s()", __FUNCTION__);
-
-    for(uint32_t i = 0; i < event->size; ++i)
+    // This is called from an interrupt so we'll keep it short
+    switch (event->id)
     {
-        printf("0x%02X, ", event->buffer[i]);
-    }
 
-    printf("\n\r");
+        case CONFIG_IF_EVENT_SEND_COMPLETE:
+            DEBUG_PR_TRACE("CONFIG_IF_EVENT_SEND_COMPLETE");
+            config_if_tx_pending = false;
+            break;
+
+        case CONFIG_IF_EVENT_RECEIVE_COMPLETE:
+            DEBUG_PR_TRACE("CONFIG_IF_EVENT_RECEIVE_COMPLETE");
+            config_if_rx_pending = true; // Indicate that there is a packet in the RX buffer that needs processing
+            break;
+
+        case CONFIG_IF_EVENT_CONNECTED:
+            DEBUG_PR_TRACE("CONFIG_IF_EVENT_CONNECTED");
+            break;
+
+        case CONFIG_IF_EVENT_DISCONNECTED:
+            DEBUG_PR_TRACE("CONFIG_IF_EVENT_DISCONNECTED");
+            break;
+
+    }
 
     return CONFIG_IF_NO_ERROR;
 }
 
-// Process any incoming requests on TJet
-/*
-static void process_cmd_request(cmd_t * req)
+static void handle_config_if_requests(void)
 {
-    switch (req->h.cmd)
+    // Process any pending event outside of an interrupt
+    if (config_if_rx_pending)
     {
-        case CMD_CFG_READ_REQ:
-            DEBUG_PR_INFO("CFG_READ_REQ");
-            cfg_read_req();
-            break;
 
-        case CMD_CFG_WRITE_REQ:
-            DEBUG_PR_INFO("CFG_WRITE_REQ");
-            cfg_write_req();
-            break;
+        cmd_t * req = (cmd_t *) &rx_buffer[0]; // Overlay command structure on receive buffer
 
-        case CMD_CFG_SAVE_REQ:
-            DEBUG_PR_INFO("CFG_SAVE_REQ");
-            cfg_save_req();
-            break;
+        switch (req->h.cmd)
+        {
+            case CMD_CFG_READ_REQ:
+                DEBUG_PR_INFO("CFG_READ_REQ");
+                cfg_read_req();
+                break;
 
-        case CMD_CFG_RESTORE_REQ:
-            DEBUG_PR_INFO("CFG_RESTORE_REQ");
-            cfg_restore_req();
-            break;
+            case CMD_CFG_WRITE_REQ:
+                DEBUG_PR_INFO("CFG_WRITE_REQ");
+                cfg_write_req();
+                break;
 
-        case CMD_CFG_ERASE_REQ:
-            DEBUG_PR_INFO("CFG_ERASE_REQ");
-            cfg_erase_req();
-            break;
+            case CMD_CFG_SAVE_REQ:
+                DEBUG_PR_INFO("CFG_SAVE_REQ");
+                cfg_save_req();
+                break;
 
-        case CMD_CFG_PROTECT_REQ:
-            DEBUG_PR_INFO("CFG_PROTECT_REQ");
-            cfg_protect_req();
-            break;
+            case CMD_CFG_RESTORE_REQ:
+                DEBUG_PR_INFO("CFG_RESTORE_REQ");
+                cfg_restore_req();
+                break;
 
-        case CMD_CFG_UNPROTECT_REQ:
-            DEBUG_PR_INFO("CFG_UNPROTECT_REQ");
-            cfg_unprotect_req();
-            break;
+            case CMD_CFG_ERASE_REQ:
+                DEBUG_PR_INFO("CFG_ERASE_REQ");
+                cfg_erase_req();
+                break;
 
-        case CMD_CFG_WRITE_CNF:
-            DEBUG_PR_INFO("CFG_WRITE_CNF");
-            cfg_write_cnf();
-            break;
+            case CMD_CFG_PROTECT_REQ:
+                DEBUG_PR_INFO("CFG_PROTECT_REQ");
+                cfg_protect_req();
+                break;
 
-        case CMD_GPS_WRITE_REQ:
-            DEBUG_PR_INFO("GPS_WRITE_REQ");
-            gps_write_req();
-            break;
+            case CMD_CFG_UNPROTECT_REQ:
+                DEBUG_PR_INFO("CFG_UNPROTECT_REQ");
+                cfg_unprotect_req();
+                break;
 
-        case CMD_GPS_READ_REQ:
-            DEBUG_PR_INFO("GPS_READ_REQ");
-            gps_read_req();
-            break;
+            case CMD_CFG_WRITE_CNF:
+                DEBUG_PR_INFO("CFG_WRITE_CNF");
+                cfg_write_cnf();
+                break;
 
-        case CMD_GPS_CONFIG_REQ:
-            DEBUG_PR_INFO("GPS_CONFIG_REQ");
-            gps_config_req();
-            break;
+            case CMD_GPS_WRITE_REQ:
+                DEBUG_PR_INFO("GPS_WRITE_REQ");
+                gps_write_req();
+                break;
 
-        case CMD_BLE_CONFIG_REQ:
-            DEBUG_PR_INFO("BLE_CONFIG_REQ");
-            ble_config_req();
-            break;
+            case CMD_GPS_READ_REQ:
+                DEBUG_PR_INFO("GPS_READ_REQ");
+                gps_read_req();
+                break;
 
-        case CMD_BLE_WRITE_REQ:
-            DEBUG_PR_INFO("BLE_WRITE_REQ");
-            ble_write_req();
-            break;
+            case CMD_GPS_CONFIG_REQ:
+                DEBUG_PR_INFO("GPS_CONFIG_REQ");
+                gps_config_req();
+                break;
 
-        case CMD_BLE_READ_REQ:
-            DEBUG_PR_INFO("BLE_READ_REQ");
-            ble_read_req();
-            break;
+            case CMD_BLE_CONFIG_REQ:
+                DEBUG_PR_INFO("BLE_CONFIG_REQ");
+                ble_config_req();
+                break;
 
-        case CMD_STATUS_REQ:
-            DEBUG_PR_INFO("STATUS_REQ");
-            status_req();
-            break;
+            case CMD_BLE_WRITE_REQ:
+                DEBUG_PR_INFO("BLE_WRITE_REQ");
+                ble_write_req();
+                break;
 
-        case CMD_FW_SEND_IMAGE_REQ:
-            DEBUG_PR_INFO("FW_SEND_IMAGE_REQ");
-            fw_send_image_req();
-            break;
+            case CMD_BLE_READ_REQ:
+                DEBUG_PR_INFO("BLE_READ_REQ");
+                ble_read_req();
+                break;
 
-        case CMD_FW_APPLY_IMAGE_REQ:
-            DEBUG_PR_INFO("FW_APPLY_IMAGE_REQ");
-            fw_apply_image_req();
-            break;
+            case CMD_STATUS_REQ:
+                DEBUG_PR_INFO("STATUS_REQ");
+                status_req();
+                break;
 
-        case CMD_RESET_REQ:
-            DEBUG_PR_INFO("RESET_REQ");
-            reset_req();
-            break;
+            case CMD_FW_SEND_IMAGE_REQ:
+                DEBUG_PR_INFO("FW_SEND_IMAGE_REQ");
+                fw_send_image_req();
+                break;
 
-        case CMD_BATTERY_STATUS_REQ:
-            DEBUG_PR_INFO("BATTERY_STATUS_REQ");
-            battery_status_req();
-            break;
+            case CMD_FW_APPLY_IMAGE_REQ:
+                DEBUG_PR_INFO("FW_APPLY_IMAGE_REQ");
+                fw_apply_image_req();
+                break;
 
-        case CMD_LOG_CREATE_REQ:
-            DEBUG_PR_INFO("LOG_CREATE_REQ");
-            log_create_req();
-            break;
+            case CMD_RESET_REQ:
+                DEBUG_PR_INFO("RESET_REQ");
+                reset_req();
+                break;
 
-        case CMD_LOG_ERASE_REQ:
-            DEBUG_PR_INFO("LOG_ERASE_REQ");
-            log_erase_req();
-            break;
+            case CMD_BATTERY_STATUS_REQ:
+                DEBUG_PR_INFO("BATTERY_STATUS_REQ");
+                battery_status_req();
+                break;
 
-        case CMD_LOG_READ_REQ:
-            DEBUG_PR_INFO("LOG_READ_REQ");
-            log_read_req();
-            break;
+            case CMD_LOG_CREATE_REQ:
+                DEBUG_PR_INFO("LOG_CREATE_REQ");
+                log_create_req();
+                break;
 
-        default:
-            DEBUG_PR_WARN("Unhandled command: id %d", req->h.cmd);
-            // Don't return an error. Fail silent
-            break;
+            case CMD_LOG_ERASE_REQ:
+                DEBUG_PR_INFO("LOG_ERASE_REQ");
+                log_erase_req();
+                break;
+
+            case CMD_LOG_READ_REQ:
+                DEBUG_PR_INFO("LOG_READ_REQ");
+                log_read_req();
+                break;
+
+            default:
+                DEBUG_PR_WARN("Unhandled command: id %d", req->h.cmd);
+                // Don't return an error. Fail silent
+                break;
+        }
+
+        config_if_rx_pending = false;
     }
-}*/
 
-//static int parse_rx_buffer(void)
-//{
-//    uint32_t bytesInRxBuffer = config_if_available();
-//
-//    // Check for minimum allowed message size
-//    if (bytesInRxBuffer < CMD_MIN_SIZE)
-//        return PARSE_RX_ERROR_INSUFFICIENT_BYTES;
-//
-//    cmd_t request;
-//
-//    // Look for SYNC byte
-//    for (uint32_t i = 0; i < bytesInRxBuffer; ++i)
-//    {
-//        if (!config_if_peek_at(&request.h.sync, 0))
-//            return PARSE_RX_ERROR_INSUFFICIENT_BYTES;
-//
-//        if (CMD_SYNCWORD == request.h.sync)
-//            goto label_sync_start;
-//        else
-//            config_if_receive(&request.h.sync, 1); // remove this character
-//    }
-//
-//    // No SYNC found
-//    return PARSE_RX_ERROR_MISSING_SYNC;
-//
-//label_sync_start: // Sync found
-//
-//    // Get the command
-//    if (!config_if_peek_at(&request.h.cmd, 1))
-//        return PARSE_RX_ERROR_INSUFFICIENT_BYTES;
-//
-//    // Get the expected size of this command
-//    uint32_t expectedSize = cmd_size_of_command(request.h.cmd);
-//
-//    // Is this message too large
-//    if (expectedSize > CMD_MAX_SIZE)
-//    {
-//        uint8_t dumpBuffer;
-//
-//        // Message is too big to store so throw it all away
-//        while (config_if_available() > 0)
-//            config_if_receive(&dumpBuffer, 1);
-//
-//        return PARSE_RX_ERROR_MSG_TOO_BIG;
-//    }
-//
-//    // Do we currently hold the full command in our buffer?
-//    if (config_if_available() < expectedSize)
-//        return PARSE_RX_ERROR_MSG_PENDING;
-//
-//    // Message is okay, lets grab the lot and remove it from the read buffer
-//    if (expectedSize != config_if_receive(&request.p.cmd_bytes[0], expectedSize))
-//        return PARSE_RX_ERROR_INSUFFICIENT_BYTES;
-//
-//    process_cmd_request(&request); // Process our newly received request
-//
-//    return PARSE_RX_NO_ERROR;
-//
-//}
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////// STATE EXECUTION CODE /////////////////////////////
@@ -476,10 +473,6 @@ void standby_provisioning_needed_state()
 // The system shall continue to monitor the battery level and charging status and may enter into the BATTERY_LEVEL_LOW or BATTERY_CHARGING sub-states.
 // The system shall also monitor the USB 5V input signal and the BLE reed switch and if the battery level is sufficient it shall be possible to transition to the PROVISIONING state.
 
-    // Queue a receive request
-    uint8_t buffer[64];
-    config_if_receive(buffer, sizeof(buffer));
-
     // Blink an LED to indicate this state
     static uint32_t blinkTimer = 0;
     const uint32_t blinkTimeMs = 1000;
@@ -491,6 +484,11 @@ void standby_provisioning_needed_state()
         syshal_gpio_set_output_low(GPIO_LED4);
         blinkTimer = syshal_time_get_ticks_ms();
     }
+
+    // Queue a receive request
+    config_if_receive(rx_buffer, sizeof(rx_buffer));
+
+    handle_config_if_requests();
 
     //parse_rx_buffer();
 

@@ -244,8 +244,6 @@ static uint8_t * USBD_Vendor_GetCfgDesc(uint16_t * length)
   */
 static uint8_t USBD_Vendor_DataIn(USBD_HandleTypeDef * pdev, uint8_t epnum)
 {
-    DEBUG_PR_TRACE("%s", __FUNCTION__);
-
     USBD_Vendor_HandleTypeDef_t * hVendor;
     hVendor = (USBD_Vendor_HandleTypeDef_t *) pdev->pClassData;
 
