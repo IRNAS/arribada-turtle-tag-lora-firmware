@@ -148,6 +148,11 @@ static uint8_t USBD_Vendor_Init(USBD_HandleTypeDef * pdev, uint8_t cfgidx)
                    USBD_EP_TYPE_BULK,
                    VENDOR_ENDPOINT_PACKET_SIZE);
 
+    // USBD_LL_OpenEP sets the endpoint to valid when actually we want to to be NAK to
+    // prevent the client from accepting a write before a syshal_usb_receive() call
+    PCD_HandleTypeDef * hpcd = pdev->pData;
+    PCD_SET_EP_RX_STATUS(hpcd->Instance, VENDOR_OUT_EP & 0x7FU, USB_EP_RX_NAK); // We must manually set this instead
+
     pdev->pClassData = USBD_malloc(sizeof (USBD_Vendor_HandleTypeDef_t)); // NOTE Malloc may not be a good idea. Consider static define
 
     if (pdev->pClassData == NULL)
@@ -239,6 +244,8 @@ static uint8_t * USBD_Vendor_GetCfgDesc(uint16_t * length)
   */
 static uint8_t USBD_Vendor_DataIn(USBD_HandleTypeDef * pdev, uint8_t epnum)
 {
+    DEBUG_PR_TRACE("%s", __FUNCTION__);
+
     USBD_Vendor_HandleTypeDef_t * hVendor;
     hVendor = (USBD_Vendor_HandleTypeDef_t *) pdev->pClassData;
 

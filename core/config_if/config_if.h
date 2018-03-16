@@ -31,6 +31,7 @@
 #define CONFIG_IF_BUFFER_TOO_SMALL   	 (-4)
 #define CONFIG_IF_ERROR_INVALID_SIZE     (-5)
 #define CONFIG_IF_ERROR_INVALID_INSTANCE (-6)
+#define CONFIG_IF_ALREADY_CONFIGURED     (-7)
 
 typedef enum
 {
@@ -46,6 +47,12 @@ typedef struct
     uint8_t * buffer;
     uint32_t size;
 } config_if_event_t;
+
+typedef enum
+{
+    CONFIG_IF_USB,
+    CONFIG_IF_BLE
+} config_if_backend_t;
 
 int config_if_init(config_if_backend_t backend);
 int config_if_term(void);

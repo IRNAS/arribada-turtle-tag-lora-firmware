@@ -122,6 +122,9 @@ int syshal_usb_receive(uint8_t * buffer, uint32_t size)
 {
     USBD_Vendor_HandleTypeDef_t * hVendor = (USBD_Vendor_HandleTypeDef_t *)hUsbDeviceFS.pClassData;
 
+    if (USBD_STATE_CONFIGURED != hUsbDeviceFS.dev_state)
+        return SYSHAL_USB_ERROR_DISCONNECTED;
+
     // If we currently are not pending a new transfer
     if (hVendor->RxPending)
         return SYSHAL_USB_ERROR_BUSY;

@@ -24,13 +24,22 @@
 int (*config_if_send_priv)(uint8_t *, uint32_t);
 int (*config_if_receive_priv)(uint8_t *, uint32_t);
 
+static config_if_backend_t backend_priv = 0xFF;
+
 // Constants
 int config_if_init(config_if_backend_t backend)
 {
+    if (backend_priv == backend)
+        return CONFIG_IF_ALREADY_CONFIGURED;
+
+    backend_priv = backend;
+
     if (backend == CONFIG_IF_USB)
     {
         config_if_send_priv = &syshal_usb_send;
         config_if_receive_priv = &syshal_usb_receive;
+
+        syshal_usb_init();
 
         return CONFIG_IF_NO_ERROR;
     }
@@ -54,6 +63,14 @@ int config_if_term(void)
 {
     config_if_send_priv = NULL;
     config_if_receive_priv = NULL;
+
+    if (backend_priv == CONFIG_IF_USB)
+        syshal_usb_term();
+
+    //if (backend_priv == CONFIG_IF_BLE)
+    //    syshal_ble_term();
+
+    backend_priv = 0xFF;
 
     return CONFIG_IF_NO_ERROR;
 }
@@ -85,7 +102,7 @@ int config_if_receive(uint8_t * data, uint32_t size)
  */
 __attribute__((weak)) int config_if_event_handler(config_if_event_t * event)
 {
-    UNUSED(event);
+    ((void)(event)); // Remove unused variable compiler warning
     DEBUG_PR_WARN("%s Not implemented", __FUNCTION__);
 
     return CONFIG_IF_NO_ERROR;
@@ -103,11 +120,11 @@ int syshal_usb_event_handler(syshal_usb_event_t * event)
 {
     // Do a manual member copy of the events. This is to avoid bugs arising from overlaying structures that later chance
     config_if_event_t parsedEvent;
-    parsedEvent.id = event.id;
-    parsedEvent.buffer = event.buffer;
-    parsedEvent.size = event.size;
+    parsedEvent.id = event->id;
+    parsedEvent.buffer = event->buffer;
+    parsedEvent.size = event->size;
 
-    config_if_event_handler( (config_if_event_t *) event);
+    config_if_event_handler(&parsedEvent);
 
     return SYSHAL_USB_NO_ERROR;
 }

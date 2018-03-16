@@ -209,6 +209,20 @@ void log_read_req()
 ////////////////////////////////// CMD HANDLERS ////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
+int config_if_event_handler(config_if_event_t * event)
+{
+    DEBUG_PR_WARN("%s()", __FUNCTION__);
+
+    for(uint32_t i = 0; i < event->size; ++i)
+    {
+        printf("0x%02X, ", event->buffer[i]);
+    }
+
+    printf("\n\r");
+
+    return CONFIG_IF_NO_ERROR;
+}
+
 // Process any incoming requests on TJet
 /*
 static void process_cmd_request(cmd_t * req)
@@ -412,7 +426,7 @@ void boot_state(void)
     syshal_i2c_init(I2C_2);
     //syshal_batt_init(I2C_1);
     //syshal_gps_init();
-    syshal_usb_init();
+    //syshal_usb_init();
 
     config_if_init(CONFIG_IF_USB);
 
@@ -461,6 +475,10 @@ void standby_provisioning_needed_state()
 // This sub-state is entered if the currently active configuration in RAM (upon being read from flash) is invalid, incomplete or has no sensors enabled.
 // The system shall continue to monitor the battery level and charging status and may enter into the BATTERY_LEVEL_LOW or BATTERY_CHARGING sub-states.
 // The system shall also monitor the USB 5V input signal and the BLE reed switch and if the battery level is sufficient it shall be possible to transition to the PROVISIONING state.
+
+    // Queue a receive request
+    uint8_t buffer[64];
+    config_if_receive(buffer, sizeof(buffer));
 
     // Blink an LED to indicate this state
     static uint32_t blinkTimer = 0;
