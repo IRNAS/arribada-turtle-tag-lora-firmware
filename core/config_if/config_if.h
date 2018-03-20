@@ -24,13 +24,13 @@
 #include <stdbool.h>
 
 // Constants
-#define CONFIG_IF_NO_ERROR               ( 0)
-#define CONFIG_IF_ERROR_BUSY             (-1)
-#define CONFIG_IF_ERROR_FAIL             (-2)
-#define CONFIG_IF_ERROR_DISCONNECTED     (-3)
-#define CONFIG_IF_ERROR_INVALID_SIZE     (-4)
-#define CONFIG_IF_ERROR_INVALID_INSTANCE (-5)
-#define CONFIG_IF_ALREADY_CONFIGURED     (-6)
+#define CONFIG_IF_NO_ERROR                  ( 0)
+#define CONFIG_IF_ERROR_BUSY                (-1)
+#define CONFIG_IF_ERROR_FAIL                (-2)
+#define CONFIG_IF_ERROR_DISCONNECTED        (-3)
+#define CONFIG_IF_ERROR_INVALID_SIZE        (-4)
+#define CONFIG_IF_ERROR_INVALID_INSTANCE    (-5)
+#define CONFIG_IF_ERROR_ALREADY_CONFIGURED  (-6)
 
 typedef enum
 {
@@ -43,14 +43,26 @@ typedef enum
 typedef struct
 {
     config_if_event_id_t id;
-    uint8_t * buffer;
-    uint32_t size;
+    union
+    {
+        struct
+        {
+            uint8_t * buffer;
+            uint32_t size;
+        } send;
+        struct
+        {
+            uint8_t * buffer;
+            uint32_t size;
+        } receive;
+    };
 } config_if_event_t;
 
 typedef enum
 {
-    CONFIG_IF_USB,
-    CONFIG_IF_BLE
+    CONFIG_IF_BACKEND_USB,
+    CONFIG_IF_BACKEND_BLE,
+    CONFIG_IF_BACKEND_NOT_SET
 } config_if_backend_t;
 
 int config_if_init(config_if_backend_t backend);

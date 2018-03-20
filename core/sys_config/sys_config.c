@@ -62,15 +62,15 @@ static const uint16_t sys_config_lookup_priv[SYS_CONFIG_TAG_TOTAL_NUMBER] =
 };
 
 /**
- * @brief      Gets the address of the given tag
+ * @brief      Gets the pointer to the data of the given tag
  *
  * @param[in]  tag   The configuration tag
- * @param[in]  addr  The address of the tag's data
+ * @param[out] data  The pointer to the tags data
  *
  * @return     The length of the given configuration tag
  * @return     SYS_CONFIG_ERROR_INVALID_TAG if the given tag is invalid
  */
-int sys_config_get_addr_priv(uint16_t tag, void * addr)
+int sys_config_get_data_ptr_priv(uint16_t tag, void * data)
 {
     uint32_t len = 0;
 
@@ -78,177 +78,177 @@ int sys_config_get_addr_priv(uint16_t tag, void * addr)
     {
         case SYS_CONFIG_TAG_GPS_LOG_POSITION_ENABLE:
             len = sizeof(sys_config_gps_log_position_enable_t);
-            addr = &sys_config.sys_config_gps_log_position_enable;
+            data = &sys_config.sys_config_gps_log_position_enable;
             break;
 
         case SYS_CONFIG_TAG_GPS_LOG_TTFF_ENABLE:
             len = sizeof(sys_config_gps_log_ttff_enable_t);
-            addr = &sys_config.sys_config_gps_log_ttff_enable;
+            data = &sys_config.sys_config_gps_log_ttff_enable;
             break;
 
         case SYS_CONFIG_TAG_GPS_TRIGGER_MODE:
             len = sizeof(sys_config_gps_trigger_mode_t);
-            addr = &sys_config.sys_config_gps_trigger_mode;
+            data = &sys_config.sys_config_gps_trigger_mode;
             break;
 
         case SYS_CONFIG_TAG_GPS_UART_BAUD_RATE:
             len = sizeof(sys_config_gps_uart_baud_rate_t);
-            addr = &sys_config.sys_config_gps_uart_baud_rate;
+            data = &sys_config.sys_config_gps_uart_baud_rate;
             break;
 
         case SYS_CONFIG_TAG_RTC_SYNC_TO_GPS_ENABLE:
             len = sizeof(sys_config_rtc_sync_to_gps_enable_t);
-            addr = &sys_config.sys_config_rtc_sync_to_gps_enable;
+            data = &sys_config.sys_config_rtc_sync_to_gps_enable;
             break;
 
         case SYS_CONFIG_TAG_RTC_CURRENT_DATE_AND_TIME:
             len = sizeof(sys_config_rtc_current_date_and_time_t);
-            addr = &sys_config.sys_config_rtc_current_date_and_time;
+            data = &sys_config.sys_config_rtc_current_date_and_time;
             break;
 
         case SYS_CONFIG_TAG_LOGGING_ENABLE:
             len = sizeof(sys_config_logging_enable_t);
-            addr = &sys_config.sys_config_logging_enable;
+            data = &sys_config.sys_config_logging_enable;
             break;
 
         case SYS_CONFIG_TAG_LOGGING_BYTES_WRITTEN:
             len = sizeof(sys_config_logging_bytes_written_t);
-            addr = &sys_config.sys_config_logging_bytes_written;
+            data = &sys_config.sys_config_logging_bytes_written;
             break;
 
         case SYS_CONFIG_TAG_LOGGING_FILE_SIZE:
             len = sizeof(sys_config_logging_file_size_t);
-            addr = &sys_config.sys_config_logging_file_size;
+            data = &sys_config.sys_config_logging_file_size;
             break;
 
         case SYS_CONFIG_TAG_LOGGING_FILE_TYPE:
             len = sizeof(sys_config_logging_file_type_t);
-            addr = &sys_config.sys_config_logging_file_type;
+            data = &sys_config.sys_config_logging_file_type;
             break;
 
         case SYS_CONFIG_TAG_LOGGING_GROUP_SENSOR_READINGS_ENABLE:
             len = sizeof(sys_config_logging_group_sensor_readings_enable_t);
-            addr = &sys_config.sys_config_logging_group_sensor_readings_enable;
+            data = &sys_config.sys_config_logging_group_sensor_readings_enable;
             break;
 
         case SYS_CONFIG_TAG_LOGGING_START_END_SYNC_ENABLE:
             len = sizeof(sys_config_logging_start_end_sync_enable_t);
-            addr = &sys_config.sys_config_logging_start_end_sync_enable;
+            data = &sys_config.sys_config_logging_start_end_sync_enable;
             break;
 
         case SYS_CONFIG_TAG_LOGGING_DATE_TIME_STAMP_ENABLE:
             len = sizeof(sys_config_logging_date_time_stamp_enable_t);
-            addr = &sys_config.sys_config_logging_date_time_stamp_enable;
+            data = &sys_config.sys_config_logging_date_time_stamp_enable;
             break;
 
         case SYS_CONFIG_TAG_LOGGING_HIGH_RESOLUTION_TIMER_ENABLE:
             len = sizeof(sys_config_logging_high_resolution_timer_enable_t);
-            addr = &sys_config.sys_config_logging_high_resolution_timer_enable;
+            data = &sys_config.sys_config_logging_high_resolution_timer_enable;
             break;
 
         case SYS_CONFIG_TAG_AXL_LOG_ENABLE:
             len = sizeof(sys_config_axl_log_enable_t);
-            addr = &sys_config.sys_config_axl_log_enable;
+            data = &sys_config.sys_config_axl_log_enable;
             break;
 
         case SYS_CONFIG_TAG_AXL_CONFIG:
             len = sizeof(sys_config_axl_config_t);
-            addr = &sys_config.sys_config_axl_config;
+            data = &sys_config.sys_config_axl_config;
             break;
 
         case SYS_CONFIG_TAG_AXL_G_FORCE_HIGH_THRESHOLD:
             len = sizeof(sys_config_axl_g_force_high_threshold_t);
-            addr = &sys_config.sys_config_axl_g_force_high_threshold;
+            data = &sys_config.sys_config_axl_g_force_high_threshold;
             break;
 
         case SYS_CONFIG_TAG_AXL_SAMPLE_RATE:
             len = sizeof(sys_config_axl_sample_rate_t);
-            addr = &sys_config.sys_config_axl_sample_rate;
+            data = &sys_config.sys_config_axl_sample_rate;
             break;
 
         case SYS_CONFIG_TAG_AXL_MODE:
             len = sizeof(sys_config_axl_mode_t);
-            addr = &sys_config.sys_config_axl_mode;
+            data = &sys_config.sys_config_axl_mode;
             break;
 
         case SYS_CONFIG_TAG_PRESSURE_SENSOR_LOG_ENABLE:
             len = sizeof(sys_config_pressure_sensor_log_enable_t);
-            addr = &sys_config.sys_config_pressure_sensor_log_enable;
+            data = &sys_config.sys_config_pressure_sensor_log_enable;
             break;
 
         case SYS_CONFIG_TAG_PRESSURE_SAMPLE_RATE:
             len = sizeof(sys_config_pressure_sample_rate_t);
-            addr = &sys_config.sys_config_pressure_sample_rate;
+            data = &sys_config.sys_config_pressure_sample_rate;
             break;
 
         case SYS_CONFIG_TAG_PRESSURE_LOW_THRESHOLD:
             len = sizeof(sys_config_pressure_low_threshold_t);
-            addr = &sys_config.sys_config_pressure_low_threshold;
+            data = &sys_config.sys_config_pressure_low_threshold;
             break;
 
         case SYS_CONFIG_TAG_PRESSURE_HIGH_THRESHOLD:
             len = sizeof(sys_config_pressure_high_threshold_t);
-            addr = &sys_config.sys_config_pressure_high_threshold;
+            data = &sys_config.sys_config_pressure_high_threshold;
             break;
 
         case SYS_CONFIG_TAG_PRESSURE_MODE:
             len = sizeof(sys_config_pressure_mode_t);
-            addr = &sys_config.sys_config_pressure_mode;
+            data = &sys_config.sys_config_pressure_mode;
             break;
 
         case SYS_CONFIG_TAG_TEMP_SENSOR_LOG_ENABLE:
             len = sizeof(sys_config_temp_sensor_log_enable_t);
-            addr = &sys_config.sys_config_temp_sensor_log_enable;
+            data = &sys_config.sys_config_temp_sensor_log_enable;
             break;
 
         case SYS_CONFIG_TAG_TEMP_SENSOR_SAMPLE_RATE:
             len = sizeof(sys_config_temp_sensor_sample_rate_t);
-            addr = &sys_config.sys_config_temp_sensor_sample_rate;
+            data = &sys_config.sys_config_temp_sensor_sample_rate;
             break;
 
         case SYS_CONFIG_TAG_TEMP_SENSOR_LOW_THRESHOLD:
             len = sizeof(sys_config_temp_sensor_low_threshold_t);
-            addr = &sys_config.sys_config_temp_sensor_low_threshold;
+            data = &sys_config.sys_config_temp_sensor_low_threshold;
             break;
 
         case SYS_CONFIG_TAG_TEMP_SENSOR_HIGH_THRESHOLD:
             len = sizeof(sys_config_temp_sensor_high_threshold_t);
-            addr = &sys_config.sys_config_temp_sensor_high_threshold;
+            data = &sys_config.sys_config_temp_sensor_high_threshold;
             break;
 
         case SYS_CONFIG_TAG_TEMP_SENSOR_MODE:
             len = sizeof(sys_config_temp_sensor_mode_t);
-            addr = &sys_config.sys_config_temp_sensor_mode;
+            data = &sys_config.sys_config_temp_sensor_mode;
             break;
 
         case SYS_CONFIG_TAG_SYSTEM_DEVICE_IDENTIFIER:
             len = sizeof(sys_config_system_device_identifier_t);
-            addr = &sys_config.sys_config_system_device_identifier;
+            data = &sys_config.sys_config_system_device_identifier;
             break;
 
         case SYS_CONFIG_TAG_BLUETOOTH_UUID:
             len = sizeof(sys_config_bluetooth_uuid_t);
-            addr = &sys_config.sys_config_bluetooth_uuid;
+            data = &sys_config.sys_config_bluetooth_uuid;
             break;
 
         case SYS_CONFIG_TAG_BLUETOOTH_BEACON_ENABLE:
             len = sizeof(sys_config_bluetooth_beacon_enable_t);
-            addr = &sys_config.sys_config_bluetooth_beacon_enable;
+            data = &sys_config.sys_config_bluetooth_beacon_enable;
             break;
 
         case SYS_CONFIG_TAG_BLUETOOTH_BEACON_GEO_FENCE_TRIGGER_LOCATION:
             len = sizeof(sys_config_bluetooth_beacon_geo_fence_trigger_location_t);
-            addr = &sys_config.sys_config_bluetooth_beacon_geo_fence_trigger_location;
+            data = &sys_config.sys_config_bluetooth_beacon_geo_fence_trigger_location;
             break;
 
         case SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_INTERVAL:
             len = sizeof(sys_config_bluetooth_beacon_advertising_interval_t);
-            addr = &sys_config.sys_config_bluetooth_beacon_advertising_interval;
+            data = &sys_config.sys_config_bluetooth_beacon_advertising_interval;
             break;
 
         case SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_CONFIGURATION:
             len = sizeof(sys_config_bluetooth_beacon_advertising_configuration_t);
-            addr = &sys_config.sys_config_bluetooth_beacon_advertising_configuration;
+            data = &sys_config.sys_config_bluetooth_beacon_advertising_configuration;
             break;
 
         default:
@@ -272,25 +272,25 @@ int sys_config_get_addr_priv(uint16_t tag, void * addr)
  */
 int sys_config_set(uint16_t tag, void * value, uint32_t length)
 {
-    // Get the address of the configuration data in RAM
-    void * addr = NULL;
-    int returnCode = sys_config_get_addr_priv(tag, addr);
+    // Get the buffer of the configuration tag in RAM
+    void * data = NULL;
+    int return_code = sys_config_get_data_ptr_priv(tag, data);
 
-    if (returnCode < 0)
-        return returnCode;
+    if (return_code < 0)
+        return return_code;
 
-    if (returnCode != length)
+    if (return_code != length)
         return SYS_CONFIG_ERROR_WRONG_SIZE;
 
     // Copy data into the configuration tag
-#pragma GCC diagnostic push // Suppress addr = NULL warning as this cannot happen as the function returns if that is the case
+#pragma GCC diagnostic push // Suppress data = NULL warning as this cannot happen as the function returns if that is the case
 #pragma GCC diagnostic ignored "-Wnonnull"
-    memcpy(addr, value, length);
+    memcpy(data, value, length);
 #pragma GCC diagnostic pop
 
     // Set the configuration set tag
     // This is done so we can always tell if a configuration tag has been setup or has been erased or never initialised
-    ((sys_config_hdr_t *)addr)->set = true;
+    ((sys_config_hdr_t *)data)->set = true;
 
     return SYS_CONFIG_NO_ERROR;
 }
@@ -302,19 +302,17 @@ int sys_config_set(uint16_t tag, void * value, uint32_t length)
  *
  * @return     SYS_CONFIG_NO_ERROR on success
  * @return     SYS_CONFIG_ERROR_INVALID_TAG if the given tag is invalid
- * @return     SYS_CONFIG_ERROR_WRONG_SIZE if the given length does not meet the
- *             configuration tag length
  */
 int sys_config_unset(uint16_t tag)
 {
     // Get the address of the configuration data in RAM
-    void * addr = NULL;
-    int returnCode = sys_config_get_addr_priv(tag, addr);
+    void * data = NULL;
+    int return_code = sys_config_get_data_ptr_priv(tag, data);
 
-    if (returnCode < 0)
-        return returnCode;
+    if (return_code < 0)
+        return return_code;
 
-    ((sys_config_hdr_t *)addr)->set = false; // Unclear the configuration set tag
+    ((sys_config_hdr_t *)data)->set = false; // Unclear the configuration set tag
 
     return SYS_CONFIG_NO_ERROR;
 }
@@ -332,23 +330,23 @@ int sys_config_unset(uint16_t tag)
 int sys_config_get(uint16_t tag, void * value)
 {
     // Get the address of the configuration data in RAM
-    void * addr = NULL;
-    int returnCode = sys_config_get_addr_priv(tag, addr);
+    void * data = NULL;
+    int return_code = sys_config_get_data_ptr_priv(tag, data);
 
-    if (returnCode < 0)
-        return returnCode;
+    if (return_code < 0)
+        return return_code;
 
     // If this configuration tag hasn't been previously set then return an error
-    if (false == ((sys_config_hdr_t *)addr)->set)
+    if (false == ((sys_config_hdr_t *)data)->set)
         return SYS_CONFIG_ERROR_TAG_NOT_SET;
 
     // Copy the configuration data back
-#pragma GCC diagnostic push // Suppress addr = NULL warning as this cannot happen as the function returns if that is the case
+#pragma GCC diagnostic push // Suppress data = NULL warning as this cannot happen as the function returns if that is the case
 #pragma GCC diagnostic ignored "-Wnonnull"
-    memcpy(value, addr, returnCode);
+    memcpy(value, data, return_code);
 #pragma GCC diagnostic pop
 
-    return returnCode;
+    return return_code;
 }
 
 /**
@@ -373,30 +371,32 @@ bool sys_config_is_valid(uint16_t tag)
  * @brief      Returns the next tag after the given tag. This is used for
  *             iterating through all the tags
  *
- * @param[in]  tag   The configuration tag
+ * @warning    This function assumes the configuration tag given is valid and
+ *             will produce spurious output if it is not
+ *
+ * @param[in]  tag         The configuration tag
+ * @param      last_index  Private variable for maintaining state. For the first
+ *                         call pass a pointer to a uint32_t set to 0
  *
  * @return     The next tag on success
- * @return     SYS_CONFIG_ERROR_INVALID_TAG if the given tag is invalid
  * @return     SYS_CONFIG_ERROR_NO_MORE_TAGS if there are no more tags after this
  *             one
  */
-int sys_config_iterate(uint16_t tag)
+int sys_config_iterate(uint16_t tag, uint16_t * last_index)
 {
-    if (!sys_config_is_valid(tag))
-        return SYS_CONFIG_ERROR_INVALID_TAG;
-
     // Find tag in lookup table
-    uint32_t index = 0;
-    for (; index < SYS_CONFIG_TAG_TOTAL_NUMBER; ++index)
+    for (; (*last_index) < SYS_CONFIG_TAG_TOTAL_NUMBER; ++(*last_index))
     {
-        if (tag == sys_config_lookup_priv[index])
+        if (tag == sys_config_lookup_priv[(*last_index)])
             break;
     }
 
+    (*last_index)++; // Increment to the next tag
+
     // If this tag is the last one then there are no more tags after it
-    if (SYS_CONFIG_TAG_TOTAL_NUMBER == index)
+    if (SYS_CONFIG_TAG_TOTAL_NUMBER == (*last_index))
         return SYS_CONFIG_ERROR_NO_MORE_TAGS;
 
     // Return the next tag in the list
-    return sys_config_lookup_priv[index + 1];
+    return sys_config_lookup_priv[(*last_index)];
 }

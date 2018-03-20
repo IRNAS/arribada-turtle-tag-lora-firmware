@@ -40,8 +40,19 @@ typedef enum
 typedef struct
 {
     syshal_usb_event_id_t id;
-    uint8_t * buffer;
-    uint32_t size;
+    union
+    {
+        struct
+        {
+            uint8_t * buffer;
+            uint32_t size;
+        } send;
+        struct
+        {
+            uint8_t * buffer;
+            uint32_t size;
+        } receive;
+    };
 } syshal_usb_event_t;
 
 int syshal_usb_init(void);

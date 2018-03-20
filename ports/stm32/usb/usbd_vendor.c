@@ -256,24 +256,13 @@ static uint8_t USBD_Vendor_DataIn(USBD_HandleTypeDef * pdev, uint8_t epnum)
     syshal_usb_event_t event;
     event.id = SYSHAL_USB_EVENT_SEND_COMPLETE;
 
+    event.id = SYSHAL_USB_EVENT_RECEIVE_COMPLETE;
+    event.send.buffer = &hVendor->TxBuffer[0];
+    event.send.size = hVendor->TxLength;
+
     syshal_usb_event_handler(&event);
 
     return USBD_OK;
-}
-
-/**
- * @brief      USB callback stub, should be overriden by the user application
- *             This is called whenever
- *
- * @param      data  The data that was received
- * @param[in]  size  The size of that data in bytes
- */
-__attribute__((weak)) void USBD_Vendor_Receive_Callback(uint8_t * data, uint32_t size)
-{
-    // See https://community.st.com/thread/34173-usb-cdc-example-cube for discussion on this callback
-    UNUSED(data);
-    UNUSED(size);
-    DEBUG_PR_WARN("%s Not implemented", __FUNCTION__);
 }
 
 /**
@@ -302,8 +291,8 @@ static uint8_t USBD_Vendor_DataOut(USBD_HandleTypeDef * pdev, uint8_t epnum)
     // Generate event for syshal_usb
     syshal_usb_event_t event;
     event.id = SYSHAL_USB_EVENT_RECEIVE_COMPLETE;
-    event.buffer = &hVendor->RxBuffer[0];
-    event.size = hVendor->RxLength;
+    event.receive.buffer = &hVendor->RxBuffer[0];
+    event.receive.size = hVendor->RxLength;
 
     syshal_usb_event_handler(&event);
     return (USBD_OK);

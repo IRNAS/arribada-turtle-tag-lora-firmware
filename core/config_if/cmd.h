@@ -21,19 +21,22 @@
 
 #include <stdint.h>
 
-#define CMD_MAX_PAYLOAD     (512 - sizeof(cmd_hdr_t))
 #define CMD_SYNCWORD        (0x7E)
 
-#define CMD_MIN_SIZE        (sizeof(cmd_hdr_t))
+#define CMD_SIZE_HDR        (sizeof(cmd_hdr_t))
+#define CMD_MIN_SIZE        (CMD_SIZE_HDR)
 #define CMD_MAX_SIZE        (512)
+#define CMD_MAX_PAYLOAD     (CMD_MAX_SIZE - sizeof(cmd_hdr_t))
 
 #define CMD_CFG_TAG_ALL 0xFFFF // A special tag to denote a read of all configuration values from RAM
 
 #define CMD_SET_HDR(p, i)  \
-    p.h.sync  = CMD_SYNCWORD; \
-    p.h.cmd   = i;
+    p->h.sync  = CMD_SYNCWORD; \
+    p->h.cmd   = i;
 
 #define CMD_SIZE(i)  (sizeof(cmd_hdr_t) + sizeof(i))
+
+#define CFG_READ_REQ_READ_ALL (0xFFFF) // Read all configuration tags
 
 typedef struct __attribute__((__packed__))
 {
@@ -97,6 +100,8 @@ typedef enum
     CMD_ERROR_GPS_COMMS,            // GPS module communications error e.g., attempt to do a GPS read/write when not bridging.
     CMD_ERROR_TIMEOUT,              // A timeout happened waiting on the byte stream to be received.
     CMD_ERROR_CONFIG_PROTECTED,     // Configuration operation not permitted as it is protected.
+    CMD_ERROR_CONFIG_TAG_NOT_SET,   // Configuration tag has not been set.
+    CMD_ERROR_UNKNOWN,              // Error code for catching unknown errors. These should never occur
 } cmd_error_t;
 
 // Exposed functions
@@ -128,6 +133,7 @@ typedef struct __attribute__((__packed__))
 {
     uint8_t error_code;
     uint32_t length;
+    uint8_t * bytes;
 } cmd_cfg_read_resp_t;
 
 typedef struct __attribute__((__packed__))

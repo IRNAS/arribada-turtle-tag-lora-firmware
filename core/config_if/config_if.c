@@ -21,35 +21,37 @@
 #include "syshal_usb.h"
 #include "debug.h"
 
-int (*config_if_send_priv)(uint8_t *, uint32_t);
-int (*config_if_receive_priv)(uint8_t *, uint32_t);
+static int (*config_if_send_priv)(uint8_t *, uint32_t);
+static int (*config_if_receive_priv)(uint8_t *, uint32_t);
 
-static config_if_backend_t backend_priv = 0xFF;
+static config_if_backend_t backend_priv = CONFIG_IF_BACKEND_NOT_SET;
 
 // Constants
 int config_if_init(config_if_backend_t backend)
 {
     if (backend_priv == backend)
-        return CONFIG_IF_ALREADY_CONFIGURED;
+        return CONFIG_IF_ERROR_ALREADY_CONFIGURED;
 
-    backend_priv = backend;
-
-    if (backend == CONFIG_IF_USB)
+    if (backend == CONFIG_IF_BACKEND_USB)
     {
         config_if_send_priv = &syshal_usb_send;
         config_if_receive_priv = &syshal_usb_receive;
 
         syshal_usb_init();
 
+        backend_priv = backend;
+
         return CONFIG_IF_NO_ERROR;
     }
-    else if (backend == CONFIG_IF_BLE)
+    else if (backend == CONFIG_IF_BACKEND_BLE)
     {
         DEBUG_PR_ERROR("BLE NOT IMPLEMENTED %s()", __FUNCTION__);
         /*
         config_if_transfer_priv = &syshal_ble_transfer;
         config_if_receive_priv = &syshal_ble_receive;
         */
+
+        backend_priv = backend;
 
         return CONFIG_IF_ERROR_INVALID_INSTANCE;
     }
@@ -64,13 +66,16 @@ int config_if_term(void)
     config_if_send_priv = NULL;
     config_if_receive_priv = NULL;
 
-    if (backend_priv == CONFIG_IF_USB)
+    if (backend_priv == CONFIG_IF_BACKEND_USB)
         syshal_usb_term();
 
-    //if (backend_priv == CONFIG_IF_BLE)
-    //    syshal_ble_term();
+    if (backend_priv == CONFIG_IF_BACKEND_BLE)
+    {
+        DEBUG_PR_ERROR("BLE NOT IMPLEMENTED %s()", __FUNCTION__);
+        //syshal_ble_term();
+    }
 
-    backend_priv = 0xFF;
+    backend_priv = CONFIG_IF_BACKEND_NOT_SET;
 
     return CONFIG_IF_NO_ERROR;
 }
@@ -118,11 +123,27 @@ __attribute__((weak)) int config_if_event_handler(config_if_event_t * event)
  */
 int syshal_usb_event_handler(syshal_usb_event_t * event)
 {
-    // Do a manual member copy of the events. This is to avoid bugs arising from overlaying structures that later chance
+    // Do a manual member copy of the events. This is to avoid bugs arising from overlaying structures that later change
     config_if_event_t parsedEvent;
     parsedEvent.id = event->id;
-    parsedEvent.buffer = event->buffer;
-    parsedEvent.size = event->size;
+
+    switch (event->id)
+    {
+        case CONFIG_IF_EVENT_SEND_COMPLETE:
+            parsedEvent.send.buffer = event->send.buffer;
+            parsedEvent.send.size = event->send.size;
+            break;
+
+        case CONFIG_IF_EVENT_RECEIVE_COMPLETE:
+            parsedEvent.receive.buffer = event->receive.buffer;
+            parsedEvent.receive.size = event->receive.size;
+            break;
+
+        case CONFIG_IF_EVENT_CONNECTED:
+        case CONFIG_IF_EVENT_DISCONNECTED:
+        default:
+            break;
+    }
 
     config_if_event_handler(&parsedEvent);
 

@@ -18,10 +18,12 @@
 
 #include "bsp.h"
 #include "cexception.h"
+#include "exceptions.h"
 #include "cmd.h"
 #include "config_if.h"
 #include "debug.h"
 #include "sm.h"
+#include "sys_config.h"
 #include "syshal_gpio.h"
 #include "syshal_i2c.h"
 #include "syshal_spi.h"
@@ -48,10 +50,12 @@ static const char * sm_state_str[] =
 };
 
 static sm_state_t state = SM_STATE_BOOT; // Default starting state
-static uint8_t rx_buffer[CMD_MAX_SIZE];
+static uint8_t tx_buffer[CMD_MAX_SIZE]; // TX buffer used by config_if
+static uint8_t rx_buffer[CMD_MAX_SIZE]; // RX buffer used by config_if
 
-volatile bool config_if_tx_pending = false;
-volatile bool config_if_rx_pending = false;
+static volatile bool config_if_tx_pending = false; // Is a transmit pending
+static volatile bool config_if_rx_pending = false; // Is a receive pending
+static volatile uint16_t config_if_rx_size; // What was the size of the last receive in bytes
 
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////// PROTOTYPES //////////////////////////////////
@@ -67,77 +71,158 @@ volatile bool config_if_rx_pending = false;
 //////////////////////////////// REQUEST HANDLERS //////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-void cfg_read_req()
+void cfg_read_req(cmd_t *req, uint16_t size)
+{
+    // Check request size is correct
+    if (CMD_SIZE(cmd_cfg_read_req_t) != size)
+        Throw(EXCEPTION_REQ_WRONG_SIZE);
+
+    // If we're already currently responding to another request
+    if (config_if_tx_pending)
+        Throw(EXCEPTION_RESP_TX_PENDING);
+
+    cmd_cfg_read_req_t * req_data = (cmd_cfg_read_req_t *) req;
+
+    if (CFG_READ_REQ_READ_ALL == req_data->configuration_tag) // Read all configuration tags
+    {
+        DEBUG_PR_WARN("READ ALL TAGS IN %s() NOT IMPLEMENTED", __FUNCTION__);
+        return;
+    }
+
+    // Read just one configuration tag
+    cmd_t * resp = (cmd_t *) &tx_buffer[0];
+    CMD_SET_HDR(resp, CMD_CFG_READ_RESP);
+
+    int return_code = sys_config_get(req_data->configuration_tag, &resp->p.cmd_cfg_read_resp.bytes);
+
+    resp->p.cmd_cfg_read_resp.length = 0;
+
+    if (SYS_CONFIG_ERROR_INVALID_TAG == return_code)  // Tag is not valid. Return an error code
+    {
+        resp->p.cmd_cfg_read_resp.error_code = CMD_ERROR_INVALID_CONFIG_TAG;
+    }
+    else if (SYS_CONFIG_ERROR_TAG_NOT_SET == return_code)  // Tag is not set. Return an error code
+    {
+        resp->p.cmd_cfg_read_resp.error_code = CMD_ERROR_CONFIG_TAG_NOT_SET;
+    }
+    else if (return_code < 0) // Unknown/Unhandled error
+    {
+        resp->p.cmd_cfg_read_resp.error_code = CMD_ERROR_UNKNOWN;
+    }
+    else
+    {
+        resp->p.cmd_cfg_read_resp.error_code = CMD_NO_ERROR;
+        resp->p.cmd_cfg_read_resp.length = return_code;
+    }
+
+    config_if_tx_pending = true;
+    config_if_send((uint8_t *) resp, CMD_SIZE(cmd_cfg_read_resp_t));
+}
+
+void cfg_write_req(cmd_t *req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void cfg_write_req()
+void cfg_save_req(cmd_t *req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void cfg_save_req()
+void cfg_restore_req(cmd_t *req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void cfg_restore_req()
+void cfg_erase_req(cmd_t *req, uint16_t size)
+{
+    // Check request size is correct
+    if (CMD_SIZE(cmd_cfg_erase_req_t) != size)
+        Throw(EXCEPTION_REQ_WRONG_SIZE);
+
+    // If we're already currently responding to another request
+    if (config_if_tx_pending)
+        Throw(EXCEPTION_RESP_TX_PENDING);
+
+    cmd_cfg_erase_req_t * req_data = (cmd_cfg_erase_req_t *) req;
+
+    if (CFG_READ_REQ_READ_ALL == req_data->configuration_tag) // Read all configuration tags
+    {
+        DEBUG_PR_WARN("READ ALL TAGS IN %s() NOT IMPLEMENTED", __FUNCTION__);
+        return;
+    }
+
+    // Erase just one configuration tag
+    cmd_t * resp = (cmd_t *) &tx_buffer[0];
+    CMD_SET_HDR(resp, CMD_GENERIC_RESP);
+
+    int return_code = sys_config_unset(req_data->configuration_tag);
+
+    switch (return_code)
+    {
+        case SYS_CONFIG_ERROR_INVALID_TAG:
+            resp->p.cmd_generic_resp.error_code = CMD_ERROR_INVALID_CONFIG_TAG;
+            break;
+
+        case SYS_CONFIG_NO_ERROR:
+            resp->p.cmd_generic_resp.error_code = CMD_ERROR_INVALID_CONFIG_TAG;
+            break;
+
+        default:
+            resp->p.cmd_generic_resp.error_code = CMD_ERROR_UNKNOWN;
+            break;
+    }
+
+    config_if_tx_pending = true;
+    config_if_send((uint8_t *) resp, CMD_SIZE(cmd_generic_resp_t));
+}
+
+void cfg_protect_req(cmd_t *req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void cfg_erase_req()
+void cfg_unprotect_req(cmd_t *req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void cfg_protect_req()
+void cfg_write_cnf(cmd_t *req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void cfg_unprotect_req()
+void gps_write_req(cmd_t *req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void cfg_write_cnf()
+void gps_read_req(cmd_t *req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void gps_write_req()
+void gps_config_req(cmd_t *req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void gps_read_req()
+void ble_config_req(cmd_t *req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void gps_config_req()
+void ble_write_req(cmd_t *req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void ble_config_req()
+void ble_read_req(cmd_t *req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void ble_write_req()
-{
-    DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
-}
-
-void ble_read_req()
-{
-    DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
-}
-
-void status_req()
+void status_req(cmd_t *req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 
@@ -153,38 +238,45 @@ void status_req()
     */
 }
 
-void status_resp()
+void status_resp(cmd_t *req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void fw_send_image_req()
+void fw_send_image_req(cmd_t *req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void fw_send_image_complete_cnf()
+void fw_send_image_complete_cnf(cmd_t *req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void fw_apply_image_req()
+void fw_apply_image_req(cmd_t *req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void reset_req()
+void reset_req(cmd_t *req, uint16_t size)
 {
+
+    // Check request size is correct
+    if (CMD_SIZE(cmd_reset_req_t) != size)
+        Throw(EXCEPTION_REQ_WRONG_SIZE);
+
+    // If we're already currently responding to another request
+    if (config_if_tx_pending)
+        Throw(EXCEPTION_RESP_TX_PENDING);
 
     // Generate and send response
-    cmd_t resp;
+    cmd_t * resp = (cmd_t *) &tx_buffer[0];
     CMD_SET_HDR(resp, CMD_GENERIC_RESP);
 
-    resp.p.cmd_generic_resp.error_code = CMD_NO_ERROR;
+    resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
 
     config_if_tx_pending = true;
-
-    config_if_send((uint8_t *) &resp, CMD_SIZE(cmd_generic_resp_t));
+    config_if_send((uint8_t *) resp, CMD_SIZE(cmd_generic_resp_t));
 
     // Wait for response to have been sent
     while (config_if_tx_pending)
@@ -198,43 +290,49 @@ void reset_req()
     for (;;) {}
 }
 
-void battery_status_req()
+void battery_status_req(cmd_t *req, uint16_t size)
 {
+
+    // Check request size is correct
+    if (size != CMD_SIZE_HDR)
+        Throw(EXCEPTION_REQ_WRONG_SIZE);
+
+    // If we're already currently responding to another request
+    if (config_if_tx_pending)
+        Throw(EXCEPTION_RESP_TX_PENDING);
+
     DEBUG_PR_WARN("%s NOT IMPLEMENTED, responding with spoof data", __FUNCTION__);
 
     // Generate and send response
-    cmd_t resp;
+    cmd_t * resp = (cmd_t *) &tx_buffer[0];
     CMD_SET_HDR(resp, CMD_BATTERY_STATUS_RESP);
 
-    resp.p.cmd_battery_status_resp.error_code = CMD_NO_ERROR;
-    resp.p.cmd_battery_status_resp.charging_indicator = 1;
-    resp.p.cmd_battery_status_resp.charge_level = 100;
-
-    config_if_send((uint8_t *) &resp, CMD_SIZE(cmd_battery_status_resp_t));
+    resp->p.cmd_battery_status_resp.error_code = CMD_NO_ERROR;
+    resp->p.cmd_battery_status_resp.charging_indicator = 1;
+    resp->p.cmd_battery_status_resp.charge_level = 100;
 
     /*
-    // Generate and send response
-    cmd_t * resp;
-    CMD_SET_HDR(resp, CMD_BATTERY_STATUS_RESP, sizeof(cmd_battery_status_resp_t));
-
     resp->p.cmd_battery_status_resp.error_code = CMD_NO_ERROR;
     resp->p.cmd_battery_status_resp.charging_indicator = syshal_batt_charging();
     resp->p.cmd_battery_status_resp.charge_level = syshal_batt_level();
     */
 
+    config_if_tx_pending = true;
+    config_if_send((uint8_t *) resp, CMD_SIZE(cmd_battery_status_resp_t));
+
 }
 
-void log_create_req()
+void log_create_req(cmd_t *req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void log_erase_req()
+void log_erase_req(cmd_t *req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void log_read_req()
+void log_read_req(cmd_t *req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
@@ -257,6 +355,7 @@ int config_if_event_handler(config_if_event_t * event)
         case CONFIG_IF_EVENT_RECEIVE_COMPLETE:
             DEBUG_PR_TRACE("CONFIG_IF_EVENT_RECEIVE_COMPLETE");
             config_if_rx_pending = true; // Indicate that there is a packet in the RX buffer that needs processing
+            config_if_rx_size = event->receive.size;// Store the size of the packet
             break;
 
         case CONFIG_IF_EVENT_CONNECTED:
@@ -265,6 +364,10 @@ int config_if_event_handler(config_if_event_t * event)
 
         case CONFIG_IF_EVENT_DISCONNECTED:
             DEBUG_PR_TRACE("CONFIG_IF_EVENT_DISCONNECTED");
+            // Clear all pending transmissions/receptions
+            config_if_tx_pending = false;
+            config_if_rx_pending = false;
+            config_if_rx_size = 0;
             break;
 
     }
@@ -284,112 +387,112 @@ static void handle_config_if_requests(void)
         {
             case CMD_CFG_READ_REQ:
                 DEBUG_PR_INFO("CFG_READ_REQ");
-                cfg_read_req();
+                cfg_read_req(req, config_if_rx_size);
                 break;
 
             case CMD_CFG_WRITE_REQ:
                 DEBUG_PR_INFO("CFG_WRITE_REQ");
-                cfg_write_req();
+                cfg_write_req(req, config_if_rx_size);
                 break;
 
             case CMD_CFG_SAVE_REQ:
                 DEBUG_PR_INFO("CFG_SAVE_REQ");
-                cfg_save_req();
+                cfg_save_req(req, config_if_rx_size);
                 break;
 
             case CMD_CFG_RESTORE_REQ:
                 DEBUG_PR_INFO("CFG_RESTORE_REQ");
-                cfg_restore_req();
+                cfg_restore_req(req, config_if_rx_size);
                 break;
 
             case CMD_CFG_ERASE_REQ:
                 DEBUG_PR_INFO("CFG_ERASE_REQ");
-                cfg_erase_req();
+                cfg_erase_req(req, config_if_rx_size);
                 break;
 
             case CMD_CFG_PROTECT_REQ:
                 DEBUG_PR_INFO("CFG_PROTECT_REQ");
-                cfg_protect_req();
+                cfg_protect_req(req, config_if_rx_size);
                 break;
 
             case CMD_CFG_UNPROTECT_REQ:
                 DEBUG_PR_INFO("CFG_UNPROTECT_REQ");
-                cfg_unprotect_req();
+                cfg_unprotect_req(req, config_if_rx_size);
                 break;
 
             case CMD_CFG_WRITE_CNF:
                 DEBUG_PR_INFO("CFG_WRITE_CNF");
-                cfg_write_cnf();
+                cfg_write_cnf(req, config_if_rx_size);
                 break;
 
             case CMD_GPS_WRITE_REQ:
                 DEBUG_PR_INFO("GPS_WRITE_REQ");
-                gps_write_req();
+                gps_write_req(req, config_if_rx_size);
                 break;
 
             case CMD_GPS_READ_REQ:
                 DEBUG_PR_INFO("GPS_READ_REQ");
-                gps_read_req();
+                gps_read_req(req, config_if_rx_size);
                 break;
 
             case CMD_GPS_CONFIG_REQ:
                 DEBUG_PR_INFO("GPS_CONFIG_REQ");
-                gps_config_req();
+                gps_config_req(req, config_if_rx_size);
                 break;
 
             case CMD_BLE_CONFIG_REQ:
                 DEBUG_PR_INFO("BLE_CONFIG_REQ");
-                ble_config_req();
+                ble_config_req(req, config_if_rx_size);
                 break;
 
             case CMD_BLE_WRITE_REQ:
                 DEBUG_PR_INFO("BLE_WRITE_REQ");
-                ble_write_req();
+                ble_write_req(req, config_if_rx_size);
                 break;
 
             case CMD_BLE_READ_REQ:
                 DEBUG_PR_INFO("BLE_READ_REQ");
-                ble_read_req();
+                ble_read_req(req, config_if_rx_size);
                 break;
 
             case CMD_STATUS_REQ:
                 DEBUG_PR_INFO("STATUS_REQ");
-                status_req();
+                status_req(req, config_if_rx_size);
                 break;
 
             case CMD_FW_SEND_IMAGE_REQ:
                 DEBUG_PR_INFO("FW_SEND_IMAGE_REQ");
-                fw_send_image_req();
+                fw_send_image_req(req, config_if_rx_size);
                 break;
 
             case CMD_FW_APPLY_IMAGE_REQ:
                 DEBUG_PR_INFO("FW_APPLY_IMAGE_REQ");
-                fw_apply_image_req();
+                fw_apply_image_req(req, config_if_rx_size);
                 break;
 
             case CMD_RESET_REQ:
                 DEBUG_PR_INFO("RESET_REQ");
-                reset_req();
+                reset_req(req, config_if_rx_size);
                 break;
 
             case CMD_BATTERY_STATUS_REQ:
                 DEBUG_PR_INFO("BATTERY_STATUS_REQ");
-                battery_status_req();
+                battery_status_req(req, config_if_rx_size);
                 break;
 
             case CMD_LOG_CREATE_REQ:
                 DEBUG_PR_INFO("LOG_CREATE_REQ");
-                log_create_req();
+                log_create_req(req, config_if_rx_size);
                 break;
 
             case CMD_LOG_ERASE_REQ:
                 DEBUG_PR_INFO("LOG_ERASE_REQ");
-                log_erase_req();
+                log_erase_req(req, config_if_rx_size);
                 break;
 
             case CMD_LOG_READ_REQ:
                 DEBUG_PR_INFO("LOG_READ_REQ");
-                log_read_req();
+                log_read_req(req, config_if_rx_size);
                 break;
 
             default:
@@ -425,7 +528,7 @@ void boot_state(void)
     //syshal_gps_init();
     //syshal_usb_init();
 
-    config_if_init(CONFIG_IF_USB);
+    config_if_init(CONFIG_IF_BACKEND_USB);
 
     // Print General System Info
     DEBUG_PR_SYS("Arribada Tracker Device");
@@ -531,6 +634,17 @@ void exception_handler(CEXCEPTION_T e)
 
     switch (e)
     {
+        case EXCEPTION_REQ_WRONG_SIZE:
+            DEBUG_PR_ERROR("EXCEPTION_REQ_WRONG_SIZE");
+            config_if_rx_pending = false; // This req message is erroneous so ignore it
+            break;
+
+        case EXCEPTION_RESP_TX_PENDING:
+            // We're already transmitted a response
+            // This is thrown to avoid overwritting the TX buffer before it is sent
+            DEBUG_PR_ERROR("EXCEPTION_RESP_TX_PENDING");
+            break;
+
         default:
             DEBUG_PR_ERROR("Unknown exception");
             break;

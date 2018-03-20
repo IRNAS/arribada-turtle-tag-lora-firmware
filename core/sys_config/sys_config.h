@@ -349,4 +349,4 @@ int sys_config_set(uint16_t tag, void * value, uint32_t length);
 int sys_config_unset(uint16_t tag);
 int sys_config_get(uint16_t tag, void * value);
 bool sys_config_is_valid(uint16_t tag);
-int sys_config_iterate(uint16_t tag);
+int sys_config_iterate(uint16_t tag, uint16_t * last_index);
