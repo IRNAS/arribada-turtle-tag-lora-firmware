@@ -145,6 +145,7 @@ typedef struct __attribute__((__packed__))
 typedef struct __attribute__((__packed__))
 {
     uint32_t length;
+    uint8_t * bytes;
 } cmd_gps_write_req_t;
 
 typedef struct __attribute__((__packed__))
@@ -156,6 +157,7 @@ typedef struct __attribute__((__packed__))
 {
     uint8_t error_code;
     uint32_t length;
+    uint8_t * bytes;
 } cmd_gps_read_resp_t;
 
 typedef struct __attribute__((__packed__))

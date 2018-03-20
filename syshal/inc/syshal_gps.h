@@ -22,6 +22,12 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+// Constants
+#define SYSHAL_GPS_NO_ERROR               ( 0)
+#define SYSHAL_GPS_ERROR_BUSY             (-1)
+#define SYSHAL_GPS_ERROR_TIMEOUT          (-2)
+#define SYSHAL_GPS_ERROR_DEVICE           (-3)
+
 typedef enum
 {
     SYSHAL_GPS_EVENT_POSLLH,

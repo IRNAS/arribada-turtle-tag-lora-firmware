@@ -29,6 +29,15 @@ static void syshal_gps_process_nav_posllh_priv(UBX_Packet_t * packet);
 static void syshal_gps_set_checksum_priv(UBX_Packet_t * packet);
 static void syshal_gps_send_packet_priv(UBX_Packet_t * ubx_packet);
 
+// HAL to SYSHAL error code mapping table
+static int hal_error_map[] =
+{
+    SYSHAL_GPS_NO_ERROR,
+    SYSHAL_GPS_ERROR_DEVICE,
+    SYSHAL_GPS_ERROR_BUSY,
+    SYSHAL_GPS_ERROR_TIMEOUT,
+};
+
 void syshal_gps_init(void)
 {
     // Make sure device is awake
@@ -153,7 +162,7 @@ void syshal_gps_set_baud(uint32_t baudrate)
  */
 int syshal_gps_send_raw(uint8_t * data, uint32_t size)
 {
-    return syshal_uart_send(GPS_UART, data, size);
+    return hal_error_map[syshal_uart_send(GPS_UART, data, size)];
 }
 
 /**

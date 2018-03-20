@@ -343,7 +343,8 @@ int sys_config_get(uint16_t tag, void * value)
     // Copy the configuration data back
 #pragma GCC diagnostic push // Suppress data = NULL warning as this cannot happen as the function returns if that is the case
 #pragma GCC diagnostic ignored "-Wnonnull"
-    memcpy(value, data, return_code);
+    if (NULL != value)
+        memcpy(value, data, return_code);
 #pragma GCC diagnostic pop
 
     return return_code;
