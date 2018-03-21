@@ -244,6 +244,8 @@ static uint8_t * USBD_Vendor_GetCfgDesc(uint16_t * length)
   */
 static uint8_t USBD_Vendor_DataIn(USBD_HandleTypeDef * pdev, uint8_t epnum)
 {
+    //DEBUG_PR_TRACE("%u: %s()", __LINE__, __FUNCTION__);
+
     USBD_Vendor_HandleTypeDef_t * hVendor;
     hVendor = (USBD_Vendor_HandleTypeDef_t *) pdev->pClassData;
 
@@ -256,7 +258,6 @@ static uint8_t USBD_Vendor_DataIn(USBD_HandleTypeDef * pdev, uint8_t epnum)
     syshal_usb_event_t event;
     event.id = SYSHAL_USB_EVENT_SEND_COMPLETE;
 
-    event.id = SYSHAL_USB_EVENT_RECEIVE_COMPLETE;
     event.send.buffer = &hVendor->TxBuffer[0];
     event.send.size = hVendor->TxLength;
 
@@ -309,7 +310,7 @@ static uint8_t USBD_Vendor_DataOut(USBD_HandleTypeDef * pdev, uint8_t epnum)
   *
   * @return     status
   */
-uint8_t USBD_Vendor_SetTxBuffer(USBD_HandleTypeDef * pdev, uint8_t * pbuff, uint16_t length)
+uint8_t USBD_Vendor_SetTxBuffer(USBD_HandleTypeDef * pdev, uint8_t * pbuff, uint32_t length)
 {
     USBD_Vendor_HandleTypeDef_t * hVendor;
     hVendor = (USBD_Vendor_HandleTypeDef_t *) pdev->pClassData;
@@ -328,12 +329,13 @@ uint8_t USBD_Vendor_SetTxBuffer(USBD_HandleTypeDef * pdev, uint8_t * pbuff, uint
   *
   * @return     status
   */
-uint8_t USBD_Vendor_SetRxBuffer(USBD_HandleTypeDef * pdev, uint8_t * pbuff)
+uint8_t USBD_Vendor_SetRxBuffer(USBD_HandleTypeDef * pdev, uint8_t * pbuff, uint32_t length)
 {
     USBD_Vendor_HandleTypeDef_t * hVendor;
     hVendor = (USBD_Vendor_HandleTypeDef_t *) pdev->pClassData;
 
     hVendor->RxBuffer = pbuff;
+    hVendor->RxLength = length;
 
     return USBD_OK;
 }
@@ -350,8 +352,12 @@ uint8_t USBD_Vendor_TransmitPacket(USBD_HandleTypeDef * pdev)
     USBD_Vendor_HandleTypeDef_t * hVendor;
     hVendor = (USBD_Vendor_HandleTypeDef_t *) pdev->pClassData;
 
+    //DEBUG_PR_TRACE("%u: %s()", __LINE__, __FUNCTION__);
+
     if (pdev->pClassData == NULL)
         return USBD_FAIL;
+
+    //DEBUG_PR_TRACE("%u: %s()", __LINE__, __FUNCTION__);
 
     if (hVendor->TxPending)
         return USBD_BUSY;
@@ -359,11 +365,15 @@ uint8_t USBD_Vendor_TransmitPacket(USBD_HandleTypeDef * pdev)
     // Queue a transfer
     hVendor->TxPending = true;
 
+    //DEBUG_PR_TRACE("%u: %s()", __LINE__, __FUNCTION__);
+
     // Transmit next packet
     USBD_LL_Transmit(pdev,
                      VENDOR_IN_EP,
                      hVendor->TxBuffer,
                      hVendor->TxLength);
+
+    //DEBUG_PR_TRACE("%u: %s()", __LINE__, __FUNCTION__);
 
     return USBD_OK;
 }
@@ -392,7 +402,7 @@ uint8_t USBD_Vendor_ReceivePacket(USBD_HandleTypeDef * pdev)
     USBD_LL_PrepareReceive(pdev,
                            VENDOR_OUT_EP,
                            hVendor->RxBuffer,
-                           VENDOR_ENDPOINT_PACKET_SIZE);
+                           hVendor->RxLength);
 
     return USBD_OK;
 }

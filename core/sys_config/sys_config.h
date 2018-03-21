@@ -26,6 +26,12 @@
 #define SYS_CONFIG_ERROR_NO_MORE_TAGS     (-3)
 #define SYS_CONFIG_ERROR_TAG_NOT_SET      (-4)
 
+#define SYS_CONFIG_MAX_CONFIGURATION_SIZE (60) // Max size the configuration data can be in bytes
+
+#define SYS_CONFIG_TAG_DATA_SIZE(tag_type) (sizeof(((tag_type *)0)->contents)) // Size of data in tag. We exclude the set member
+
+#define SYS_CONFIG_TAG_TOTAL_NUMBER (35) // Number of configuration tags - WARN: This has to be manually updated
+
 enum
 {
     // GPS
@@ -78,8 +84,6 @@ enum
     SYS_CONFIG_TAG_BLUETOOTH_BEACON_GEO_FENCE_TRIGGER_LOCATION,  // Beacon function is only enabled at the specified geo-fence location.
     SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_INTERVAL,        // The beacon advertising interval expressed in milliseconds.
     SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_CONFIGURATION,   // TBD - for future expansion of the advertising payload to convey in the beacon.
-
-    SYS_CONFIG_TAG_TOTAL_NUMBER // Number of configuration tags
 };
 
 typedef struct __attribute__((__packed__))
@@ -90,31 +94,46 @@ typedef struct __attribute__((__packed__))
 typedef struct __attribute__((__packed__))
 {
     sys_config_hdr_t hdr;
-    uint8_t enable;
+    struct __attribute__((__packed__))
+    {
+        uint8_t enable;
+    } contents;
 } sys_config_gps_log_position_enable_t;
 
 typedef struct __attribute__((__packed__))
 {
     sys_config_hdr_t hdr;
-    uint8_t enable;
+    struct __attribute__((__packed__))
+    {
+        uint8_t enable;
+    } contents;
 } sys_config_gps_log_ttff_enable_t;
 
 typedef struct __attribute__((__packed__))
 {
     sys_config_hdr_t hdr;
-    uint8_t mode;
+    struct __attribute__((__packed__))
+    {
+        uint8_t mode;
+    } contents;
 } sys_config_gps_trigger_mode_t;
 
 typedef struct __attribute__((__packed__))
 {
     sys_config_hdr_t hdr;
-    uint32_t baudrate;
+    struct __attribute__((__packed__))
+    {
+        uint32_t baudrate;
+    } contents;
 } sys_config_gps_uart_baud_rate_t;
 
 typedef struct __attribute__((__packed__))
 {
     sys_config_hdr_t hdr;
-    uint8_t enable;
+    struct __attribute__((__packed__))
+    {
+        uint8_t enable;
+    } contents;
 } sys_config_rtc_sync_to_gps_enable_t;
 
 typedef struct __attribute__((__packed__))
@@ -128,181 +147,268 @@ typedef struct __attribute__((__packed__))
         uint8_t hours;
         uint8_t minutes;
         uint8_t seconds;
-    };
+    } contents;
 } sys_config_rtc_current_date_and_time_t;
 
 typedef struct __attribute__((__packed__))
 {
     sys_config_hdr_t hdr;
-    uint8_t enable;
+    struct __attribute__((__packed__))
+    {
+        uint8_t enable;
+    } contents;
 } sys_config_logging_enable_t;
 
 typedef struct __attribute__((__packed__))
 {
     sys_config_hdr_t hdr;
-    uint32_t bytes_written;
+    struct __attribute__((__packed__))
+    {
+        uint32_t bytes_written;
+    } contents;
 } sys_config_logging_bytes_written_t;
 
 typedef struct __attribute__((__packed__))
 {
     sys_config_hdr_t hdr;
-    uint32_t file_size;
+    struct __attribute__((__packed__))
+    {
+        uint32_t file_size;
+    } contents;
 } sys_config_logging_file_size_t;
 
 typedef struct __attribute__((__packed__))
 {
     sys_config_hdr_t hdr;
-    uint8_t file_type;
+    struct __attribute__((__packed__))
+    {
+        uint8_t file_type;
+    } contents;
 } sys_config_logging_file_type_t;
 
 typedef struct __attribute__((__packed__))
 {
     sys_config_hdr_t hdr;
-    uint8_t enable;
+    struct __attribute__((__packed__))
+    {
+        uint8_t enable;
+    } contents;
 } sys_config_logging_group_sensor_readings_enable_t;
 
 typedef struct __attribute__((__packed__))
 {
     sys_config_hdr_t hdr;
-    uint8_t enable;
+    struct __attribute__((__packed__))
+    {
+        uint8_t enable;
+    } contents;
 } sys_config_logging_start_end_sync_enable_t;
 
 typedef struct __attribute__((__packed__))
 {
     sys_config_hdr_t hdr;
-    uint8_t enable;
+    struct __attribute__((__packed__))
+    {
+        uint8_t enable;
+    } contents;
 } sys_config_logging_date_time_stamp_enable_t;
 
 typedef struct __attribute__((__packed__))
 {
     sys_config_hdr_t hdr;
-    uint8_t enable;
+    struct __attribute__((__packed__))
+    {
+        uint8_t enable;
+    } contents;
 } sys_config_logging_high_resolution_timer_enable_t;
 
 typedef struct __attribute__((__packed__))
 {
     sys_config_hdr_t hdr;
-    uint8_t enable;
+    struct __attribute__((__packed__))
+    {
+        uint8_t enable;
+    } contents;
 } sys_config_axl_log_enable_t;
 
 typedef struct __attribute__((__packed__))
 {
     sys_config_hdr_t hdr;
-    uint8_t config;
+    struct __attribute__((__packed__))
+    {
+        uint8_t config;
+    } contents;
 } sys_config_axl_config_t;
 
 typedef struct __attribute__((__packed__))
 {
     sys_config_hdr_t hdr;
-    uint16_t threshold;
+    struct __attribute__((__packed__))
+    {
+        uint16_t threshold;
+    } contents;
 } sys_config_axl_g_force_high_threshold_t;
 
 typedef struct __attribute__((__packed__))
 {
     sys_config_hdr_t hdr;
-    uint16_t sample_rate;
+    struct __attribute__((__packed__))
+    {
+        uint16_t sample_rate;
+    } contents;
 } sys_config_axl_sample_rate_t;
 
 typedef struct __attribute__((__packed__))
 {
     sys_config_hdr_t hdr;
-    uint8_t mode;
+    struct __attribute__((__packed__))
+    {
+        uint8_t mode;
+    } contents;
 } sys_config_axl_mode_t;
 
 typedef struct __attribute__((__packed__))
 {
     sys_config_hdr_t hdr;
-    uint8_t enable;
+    struct __attribute__((__packed__))
+    {
+        uint8_t enable;
+    } contents;
 } sys_config_pressure_sensor_log_enable_t;
 
 typedef struct __attribute__((__packed__))
 {
     sys_config_hdr_t hdr;
-    uint16_t sample_rate;
+    struct __attribute__((__packed__))
+    {
+        uint16_t sample_rate;
+    } contents;
 } sys_config_pressure_sample_rate_t;
 
 typedef struct __attribute__((__packed__))
 {
     sys_config_hdr_t hdr;
-    uint16_t threshold;
+    struct __attribute__((__packed__))
+    {
+        uint16_t threshold;
+    } contents;
 } sys_config_pressure_low_threshold_t;
 
 typedef struct __attribute__((__packed__))
 {
     sys_config_hdr_t hdr;
-    uint16_t threshold;
+    struct __attribute__((__packed__))
+    {
+        uint16_t threshold;
+    } contents;
 } sys_config_pressure_high_threshold_t;
 
 typedef struct __attribute__((__packed__))
 {
     sys_config_hdr_t hdr;
-    uint8_t mode;
+    struct __attribute__((__packed__))
+    {
+        uint8_t mode;
+    } contents;
 } sys_config_pressure_mode_t;
 
 typedef struct __attribute__((__packed__))
 {
     sys_config_hdr_t hdr;
-    uint8_t enable;
+    struct __attribute__((__packed__))
+    {
+        uint8_t enable;
+    } contents;
 } sys_config_temp_sensor_log_enable_t;
 
 typedef struct __attribute__((__packed__))
 {
     sys_config_hdr_t hdr;
-    uint16_t sample_rate;
+    struct __attribute__((__packed__))
+    {
+        uint16_t sample_rate;
+    } contents;
 } sys_config_temp_sensor_sample_rate_t;
 
 typedef struct __attribute__((__packed__))
 {
     sys_config_hdr_t hdr;
-    uint16_t threshold;
+    struct __attribute__((__packed__))
+    {
+        uint16_t threshold;
+    } contents;
 } sys_config_temp_sensor_low_threshold_t;
 
 typedef struct __attribute__((__packed__))
 {
     sys_config_hdr_t hdr;
-    uint16_t threshold;
+    struct __attribute__((__packed__))
+    {
+        uint16_t threshold;
+    } contents;
 } sys_config_temp_sensor_high_threshold_t;
 
 typedef struct __attribute__((__packed__))
 {
     sys_config_hdr_t hdr;
-    uint16_t mode;
+    struct __attribute__((__packed__))
+    {
+        uint16_t mode;
+    } contents;
 } sys_config_temp_sensor_mode_t;
 
 typedef struct __attribute__((__packed__))
 {
     sys_config_hdr_t hdr;
-    uint8_t id[8];
+    struct __attribute__((__packed__))
+    {
+        uint8_t id[8];
+    } contents;
 } sys_config_system_device_identifier_t;
 
 typedef struct __attribute__((__packed__))
 {
     sys_config_hdr_t hdr;
-    uint8_t uuid[16];
+    struct __attribute__((__packed__))
+    {
+        uint8_t uuid[16];
+    } contents;
 } sys_config_bluetooth_uuid_t;
 
 typedef struct __attribute__((__packed__))
 {
     sys_config_hdr_t hdr;
-    uint8_t enable;
+    struct __attribute__((__packed__))
+    {
+        uint8_t enable;
+    } contents;
 } sys_config_bluetooth_beacon_enable_t;
 
 typedef struct __attribute__((__packed__))
 {
     sys_config_hdr_t hdr;
-    uint8_t location[12];
+    struct __attribute__((__packed__))
+    {
+        uint8_t location[12];
+    } contents;
 } sys_config_bluetooth_beacon_geo_fence_trigger_location_t;
 
 typedef struct __attribute__((__packed__))
 {
     sys_config_hdr_t hdr;
-    uint16_t interval;
+    struct __attribute__((__packed__))
+    {
+        uint16_t interval;
+    } contents;
 } sys_config_bluetooth_beacon_advertising_interval_t;
 
 typedef struct __attribute__((__packed__))
 {
     sys_config_hdr_t hdr;
-    uint8_t configuration;
+    struct __attribute__((__packed__))
+    {
+        uint8_t configuration;
+    } contents;
 } sys_config_bluetooth_beacon_advertising_configuration_t;
 
 typedef struct __attribute__((__packed__))

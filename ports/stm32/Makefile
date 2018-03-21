@@ -32,7 +32,6 @@ BUILD_DIR = build
 # C sources
 C_SOURCES =  \
 $(CORE_DIR)/cexception/cexception.c \
-$(CORE_DIR)/config_if/cmd.c \
 $(CORE_DIR)/config_if/config_if.c \
 $(CORE_DIR)/debug/debug.c \
 $(CORE_DIR)/sm/sm.c \
@@ -149,7 +148,7 @@ ASFLAGS = $(MCU) $(AS_DEFS) $(AS_INCLUDES) $(OPT) -Wall -Werror -fdata-sections 
 CFLAGS = $(MCU) $(C_DEFS) $(C_INCLUDES) $(OPT) -Wall -Werror -fdata-sections -ffunction-sections
 
 ifeq ($(DEBUG), 1)
-CFLAGS += -g
+CFLAGS += -g3
 endif
 
 

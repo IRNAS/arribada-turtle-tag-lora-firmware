@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <string.h>
 #include "bsp.h"
 #include "cexception.h"
 #include "exceptions.h"
@@ -50,8 +51,14 @@ static const char * sm_state_str[] =
 };
 
 static sm_state_t state = SM_STATE_BOOT; // Default starting state
-static uint8_t tx_buffer[CMD_MAX_SIZE]; // TX buffer used by config_if
-static uint8_t rx_buffer[CMD_MAX_SIZE]; // RX buffer used by config_if
+
+static uint8_t tx_buffer_1[SYSHAL_USB_PACKET_SIZE]; // TX buffer 1
+static uint8_t tx_buffer_2[SYSHAL_USB_PACKET_SIZE]; // TX buffer 2 (two used for double buffering)
+
+static uint8_t * tx_buffer_sending = &tx_buffer_1[0]; // Pointer to buffer currently being transmitted
+static uint8_t * tx_buffer_working = &tx_buffer_2[0]; // Pointer to TX backbuffer
+
+static uint8_t rx_buffer[SYSHAL_USB_PACKET_SIZE]; // RX buffer used by config_if
 
 static volatile bool config_if_tx_pending = false; // Is a transmit pending
 static volatile bool config_if_rx_pending = false; // Is a receive pending
@@ -64,224 +71,284 @@ static bool syshal_gps_bridging = false; // Is a transmit pending
 
 
 ////////////////////////////////////////////////////////////////////////////////
-////////////////////////////// HARDWARE INIT CODE //////////////////////////////
+/////////////////////////////// HELPER FUNCTIONS ///////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
+/**
+ * @brief      Swaps the TX sending and worker buffers. This is used for double
+ *             buffering to prevent unnecessary pauses in data transmission
+ *
+ * @warning    This should not be called when a transmission is currently taking
+ *             place on the config_if interface
+ */
+static void tx_buffer_swap_priv(void)
+{
+    if (tx_buffer_sending == &tx_buffer_1[0])
+    {
+        tx_buffer_sending = &tx_buffer_2[0];
+        tx_buffer_working = &tx_buffer_1[0];
+    }
+    else
+    {
+        tx_buffer_sending = &tx_buffer_1[0];
+        tx_buffer_working = &tx_buffer_2[0];
+    }
+}
+
+static void config_if_send_priv(uint8_t * data, uint32_t size)
+{
+    while (config_if_tx_pending) // FIXME: implement timeout
+    {} // Wait for previous transmission to be sent
+
+    DEBUG_PR_TRACE("Sending packet of size %lu", size);
+
+    config_if_tx_pending = true;
+    config_if_send(data, size); // Send response
+    tx_buffer_swap_priv(); // Swap buffers so the working buffer is always free
+}
+
+static void config_if_receive_blocking(uint8_t * data, uint32_t size)
+{
+    config_if_receive(data, size);
+
+    while (!config_if_rx_pending) // FIXME: implement timeout
+    {} // Wait for data to be received
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////// REQUEST HANDLERS //////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-void cfg_read_req(cmd_t *req, uint16_t size)
+void cfg_read_req(cmd_t * req, uint16_t size)
 {
     // Check request size is correct
     if (CMD_SIZE(cmd_cfg_read_req_t) != size)
         Throw(EXCEPTION_REQ_WRONG_SIZE);
 
-    // If we're already currently responding to another request
-    if (config_if_tx_pending)
-        Throw(EXCEPTION_RESP_TX_PENDING);
+    cmd_t * resp = (cmd_t *) tx_buffer_working;
+    CMD_SET_HDR(resp, CMD_CFG_READ_RESP);
 
     if (CFG_READ_REQ_READ_ALL == req->p.cmd_cfg_read_req.configuration_tag) // Read all configuration tags
     {
         DEBUG_PR_WARN("READ ALL TAGS IN %s() NOT IMPLEMENTED", __FUNCTION__);
         return;
     }
-
-    // Read just one configuration tag
-    cmd_t * resp = (cmd_t *) &tx_buffer[0];
-    CMD_SET_HDR(resp, CMD_CFG_READ_RESP);
-
-    int return_code = sys_config_get(req->p.cmd_cfg_read_req.configuration_tag, &resp->p.cmd_cfg_read_resp.bytes);
-
-    resp->p.cmd_cfg_read_resp.length = 0;
-
-    if (SYS_CONFIG_ERROR_INVALID_TAG == return_code)  // Tag is not valid. Return an error code
+    else // Read just one tag
     {
-        resp->p.cmd_cfg_read_resp.error_code = CMD_ERROR_INVALID_CONFIG_TAG;
-    }
-    else if (SYS_CONFIG_ERROR_TAG_NOT_SET == return_code)  // Tag is not set. Return an error code
-    {
-        resp->p.cmd_cfg_read_resp.error_code = CMD_ERROR_CONFIG_TAG_NOT_SET;
-    }
-    else if (return_code < 0) // Unknown/Unhandled error
-    {
-        resp->p.cmd_cfg_read_resp.error_code = CMD_ERROR_UNKNOWN;
-    }
-    else
-    {
-        resp->p.cmd_cfg_read_resp.error_code = CMD_NO_ERROR;
-        resp->p.cmd_cfg_read_resp.length = return_code;
+        uint8_t data[SYS_CONFIG_MAX_CONFIGURATION_SIZE];
+        uint16_t tag = req->p.cmd_cfg_read_req.configuration_tag;
+
+        int tag_length = sys_config_get(tag, &data[0]);
+
+        resp->p.cmd_cfg_read_resp.length = 0;
+
+        if (SYS_CONFIG_ERROR_INVALID_TAG == tag_length)  // Tag is not valid. Return an error code
+        {
+            resp->p.cmd_cfg_read_resp.error_code = CMD_ERROR_INVALID_CONFIG_TAG;
+        }
+        else if (SYS_CONFIG_ERROR_TAG_NOT_SET == tag_length)  // Tag is not set. Return an error code
+        {
+            resp->p.cmd_cfg_read_resp.error_code = CMD_ERROR_CONFIG_TAG_NOT_SET;
+        }
+        else if (tag_length < 0) // Unknown/Unhandled error
+        {
+            resp->p.cmd_cfg_read_resp.error_code = CMD_ERROR_UNKNOWN;
+        }
+        else // Tag is valid
+        {
+            resp->p.cmd_cfg_read_resp.error_code = CMD_NO_ERROR;
+            resp->p.cmd_cfg_read_resp.length = sizeof(tag) + tag_length; // We will be sending a tag along with its data
+        }
+
+        config_if_send_priv((uint8_t *) resp, CMD_SIZE(cmd_cfg_read_resp_t)); // Send response
+
+        if (tag_length >= 0) // If there was no error
+        {
+            // Send the configuration tag's data
+            memcpy(&tx_buffer_working[0], &tag, sizeof(tag)); // Start of packet is the configuration tag itself
+            memcpy(&tx_buffer_working[sizeof(tag)], &data[0], tag_length);  // And now for the data
+
+            config_if_send_priv(tx_buffer_working, resp->p.cmd_cfg_read_resp.length); // Send data
+        }
+
     }
 
-    config_if_tx_pending = true;
-    config_if_send((uint8_t *) resp, CMD_SIZE(cmd_cfg_read_resp_t));
 }
 
-void cfg_write_req(cmd_t *req, uint16_t size)
+void cfg_write_req(cmd_t * req, uint16_t size)
+{
+    // Check request size is correct
+    if (CMD_SIZE(cmd_cfg_write_req_t) != size)
+        Throw(EXCEPTION_REQ_WRONG_SIZE);
+
+    uint32_t length = req->p.cmd_cfg_write_req.length;
+
+    // Length is not zero
+    if (!length)
+        return;
+
+    cmd_t * resp = (cmd_t *) tx_buffer_working;
+    CMD_SET_HDR(resp, CMD_GENERIC_RESP);
+    resp->p.cmd_cfg_read_resp.error_code = CMD_NO_ERROR;
+    config_if_send_priv((uint8_t *) resp, CMD_SIZE(cmd_generic_resp_t)); // Send response
+
+    if (CFG_READ_REQ_READ_ALL == length) // Read all configuration tags
+    {
+        DEBUG_PR_WARN("WRITE ALL TAGS IN %s() NOT IMPLEMENTED", __FUNCTION__);
+        return;
+    }
+    else // Write just one tag
+    {
+        config_if_receive_blocking(rx_buffer, length);
+
+        uint16_t tag = ((uint16_t)rx_buffer[1] << 8) | rx_buffer[0];
+        DEBUG_PR_TRACE("Setting tag 0x%04X", tag);
+        sys_config_set(tag, &rx_buffer[2], length);
+    }
+}
+
+void cfg_save_req(cmd_t * req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void cfg_save_req(cmd_t *req, uint16_t size)
+void cfg_restore_req(cmd_t * req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void cfg_restore_req(cmd_t *req, uint16_t size)
-{
-    DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
-}
-
-void cfg_erase_req(cmd_t *req, uint16_t size)
+void cfg_erase_req(cmd_t * req, uint16_t size)
 {
     // Check request size is correct
     if (CMD_SIZE(cmd_cfg_erase_req_t) != size)
         Throw(EXCEPTION_REQ_WRONG_SIZE);
 
-    // If we're already currently responding to another request
-    if (config_if_tx_pending)
-        Throw(EXCEPTION_RESP_TX_PENDING);
-
-    if (CFG_READ_REQ_READ_ALL == req->p.cmd_cfg_erase_req.configuration_tag) // Read all configuration tags
+    if (CFG_READ_REQ_READ_ALL == req->p.cmd_cfg_erase_req.configuration_tag) // Erase all configuration tags
     {
         DEBUG_PR_WARN("ERASE ALL TAGS IN %s() NOT IMPLEMENTED", __FUNCTION__);
         return;
     }
-
-    // Erase just one configuration tag
-    cmd_t * resp = (cmd_t *) &tx_buffer[0];
-    CMD_SET_HDR(resp, CMD_GENERIC_RESP);
-
-    int return_code = sys_config_unset(req->p.cmd_cfg_erase_req.configuration_tag);
-
-    switch (return_code)
+    else
     {
-        case SYS_CONFIG_NO_ERROR:
-            resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
-            break;
+        // Erase just one configuration tag
+        cmd_t * resp = (cmd_t *) tx_buffer_working;
+        CMD_SET_HDR(resp, CMD_GENERIC_RESP);
 
-        case SYS_CONFIG_ERROR_INVALID_TAG:
-            resp->p.cmd_generic_resp.error_code = CMD_ERROR_INVALID_CONFIG_TAG;
-            break;
+        int return_code = sys_config_unset(req->p.cmd_cfg_erase_req.configuration_tag);
 
-        default:
-            resp->p.cmd_generic_resp.error_code = CMD_ERROR_UNKNOWN;
-            break;
+        switch (return_code)
+        {
+            case SYS_CONFIG_NO_ERROR:
+                resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
+                break;
+
+            case SYS_CONFIG_ERROR_INVALID_TAG:
+                resp->p.cmd_generic_resp.error_code = CMD_ERROR_INVALID_CONFIG_TAG;
+                break;
+
+            default:
+                resp->p.cmd_generic_resp.error_code = CMD_ERROR_UNKNOWN;
+                break;
+        }
+
+        config_if_send_priv((uint8_t *) resp, CMD_SIZE(cmd_generic_resp_t));
     }
-
-    config_if_tx_pending = true;
-    config_if_send((uint8_t *) resp, CMD_SIZE(cmd_generic_resp_t));
 }
 
-void cfg_protect_req(cmd_t *req, uint16_t size)
+void cfg_protect_req(cmd_t * req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void cfg_unprotect_req(cmd_t *req, uint16_t size)
+void cfg_unprotect_req(cmd_t * req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void gps_write_req(cmd_t *req, uint16_t size)
+void gps_write_req(cmd_t * req, uint16_t size)
 {
-    // Check request size is correct
-    if (CMD_SIZE(cmd_gps_write_req_t) != size)
-        Throw(EXCEPTION_REQ_WRONG_SIZE);
-
-    // If we're already currently responding to another request
-    if (config_if_tx_pending)
-        Throw(EXCEPTION_RESP_TX_PENDING);
-
-    int return_code = syshal_gps_send_raw(req->p.cmd_gps_write_req.bytes, req->p.cmd_gps_write_req.length);
-
-    // Generate and send response
-    cmd_t * resp = (cmd_t *) &tx_buffer[0];
-    CMD_SET_HDR(resp, CMD_GENERIC_RESP);
-
-    switch (return_code)
-    {
-        case SYSHAL_GPS_NO_ERROR:
-            resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
-            break;
-
-        case SYSHAL_GPS_ERROR_TIMEOUT:
-            resp->p.cmd_generic_resp.error_code = CMD_ERROR_TIMEOUT;
-            break;
-
-        case SYSHAL_GPS_ERROR_BUSY:
-        case SYSHAL_GPS_ERROR_DEVICE:
-        default:
-            resp->p.cmd_generic_resp.error_code = CMD_ERROR_UNKNOWN;
-            break;
-    }
-
-    config_if_tx_pending = true;
-    config_if_send((uint8_t *) resp, CMD_SIZE(cmd_generic_resp_t));
+//    // Check request size is correct
+//    if (CMD_SIZE(cmd_gps_write_req_t) != size)
+//        Throw(EXCEPTION_REQ_WRONG_SIZE);
+//
+//
+//    int return_code = syshal_gps_send_raw(req->p.cmd_gps_write_req.bytes, req->p.cmd_gps_write_req.length);
+//
+//    // Generate and send response
+//    cmd_t * resp = (cmd_t *) &tx_buffer[0];
+//    CMD_SET_HDR(resp, CMD_GENERIC_RESP);
+//
+//    switch (return_code)
+//    {
+//        case SYSHAL_GPS_NO_ERROR:
+//            resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
+//            break;
+//
+//        case SYSHAL_GPS_ERROR_TIMEOUT:
+//            resp->p.cmd_generic_resp.error_code = CMD_ERROR_TIMEOUT;
+//            break;
+//
+//        case SYSHAL_GPS_ERROR_BUSY:
+//        case SYSHAL_GPS_ERROR_DEVICE:
+//        default:
+//            resp->p.cmd_generic_resp.error_code = CMD_ERROR_UNKNOWN;
+//            break;
+//    }
+//
+//    config_if_send_priv((uint8_t *) resp, CMD_SIZE(cmd_generic_resp_t));
 }
 
-void gps_read_req(cmd_t *req, uint16_t size)
+void gps_read_req(cmd_t * req, uint16_t size)
 {
-    // Check request size is correct
-    if (CMD_SIZE(cmd_gps_read_req_t) != size)
-        Throw(EXCEPTION_REQ_WRONG_SIZE);
-
-    // If we're already currently responding to another request
-    if (config_if_tx_pending)
-        Throw(EXCEPTION_RESP_TX_PENDING);
-
-    // Generate and send response
-    cmd_t * resp = (cmd_t *) &tx_buffer[0];
-    CMD_SET_HDR(resp, CMD_GPS_READ_RESP);
-
-    resp->p.cmd_gps_read_resp.length = syshal_gps_receive_raw(resp->p.cmd_gps_read_resp.bytes, req->p.cmd_gps_read_req.length);
-    resp->p.cmd_gps_read_resp.error_code = CMD_NO_ERROR;
-
-    config_if_tx_pending = true;
-    config_if_send((uint8_t *) resp, CMD_SIZE(cmd_gps_read_resp_t));
+//    // Check request size is correct
+//    if (CMD_SIZE(cmd_gps_read_req_t) != size)
+//        Throw(EXCEPTION_REQ_WRONG_SIZE);
+//
+//    // Generate and send response
+//    cmd_t * resp = (cmd_t *) tx_buffer_working;
+//    CMD_SET_HDR(resp, CMD_GPS_READ_RESP);
+//
+//    resp->p.cmd_gps_read_resp.length = syshal_gps_receive_raw(resp->p.cmd_gps_read_resp.bytes, req->p.cmd_gps_read_req.length);
+//    resp->p.cmd_gps_read_resp.error_code = CMD_NO_ERROR;
+//
+//    config_if_send_priv((uint8_t *) resp, CMD_SIZE(cmd_gps_read_resp_t));
 }
 
-void gps_config_req(cmd_t *req, uint16_t size)
+void gps_config_req(cmd_t * req, uint16_t size)
 {
 
     // Check request size is correct
     if (CMD_SIZE(cmd_gps_config_req_t) != size)
         Throw(EXCEPTION_REQ_WRONG_SIZE);
 
-    // If we're already currently responding to another request
-    if (config_if_tx_pending)
-        Throw(EXCEPTION_RESP_TX_PENDING);
-
     syshal_gps_bridging = req->p.cmd_gps_config_req.enable; // Disable or enable GPS bridging
 
     // Generate and send response
-    cmd_t * resp = (cmd_t *) &tx_buffer[0];
+    cmd_t * resp = (cmd_t *) tx_buffer_working;
     CMD_SET_HDR(resp, CMD_GENERIC_RESP);
 
     resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
 
-    config_if_tx_pending = true;
-    config_if_send((uint8_t *) resp, CMD_SIZE(cmd_generic_resp_t));
+    config_if_send_priv((uint8_t *) resp, CMD_SIZE(cmd_generic_resp_t));
 
 }
 
-void ble_config_req(cmd_t *req, uint16_t size)
+void ble_config_req(cmd_t * req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void ble_write_req(cmd_t *req, uint16_t size)
+void ble_write_req(cmd_t * req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void ble_read_req(cmd_t *req, uint16_t size)
+void ble_read_req(cmd_t * req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void status_req(cmd_t *req, uint16_t size)
+void status_req(cmd_t * req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 
@@ -297,43 +364,44 @@ void status_req(cmd_t *req, uint16_t size)
     */
 }
 
-void fw_send_image_req(cmd_t *req, uint16_t size)
+void fw_send_image_req(cmd_t * req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void fw_send_image_complete_cnf(cmd_t *req, uint16_t size)
+void fw_send_image_complete_cnf(cmd_t * req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void fw_apply_image_req(cmd_t *req, uint16_t size)
+void fw_apply_image_req(cmd_t * req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void reset_req(cmd_t *req, uint16_t size)
+void reset_req(cmd_t * req, uint16_t size)
 {
     // Check request size is correct
     if (CMD_SIZE(cmd_reset_req_t) != size)
         Throw(EXCEPTION_REQ_WRONG_SIZE);
 
-    // If we're already currently responding to another request
-    if (config_if_tx_pending)
-        Throw(EXCEPTION_RESP_TX_PENDING);
-
     // Generate and send response
-    cmd_t * resp = (cmd_t *) &tx_buffer[0];
+    cmd_t * resp = (cmd_t *) tx_buffer_working;
     CMD_SET_HDR(resp, CMD_GENERIC_RESP);
 
     resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
 
-    config_if_tx_pending = true;
-    config_if_send((uint8_t *) resp, CMD_SIZE(cmd_generic_resp_t));
+    //DEBUG_PR_INFO("A");
+
+    config_if_send_priv((uint8_t *) resp, CMD_SIZE(cmd_generic_resp_t));
+
+    //DEBUG_PR_INFO("B");
 
     // Wait for response to have been sent
     while (config_if_tx_pending)
     {}
+
+    //DEBUG_PR_INFO("C");
 
 #ifdef __CORTEX_M // FIXME: find and replace with the ARM macro
     NVIC_SystemReset();
@@ -343,47 +411,46 @@ void reset_req(cmd_t *req, uint16_t size)
     for (;;) {}
 }
 
-void battery_status_req(cmd_t *req, uint16_t size)
+void battery_status_req(cmd_t * req, uint16_t size)
 {
-    // Check request size is correct
-    if (size != CMD_SIZE_HDR)
-        Throw(EXCEPTION_REQ_WRONG_SIZE);
-
-    // If we're already currently responding to another request
-    if (config_if_tx_pending)
-        Throw(EXCEPTION_RESP_TX_PENDING);
-
-    DEBUG_PR_WARN("%s() NOT IMPLEMENTED, responding with spoof data", __FUNCTION__);
-
-    // Generate and send response
-    cmd_t * resp = (cmd_t *) &tx_buffer[0];
-    CMD_SET_HDR(resp, CMD_BATTERY_STATUS_RESP);
-
-    resp->p.cmd_battery_status_resp.error_code = CMD_NO_ERROR;
-    resp->p.cmd_battery_status_resp.charging_indicator = 1;
-    resp->p.cmd_battery_status_resp.charge_level = 100;
-
-    /*
-    resp->p.cmd_battery_status_resp.error_code = CMD_NO_ERROR;
-    resp->p.cmd_battery_status_resp.charging_indicator = syshal_batt_charging();
-    resp->p.cmd_battery_status_resp.charge_level = syshal_batt_level();
-    */
-
-    config_if_tx_pending = true;
-    config_if_send((uint8_t *) resp, CMD_SIZE(cmd_battery_status_resp_t));
+//    // Check request size is correct
+//    if (size != CMD_SIZE_HDR)
+//        Throw(EXCEPTION_REQ_WRONG_SIZE);
+//
+//    // If we're already currently responding to another request
+//    if (config_if_tx_pending)
+//        Throw(EXCEPTION_RESP_TX_PENDING);
+//
+//    DEBUG_PR_WARN("%s() NOT IMPLEMENTED, responding with spoof data", __FUNCTION__);
+//
+//    // Generate and send response
+//    cmd_t * resp = (cmd_t *) &tx_buffer[0];
+//    CMD_SET_HDR(resp, CMD_BATTERY_STATUS_RESP);
+//
+//    resp->p.cmd_battery_status_resp.error_code = CMD_NO_ERROR;
+//    resp->p.cmd_battery_status_resp.charging_indicator = 1;
+//    resp->p.cmd_battery_status_resp.charge_level = 100;
+//
+//    /*
+//    resp->p.cmd_battery_status_resp.error_code = CMD_NO_ERROR;
+//    resp->p.cmd_battery_status_resp.charging_indicator = syshal_batt_charging();
+//    resp->p.cmd_battery_status_resp.charge_level = syshal_batt_level();
+//    */
+//
+//    config_if_send_priv((uint8_t *) resp, CMD_SIZE(cmd_battery_status_resp_t));
 }
 
-void log_create_req(cmd_t *req, uint16_t size)
-{
-    DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
-}
-
-void log_erase_req(cmd_t *req, uint16_t size)
+void log_create_req(cmd_t * req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void log_read_req(cmd_t *req, uint16_t size)
+void log_erase_req(cmd_t * req, uint16_t size)
+{
+    DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
+}
+
+void log_read_req(cmd_t * req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
@@ -596,25 +663,42 @@ void boot_state(void)
     //if (syshal_gpio_get_input(GPIO_USB_DETECT) || syshal_gpio_get_input(GPIO_BLE_REED))
     //    sm_set_state(SM_STATE_PROVISIONING);
 
+    // Generate spoof time/date data
+    sys_config_rtc_current_date_and_time_t date_time;
+    date_time.contents.day = 1;
+    date_time.contents.month = 2;
+    date_time.contents.year = 3;
+    date_time.contents.hours = 4;
+    date_time.contents.minutes = 5;
+    date_time.contents.seconds = 6;
+    sys_config_set(SYS_CONFIG_TAG_RTC_CURRENT_DATE_AND_TIME, &date_time.contents, SYS_CONFIG_TAG_DATA_SIZE(sys_config_rtc_current_date_and_time_t));
+
     // Otherwise, if no configuration file is present or the current configuration is invalid then the system shall transition to the PROVISIONING_NEEDED sub-state.
 
     // Check that all configuration tags are set
     uint16_t last_index = 0;
-    uint16_t tag = 0; // The first tag - WARN: this relies on there being a tag ID of 0x0000
+    int tag = 0; // The first tag - WARN: this relies on there being a tag ID of 0x0000
     int return_code;
+    bool tag_not_set = false;
     do
     {
         return_code = sys_config_get(tag, NULL);
         if (SYS_CONFIG_ERROR_TAG_NOT_SET == return_code)
-            break;
+        {
+            DEBUG_PR_WARN("Tag 0x%04X not set", tag);
+            tag_not_set = true;
+        }
         tag = sys_config_iterate(tag, &last_index);
     }
     while (SYS_CONFIG_ERROR_NO_MORE_TAGS != tag);
 
-    if (SYS_CONFIG_ERROR_TAG_NOT_SET == return_code)
+    if (tag_not_set)
         sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED);
     else
         sm_set_state(SM_STATE_OPERATIONAL);
+
+
+    //sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED);
 
 }
 

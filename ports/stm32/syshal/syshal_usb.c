@@ -25,6 +25,8 @@
 #include "ring_buffer.h"
 #include "debug.h"
 
+#include "syshal_uart.h" // FIXME: temp
+
 // Internal variables
 
 // HAL to SYSHAL error code mapping table
@@ -98,14 +100,25 @@ int syshal_usb_send(uint8_t * data, uint32_t size)
 {
     USBD_Vendor_HandleTypeDef_t * hVendor = (USBD_Vendor_HandleTypeDef_t *)hUsbDeviceFS.pClassData;
 
+    //DEBUG_PR_TRACE("%u: %s()", __LINE__, __FUNCTION__);
+
     if (USBD_STATE_CONFIGURED != hUsbDeviceFS.dev_state)
         return SYSHAL_USB_ERROR_DISCONNECTED;
+
+    //DEBUG_PR_TRACE("%u: %s()", __LINE__, __FUNCTION__);
 
     if (hVendor->TxPending)
         return SYSHAL_USB_ERROR_BUSY;
 
+    //DEBUG_PR_TRACE("%u: %s()", __LINE__, __FUNCTION__);
+
     USBD_Vendor_SetTxBuffer(&hUsbDeviceFS, data, size);
+
+    //DEBUG_PR_TRACE("%u: %s()", __LINE__, __FUNCTION__);
+
     uint8_t result = USBD_Vendor_TransmitPacket(&hUsbDeviceFS);
+
+    //DEBUG_PR_TRACE("%u: %s()", __LINE__, __FUNCTION__);
 
     return hal_error_map[result];
 }
@@ -129,10 +142,10 @@ int syshal_usb_receive(uint8_t * buffer, uint32_t size)
     if (hVendor->RxPending)
         return SYSHAL_USB_ERROR_BUSY;
 
-    if (size < VENDOR_ENDPOINT_PACKET_SIZE)
+    if (size < SYSHAL_USB_PACKET_SIZE)
         return SYSHAL_USB_BUFFER_TOO_SMALL;
 
-    USBD_Vendor_SetRxBuffer(&hUsbDeviceFS, buffer); // Potentially unnecessary?
+    USBD_Vendor_SetRxBuffer(&hUsbDeviceFS, buffer, size);
     USBD_Vendor_ReceivePacket(&hUsbDeviceFS);
 
     return SYSHAL_USB_NO_ERROR;

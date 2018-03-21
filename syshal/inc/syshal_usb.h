@@ -23,11 +23,13 @@
 #include <stdbool.h>
 
 // Constants
-#define SYSHAL_USB_NO_ERROR            0
-#define SYSHAL_USB_ERROR_BUSY         -1
-#define SYSHAL_USB_ERROR_FAIL         -2
-#define SYSHAL_USB_ERROR_DISCONNECTED -3
-#define SYSHAL_USB_BUFFER_TOO_SMALL   -4
+#define SYSHAL_USB_NO_ERROR            ( 0)
+#define SYSHAL_USB_ERROR_BUSY          (-1)
+#define SYSHAL_USB_ERROR_FAIL          (-2)
+#define SYSHAL_USB_ERROR_DISCONNECTED  (-3)
+#define SYSHAL_USB_BUFFER_TOO_SMALL    (-4)
+
+#define SYSHAL_USB_PACKET_SIZE (512)
 
 typedef enum
 {

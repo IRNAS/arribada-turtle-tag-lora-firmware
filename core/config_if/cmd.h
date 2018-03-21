@@ -28,7 +28,7 @@
 #define CMD_MAX_SIZE        (512)
 #define CMD_MAX_PAYLOAD     (CMD_MAX_SIZE - sizeof(cmd_hdr_t))
 
-#define CMD_CFG_TAG_ALL 0xFFFF // A special tag to denote a read of all configuration values from RAM
+#define CMD_CFG_TAG_ALL (0xFFFF) // A special tag to denote a read of all configuration values from RAM
 
 #define CMD_SET_HDR(p, i)  \
     p->h.sync  = CMD_SYNCWORD; \
@@ -133,7 +133,6 @@ typedef struct __attribute__((__packed__))
 {
     uint8_t error_code;
     uint32_t length;
-    uint8_t * bytes;
 } cmd_cfg_read_resp_t;
 
 typedef struct __attribute__((__packed__))
@@ -145,7 +144,6 @@ typedef struct __attribute__((__packed__))
 typedef struct __attribute__((__packed__))
 {
     uint32_t length;
-    uint8_t * bytes;
 } cmd_gps_write_req_t;
 
 typedef struct __attribute__((__packed__))
@@ -157,7 +155,6 @@ typedef struct __attribute__((__packed__))
 {
     uint8_t error_code;
     uint32_t length;
-    uint8_t * bytes;
 } cmd_gps_read_resp_t;
 
 typedef struct __attribute__((__packed__))
@@ -247,7 +244,6 @@ typedef struct __attribute__((__packed__))
     cmd_hdr_t h;
     union
     {
-        uint8_t                             cmd_bytes[CMD_MAX_PAYLOAD];
         cmd_generic_resp_t                  cmd_generic_resp;
         cmd_cfg_read_req_t                  cmd_cfg_read_req;
         cmd_cfg_write_req_t                 cmd_cfg_write_req;

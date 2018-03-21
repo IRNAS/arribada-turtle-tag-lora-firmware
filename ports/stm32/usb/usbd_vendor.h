@@ -45,8 +45,8 @@ typedef struct
 }
 USBD_Vendor_HandleTypeDef_t;
 
-uint8_t USBD_Vendor_SetTxBuffer(USBD_HandleTypeDef * pdev, uint8_t * pbuff, uint16_t length);
-uint8_t USBD_Vendor_SetRxBuffer(USBD_HandleTypeDef * pdev, uint8_t * pbuff);
+uint8_t USBD_Vendor_SetTxBuffer(USBD_HandleTypeDef * pdev, uint8_t * pbuff, uint32_t length);
+uint8_t USBD_Vendor_SetRxBuffer(USBD_HandleTypeDef * pdev, uint8_t * pbuff, uint32_t length);
 uint8_t USBD_Vendor_TransmitPacket(USBD_HandleTypeDef * pdev);
 uint8_t USBD_Vendor_ReceivePacket(USBD_HandleTypeDef * pdev);
 

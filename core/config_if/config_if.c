@@ -21,8 +21,8 @@
 #include "syshal_usb.h"
 #include "debug.h"
 
-static int (*config_if_send_priv)(uint8_t *, uint32_t);
-static int (*config_if_receive_priv)(uint8_t *, uint32_t);
+static int (*config_if_func_send_priv)(uint8_t *, uint32_t);
+static int (*config_if_func_receive_priv)(uint8_t *, uint32_t);
 
 static config_if_backend_t backend_priv = CONFIG_IF_BACKEND_NOT_SET;
 
@@ -34,8 +34,8 @@ int config_if_init(config_if_backend_t backend)
 
     if (backend == CONFIG_IF_BACKEND_USB)
     {
-        config_if_send_priv = &syshal_usb_send;
-        config_if_receive_priv = &syshal_usb_receive;
+        config_if_func_send_priv = &syshal_usb_send;
+        config_if_func_receive_priv = &syshal_usb_receive;
 
         syshal_usb_init();
 
@@ -63,8 +63,8 @@ int config_if_init(config_if_backend_t backend)
 
 int config_if_term(void)
 {
-    config_if_send_priv = NULL;
-    config_if_receive_priv = NULL;
+    config_if_func_send_priv = NULL;
+    config_if_func_receive_priv = NULL;
 
     if (backend_priv == CONFIG_IF_BACKEND_USB)
         syshal_usb_term();
@@ -82,18 +82,18 @@ int config_if_term(void)
 
 int config_if_send(uint8_t * data, uint32_t size)
 {
-    if (config_if_send_priv == NULL)
+    if (config_if_func_send_priv == NULL)
         return CONFIG_IF_ERROR_INVALID_INSTANCE;
 
-    return config_if_send_priv(data, size);
+    return config_if_func_send_priv(data, size);
 }
 
 int config_if_receive(uint8_t * data, uint32_t size)
 {
-    if (config_if_receive_priv == NULL)
+    if (config_if_func_receive_priv == NULL)
         return CONFIG_IF_ERROR_INVALID_INSTANCE;
 
-    return config_if_receive_priv(data, size);
+    return config_if_func_receive_priv(data, size);
 }
 
 /**
