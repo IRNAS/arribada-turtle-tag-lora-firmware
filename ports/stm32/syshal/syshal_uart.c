@@ -195,8 +195,8 @@ int syshal_uart_send(uint32_t instance, uint8_t * data, uint32_t size)
     HAL_StatusTypeDef status;
 
     // Wait for UART to be free
-    while (HAL_UART_GetState(&huart[instance]) != HAL_UART_STATE_READY)
-    {}
+    if (UART_WaitOnFlagUntilTimeout(&huart[instance], UART_FLAG_TXE, RESET, HAL_GetTick(), UART_TIMEOUT) != HAL_OK)
+        return SYSHAL_UART_ERROR_TIMEOUT;
 
     status = HAL_UART_Transmit(&huart[instance], data, size, UART_TIMEOUT);
 
@@ -385,8 +385,8 @@ int _write(int file, char * data, int len)
     }
 
     // Wait for UART to be free
-    while (HAL_UART_GetState(&huart[PRINTF_UART]) != HAL_UART_STATE_READY)
-    {}
+    if (UART_WaitOnFlagUntilTimeout(&huart[PRINTF_UART], UART_FLAG_TXE, RESET, HAL_GetTick(), UART_TIMEOUT) != HAL_OK)
+        return 0;
 
     HAL_StatusTypeDef status = HAL_UART_Transmit(&huart[PRINTF_UART], (uint8_t *)data, len, UART_TIMEOUT);
 
