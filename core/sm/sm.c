@@ -113,6 +113,8 @@ static void config_if_receive_blocking(uint8_t * data, uint32_t size)
 
     while (!config_if_rx_pending) // FIXME: implement timeout
     {} // Wait for data to be received
+
+    config_if_rx_pending = false; // Mark this packet as received
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -203,8 +205,13 @@ void cfg_write_req(cmd_t * req, uint16_t size)
 
         uint16_t tag = ((uint16_t)rx_buffer[1] << 8) | rx_buffer[0];
         DEBUG_PR_TRACE("Setting tag 0x%04X", tag);
-        sys_config_set(tag, &rx_buffer[2], length);
+        sys_config_set(tag, &rx_buffer[sizeof(tag)], length - sizeof(tag));
     }
+
+    // Return CFG_WRITE_CNF to mark completion of transfer
+    CMD_SET_HDR(resp, CMD_CFG_WRITE_CNF);
+    resp->p.cmd_cfg_write_cnf.error_code = CMD_NO_ERROR;
+    config_if_send_priv((uint8_t *) resp, CMD_SIZE(cmd_cfg_write_cnf_t)); // Send confirmation
 }
 
 void cfg_save_req(cmd_t * req, uint16_t size)
@@ -471,7 +478,7 @@ int config_if_event_handler(config_if_event_t * event)
             break;
 
         case CONFIG_IF_EVENT_RECEIVE_COMPLETE:
-            DEBUG_PR_TRACE("CONFIG_IF_EVENT_RECEIVE_COMPLETE");
+            DEBUG_PR_TRACE("CONFIG_IF_EVENT_RECEIVE_COMPLETE, SIZE: %lu", event->receive.size);
             config_if_rx_pending = true; // Indicate that there is a packet in the RX buffer that needs processing
             config_if_rx_size = event->receive.size;// Store the size of the packet
             break;
@@ -499,6 +506,9 @@ static void handle_config_if_requests(void)
     // Process any pending event outside of an interrupt
     if (config_if_rx_pending)
     {
+
+        config_if_rx_pending = false; // Mark this message as received. This maybe a bit preemptive but it
+                                      // is assumed the request handlers will receive the message appropriately
 
         cmd_t * req = (cmd_t *) &rx_buffer[0]; // Overlay command structure on receive buffer
 
@@ -615,7 +625,6 @@ static void handle_config_if_requests(void)
                 break;
         }
 
-        config_if_rx_pending = false;
     }
 
 }
