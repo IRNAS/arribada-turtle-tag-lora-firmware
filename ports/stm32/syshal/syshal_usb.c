@@ -142,9 +142,6 @@ int syshal_usb_receive(uint8_t * buffer, uint32_t size)
     if (hVendor->RxPending)
         return SYSHAL_USB_ERROR_BUSY;
 
-    if (size < SYSHAL_USB_PACKET_SIZE)
-        return SYSHAL_USB_BUFFER_TOO_SMALL;
-
     USBD_Vendor_SetRxBuffer(&hUsbDeviceFS, buffer, size);
     USBD_Vendor_ReceivePacket(&hUsbDeviceFS);
 
