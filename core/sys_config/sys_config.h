@@ -26,8 +26,9 @@
 #define SYS_CONFIG_ERROR_NO_MORE_TAGS     (-3)
 #define SYS_CONFIG_ERROR_TAG_NOT_SET      (-4)
 
-#define SYS_CONFIG_MAX_CONFIGURATION_SIZE (60) // Max size the configuration data can be in bytes
+#define SYS_CONFIG_MAX_DATA_SIZE (60) // Max size the configuration tag's data can be in bytes
 
+#define SYS_CONFIG_TAG_ID_SIZE (sizeof(uint16_t))
 #define SYS_CONFIG_TAG_DATA_SIZE(tag_type) (sizeof(((tag_type *)0)->contents)) // Size of data in tag. We exclude the set member
 
 #define SYS_CONFIG_TAG_TOTAL_NUMBER (35) // Number of configuration tags - WARN: This has to be manually updated
@@ -454,5 +455,6 @@ typedef struct __attribute__((__packed__))
 int sys_config_set(uint16_t tag, void * value, uint32_t length);
 int sys_config_unset(uint16_t tag);
 int sys_config_get(uint16_t tag, void * value);
+int sys_config_size(uint16_t tag);
 bool sys_config_is_valid(uint16_t tag);
 int sys_config_iterate(uint16_t tag, uint16_t * last_index);

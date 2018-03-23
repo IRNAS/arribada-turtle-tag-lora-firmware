@@ -68,7 +68,7 @@ static const uint16_t sys_config_lookup_priv[SYS_CONFIG_TAG_TOTAL_NUMBER] =
  * @param[in]  tag   The configuration tag
  * @param[out] data  The pointer to the tags data
  *
- * @return     The length of the given configuration tag
+ * @return     The length of the given configuration tag in bytes
  * @return     SYS_CONFIG_ERROR_INVALID_TAG if the given tag is invalid
  */
 int sys_config_get_data_ptr_priv(uint16_t tag, void ** data)
@@ -257,6 +257,20 @@ int sys_config_get_data_ptr_priv(uint16_t tag, void ** data)
     }
 
     return len;
+}
+
+/**
+ * @brief      Gets the size of the data in the given configuration tag
+ *
+ * @param[in]  tag   The configuration tag
+ *
+ * @return     The length of the given configuration tag in bytes
+ * @return     SYS_CONFIG_ERROR_INVALID_TAG if the given tag is invalid
+ */
+int sys_config_size(uint16_t tag)
+{
+    void dummy_ptr;
+    return sys_config_get_data_ptr_priv(tag, &dummy_ptr);
 }
 
 /**
