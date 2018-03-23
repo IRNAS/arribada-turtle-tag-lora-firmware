@@ -53,19 +53,16 @@ static const char * sm_state_str[] =
 
 static sm_state_t state = SM_STATE_BOOT; // Default starting state
 
-static uint8_t rx_buffer[SYSHAL_USB_PACKET_SIZE]; // RX buffer used by config_if
-
 static volatile bool config_if_tx_pending = false; // Is a transmit pending
 static volatile bool config_if_rx_pending = false; // Is a receive pending
-static volatile uint16_t config_if_rx_size; // What was the size of the last receive in bytes
 static bool syshal_gps_bridging = false; // Is a transmit pending
 
 // Buffers
 static buffer_t config_if_send_buffer;
-//static buffer_t config_if_receive_buffer;
+static buffer_t config_if_receive_buffer;
 
 static uint8_t config_if_send_buffer_pool[SYSHAL_USB_PACKET_SIZE * 2];
-//static uint8_t config_if_receive_buffer_pool[SYSHAL_USB_PACKET_SIZE];
+static uint8_t config_if_receive_buffer_pool[SYSHAL_USB_PACKET_SIZE];
 
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////// PROTOTYPES //////////////////////////////////
@@ -78,7 +75,15 @@ static uint8_t config_if_send_buffer_pool[SYSHAL_USB_PACKET_SIZE * 2];
 
 static void setup_buffers(void)
 {
-    buffer_init_policy(pool, &config_if_send_buffer, (uintptr_t) &config_if_send_buffer_pool[0], sizeof(config_if_send_buffer_pool), 2);
+    // Send buffer
+    buffer_init_policy(pool, &config_if_send_buffer,
+                       (uintptr_t) &config_if_send_buffer_pool[0],
+                       sizeof(config_if_send_buffer_pool), 2);
+
+    // Receive buffer
+    buffer_init_policy(pool, &config_if_receive_buffer,
+                       (uintptr_t) &config_if_receive_buffer_pool[0],
+                       sizeof(config_if_receive_buffer_pool), 1);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -102,14 +107,21 @@ static void config_if_send_priv(buffer_t * buffer)
     }
 }
 
-static void config_if_receive_blocking(uint8_t * data, uint32_t size)
+static uint32_t config_if_receive_blocking(uint8_t ** data, uint32_t size)
 {
-    config_if_receive(data, size);
+    uint8_t * receive_buffer;
+    if (!buffer_write(&config_if_receive_buffer, (uintptr_t *)&receive_buffer))
+        Throw(EXCEPTION_RX_BUFFER_FULL);
 
-    while (!config_if_rx_pending) // FIXME: implement timeout
-    {} // Wait for data to be received
+    config_if_receive(receive_buffer, size);
 
-    config_if_rx_pending = false; // Mark this packet as received
+    while (!buffer_occupancy(&config_if_receive_buffer))
+    {}
+
+    uint32_t length = buffer_read(&config_if_receive_buffer, (uintptr_t *) data); // Wait for data to be received
+    buffer_read_advance(&config_if_receive_buffer, length); // Remove this from the buffer
+
+    return length;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -212,11 +224,15 @@ void cfg_write_req(cmd_t * req, uint16_t size)
     }
     else // Write just one tag
     {
-        config_if_receive_blocking(rx_buffer, length);
+        uint8_t * receive_buffer = NULL;
+        config_if_receive_blocking(&receive_buffer, length);
 
-        uint16_t tag = ((uint16_t)rx_buffer[1] << 8) | rx_buffer[0];
+        DEBUG_PR_TRACE("Pointer = %p", receive_buffer);
+
+        uint16_t tag = ((uint16_t)receive_buffer[1] << 8) | receive_buffer[0];
+
         DEBUG_PR_TRACE("Setting tag 0x%04X", tag);
-        sys_config_set(tag, &rx_buffer[sizeof(tag)], length - sizeof(tag));
+        sys_config_set(tag, &receive_buffer[sizeof(tag)], length - sizeof(tag));
     }
 
     // Return CFG_WRITE_CNF to mark completion of transfer
@@ -243,22 +259,33 @@ void cfg_restore_req(cmd_t * req, uint16_t size)
 
 void cfg_erase_req(cmd_t * req, uint16_t size)
 {
-    /*
     // Check request size is correct
     if (CMD_SIZE(cmd_cfg_erase_req_t) != size)
         Throw(EXCEPTION_REQ_WRONG_SIZE);
 
+    cmd_t * resp;
+    if (!buffer_write(&config_if_send_buffer, (uintptr_t *)&resp))
+        Throw(EXCEPTION_TX_BUFFER_FULL);
+    CMD_SET_HDR(resp, CMD_GENERIC_RESP);
+
     if (CFG_READ_REQ_READ_ALL == req->p.cmd_cfg_erase_req.configuration_tag) // Erase all configuration tags
     {
-        DEBUG_PR_WARN("ERASE ALL TAGS IN %s() NOT IMPLEMENTED", __FUNCTION__);
-        return;
+        uint16_t last_index = 0;
+        int tag = 0; // The first tag - WARN: this relies on there being a tag ID of 0x0000
+        do
+        {
+            DEBUG_PR_TRACE("Unsetting tag 0x%04X", tag);
+            sys_config_unset(tag);
+            tag = sys_config_iterate(tag, &last_index);
+        }
+        while (SYS_CONFIG_ERROR_NO_MORE_TAGS != tag);
+
+        resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
+
     }
     else
     {
         // Erase just one configuration tag
-        cmd_t * resp = (cmd_t *) tx_buffer_working;
-        CMD_SET_HDR(resp, CMD_GENERIC_RESP);
-
         int return_code = sys_config_unset(req->p.cmd_cfg_erase_req.configuration_tag);
 
         switch (return_code)
@@ -275,10 +302,10 @@ void cfg_erase_req(cmd_t * req, uint16_t size)
                 resp->p.cmd_generic_resp.error_code = CMD_ERROR_UNKNOWN;
                 break;
         }
-
-        config_if_send_priv((uint8_t *) resp, CMD_SIZE(cmd_generic_resp_t));
     }
-    */
+
+    buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_generic_resp_t));
+    config_if_send_priv(&config_if_send_buffer); // Send confirmation
 }
 
 void cfg_protect_req(cmd_t * req, uint16_t size)
@@ -502,8 +529,7 @@ int config_if_event_handler(config_if_event_t * event)
 
         case CONFIG_IF_EVENT_RECEIVE_COMPLETE:
             DEBUG_PR_TRACE("CONFIG_IF_EVENT_RECEIVE_COMPLETE, SIZE: %lu", event->receive.size);
-            config_if_rx_pending = true; // Indicate that there is a packet in the RX buffer that needs processing
-            config_if_rx_size = event->receive.size;// Store the size of the packet
+            buffer_write_advance(&config_if_receive_buffer, event->receive.size); // Store it in the buffer
             break;
 
         case CONFIG_IF_EVENT_CONNECTED:
@@ -514,9 +540,8 @@ int config_if_event_handler(config_if_event_t * event)
             DEBUG_PR_TRACE("CONFIG_IF_EVENT_DISCONNECTED");
             // Clear all pending transmissions/receptions
             buffer_reset(&config_if_send_buffer);
+            buffer_reset(&config_if_receive_buffer);
             config_if_tx_pending = false;
-            config_if_rx_pending = false;
-            config_if_rx_size = 0;
             syshal_gps_bridging = false;
             break;
 
@@ -527,120 +552,123 @@ int config_if_event_handler(config_if_event_t * event)
 
 static void handle_config_if_requests(void)
 {
-    // Process any pending event outside of an interrupt
-    if (config_if_rx_pending)
+
+    cmd_t * req;
+    uint32_t length = buffer_read(&config_if_receive_buffer, (uintptr_t *)&req);
+    if (length) // Is there data waiting to be received?
     {
 
-        config_if_rx_pending = false; // Mark this message as received. This maybe a bit preemptive but it
-        // is assumed the request handlers will receive the message appropriately
+        // Then process any pending event here, outside of an interrupt
 
-        cmd_t * req = (cmd_t *) &rx_buffer[0]; // Overlay command structure on receive buffer
+        // Mark this message as received. This maybe a bit preemptive but it
+        // is assumed the request handlers will handle the message appropriately
+        buffer_read_advance(&config_if_receive_buffer, length);
 
         switch (req->h.cmd)
         {
             case CMD_CFG_READ_REQ:
                 DEBUG_PR_INFO("CFG_READ_REQ");
-                cfg_read_req(req, config_if_rx_size);
+                cfg_read_req(req, length);
                 break;
 
             case CMD_CFG_WRITE_REQ:
                 DEBUG_PR_INFO("CFG_WRITE_REQ");
-                cfg_write_req(req, config_if_rx_size);
+                cfg_write_req(req, length);
                 break;
 
             case CMD_CFG_SAVE_REQ:
                 DEBUG_PR_INFO("CFG_SAVE_REQ");
-                cfg_save_req(req, config_if_rx_size);
+                cfg_save_req(req, length);
                 break;
 
             case CMD_CFG_RESTORE_REQ:
                 DEBUG_PR_INFO("CFG_RESTORE_REQ");
-                cfg_restore_req(req, config_if_rx_size);
+                cfg_restore_req(req, length);
                 break;
 
             case CMD_CFG_ERASE_REQ:
                 DEBUG_PR_INFO("CFG_ERASE_REQ");
-                cfg_erase_req(req, config_if_rx_size);
+                cfg_erase_req(req, length);
                 break;
 
             case CMD_CFG_PROTECT_REQ:
                 DEBUG_PR_INFO("CFG_PROTECT_REQ");
-                cfg_protect_req(req, config_if_rx_size);
+                cfg_protect_req(req, length);
                 break;
 
             case CMD_CFG_UNPROTECT_REQ:
                 DEBUG_PR_INFO("CFG_UNPROTECT_REQ");
-                cfg_unprotect_req(req, config_if_rx_size);
+                cfg_unprotect_req(req, length);
                 break;
 
             case CMD_GPS_WRITE_REQ:
                 DEBUG_PR_INFO("GPS_WRITE_REQ");
-                gps_write_req(req, config_if_rx_size);
+                gps_write_req(req, length);
                 break;
 
             case CMD_GPS_READ_REQ:
                 DEBUG_PR_INFO("GPS_READ_REQ");
-                gps_read_req(req, config_if_rx_size);
+                gps_read_req(req, length);
                 break;
 
             case CMD_GPS_CONFIG_REQ:
                 DEBUG_PR_INFO("GPS_CONFIG_REQ");
-                gps_config_req(req, config_if_rx_size);
+                gps_config_req(req, length);
                 break;
 
             case CMD_BLE_CONFIG_REQ:
                 DEBUG_PR_INFO("BLE_CONFIG_REQ");
-                ble_config_req(req, config_if_rx_size);
+                ble_config_req(req, length);
                 break;
 
             case CMD_BLE_WRITE_REQ:
                 DEBUG_PR_INFO("BLE_WRITE_REQ");
-                ble_write_req(req, config_if_rx_size);
+                ble_write_req(req, length);
                 break;
 
             case CMD_BLE_READ_REQ:
                 DEBUG_PR_INFO("BLE_READ_REQ");
-                ble_read_req(req, config_if_rx_size);
+                ble_read_req(req, length);
                 break;
 
             case CMD_STATUS_REQ:
                 DEBUG_PR_INFO("STATUS_REQ");
-                status_req(req, config_if_rx_size);
+                status_req(req, length);
                 break;
 
             case CMD_FW_SEND_IMAGE_REQ:
                 DEBUG_PR_INFO("FW_SEND_IMAGE_REQ");
-                fw_send_image_req(req, config_if_rx_size);
+                fw_send_image_req(req, length);
                 break;
 
             case CMD_FW_APPLY_IMAGE_REQ:
                 DEBUG_PR_INFO("FW_APPLY_IMAGE_REQ");
-                fw_apply_image_req(req, config_if_rx_size);
+                fw_apply_image_req(req, length);
                 break;
 
             case CMD_RESET_REQ:
                 DEBUG_PR_INFO("RESET_REQ");
-                reset_req(req, config_if_rx_size);
+                reset_req(req, length);
                 break;
 
             case CMD_BATTERY_STATUS_REQ:
                 DEBUG_PR_INFO("BATTERY_STATUS_REQ");
-                battery_status_req(req, config_if_rx_size);
+                battery_status_req(req, length);
                 break;
 
             case CMD_LOG_CREATE_REQ:
                 DEBUG_PR_INFO("LOG_CREATE_REQ");
-                log_create_req(req, config_if_rx_size);
+                log_create_req(req, length);
                 break;
 
             case CMD_LOG_ERASE_REQ:
                 DEBUG_PR_INFO("LOG_ERASE_REQ");
-                log_erase_req(req, config_if_rx_size);
+                log_erase_req(req, length);
                 break;
 
             case CMD_LOG_READ_REQ:
                 DEBUG_PR_INFO("LOG_READ_REQ");
-                log_read_req(req, config_if_rx_size);
+                log_read_req(req, length);
                 break;
 
             default:
@@ -649,6 +677,14 @@ static void handle_config_if_requests(void)
                 break;
         }
 
+    }
+    else
+    {
+        // Queue receive
+        uint8_t * receive_buffer;
+        if (!buffer_write(&config_if_receive_buffer, (uintptr_t *)&receive_buffer))
+            Throw(EXCEPTION_RX_BUFFER_FULL);
+        config_if_receive(receive_buffer, SYSHAL_USB_PACKET_SIZE);
     }
 
 }
@@ -772,7 +808,7 @@ void standby_provisioning_needed_state()
     }
 
     // Queue a receive request
-    config_if_receive(rx_buffer, sizeof(rx_buffer));
+    //config_if_receive(rx_buffer, sizeof(rx_buffer));
 
     handle_config_if_requests();
 
@@ -819,7 +855,7 @@ void exception_handler(CEXCEPTION_T e)
     {
         case EXCEPTION_REQ_WRONG_SIZE:
             DEBUG_PR_ERROR("EXCEPTION_REQ_WRONG_SIZE");
-            config_if_rx_pending = false; // This req message is erroneous so ignore it
+            buffer_reset(&config_if_receive_buffer); // This req message is erroneous so ignore it
             break;
 
         case EXCEPTION_RESP_TX_PENDING:
