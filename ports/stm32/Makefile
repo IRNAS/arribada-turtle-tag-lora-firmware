@@ -31,6 +31,7 @@ BUILD_DIR = build
 ######################################
 # C sources
 C_SOURCES =  \
+$(CORE_DIR)/buffer/buffer.c \
 $(CORE_DIR)/cexception/cexception.c \
 $(CORE_DIR)/config_if/config_if.c \
 $(CORE_DIR)/debug/debug.c \
@@ -125,6 +126,7 @@ AS_INCLUDES =
 C_INCLUDES =  \
 -I$(CMSIS_DIR)/Device/ST/STM32F0xx/Include \
 -I$(CMSIS_DIR)/Include \
+-I$(CORE_DIR)/buffer \
 -I$(CORE_DIR)/cexception \
 -I$(CORE_DIR)/config \
 -I$(CORE_DIR)/config_if \

@@ -18,19 +18,20 @@
 
 #include <string.h>
 #include "bsp.h"
+#include "buffer.h"
 #include "cexception.h"
-#include "exceptions.h"
 #include "cmd.h"
 #include "config_if.h"
 #include "debug.h"
+#include "exceptions.h"
 #include "sm.h"
 #include "sys_config.h"
+#include "syshal_batt.h"
 #include "syshal_gpio.h"
+#include "syshal_gps.h"
 #include "syshal_i2c.h"
 #include "syshal_spi.h"
 #include "syshal_uart.h"
-#include "syshal_batt.h"
-#include "syshal_gps.h"
 #include "syshal_usb.h"
 #include "version.h"
 
@@ -52,12 +53,6 @@ static const char * sm_state_str[] =
 
 static sm_state_t state = SM_STATE_BOOT; // Default starting state
 
-static uint8_t tx_buffer_1[SYSHAL_USB_PACKET_SIZE]; // TX buffer 1
-static uint8_t tx_buffer_2[SYSHAL_USB_PACKET_SIZE]; // TX buffer 2 (two used for double buffering)
-
-static uint8_t * tx_buffer_sending = &tx_buffer_1[0]; // Pointer to buffer currently being transmitted
-static uint8_t * tx_buffer_working = &tx_buffer_2[0]; // Pointer to TX backbuffer
-
 static uint8_t rx_buffer[SYSHAL_USB_PACKET_SIZE]; // RX buffer used by config_if
 
 static volatile bool config_if_tx_pending = false; // Is a transmit pending
@@ -65,46 +60,46 @@ static volatile bool config_if_rx_pending = false; // Is a receive pending
 static volatile uint16_t config_if_rx_size; // What was the size of the last receive in bytes
 static bool syshal_gps_bridging = false; // Is a transmit pending
 
+// Buffers
+static buffer_t config_if_send_buffer;
+//static buffer_t config_if_receive_buffer;
+
+static uint8_t config_if_send_buffer_pool[SYSHAL_USB_PACKET_SIZE * 2];
+//static uint8_t config_if_receive_buffer_pool[SYSHAL_USB_PACKET_SIZE];
+
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////// PROTOTYPES //////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
 
 ////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////// STARTUP ////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
+static void setup_buffers(void)
+{
+    buffer_init_policy(pool, &config_if_send_buffer, (uintptr_t) &config_if_send_buffer_pool[0], sizeof(config_if_send_buffer_pool), 2);
+}
+
+////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////// HELPER FUNCTIONS ///////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-/**
- * @brief      Swaps the TX sending and worker buffers. This is used for double
- *             buffering to prevent unnecessary pauses in data transmission
- *
- * @warning    This should not be called when a transmission is currently taking
- *             place on the config_if interface
- */
-static void tx_buffer_swap_priv(void)
-{
-    if (tx_buffer_sending == &tx_buffer_1[0])
-    {
-        tx_buffer_sending = &tx_buffer_2[0];
-        tx_buffer_working = &tx_buffer_1[0];
-    }
-    else
-    {
-        tx_buffer_sending = &tx_buffer_1[0];
-        tx_buffer_working = &tx_buffer_2[0];
-    }
-}
-
-static void config_if_send_priv(uint8_t * data, uint32_t size)
+static void config_if_send_priv(buffer_t * buffer)
 {
     while (config_if_tx_pending) // FIXME: implement timeout
     {} // Wait for previous transmission to be sent
 
-    DEBUG_PR_TRACE("Sending packet of size %lu", size);
+    uintptr_t addr;
+    uint32_t length = buffer_read(buffer, &addr);
 
-    config_if_tx_pending = true;
-    config_if_send(data, size); // Send response
-    tx_buffer_swap_priv(); // Swap buffers so the working buffer is always free
+    if (length)
+    {
+        DEBUG_PR_TRACE("Sending packet of size %lu", length);
+
+        config_if_tx_pending = true;
+        config_if_send((uint8_t *) addr, length); // Send response
+    }
 }
 
 static void config_if_receive_blocking(uint8_t * data, uint32_t size)
@@ -123,11 +118,14 @@ static void config_if_receive_blocking(uint8_t * data, uint32_t size)
 
 void cfg_read_req(cmd_t * req, uint16_t size)
 {
+
     // Check request size is correct
     if (CMD_SIZE(cmd_cfg_read_req_t) != size)
         Throw(EXCEPTION_REQ_WRONG_SIZE);
 
-    cmd_t * resp = (cmd_t *) tx_buffer_working;
+    cmd_t * resp;
+    if (!buffer_write(&config_if_send_buffer, (uintptr_t *)&resp))
+        Throw(EXCEPTION_TX_BUFFER_FULL);
     CMD_SET_HDR(resp, CMD_CFG_READ_RESP);
 
     if (CFG_READ_REQ_READ_ALL == req->p.cmd_cfg_read_req.configuration_tag) // Read all configuration tags
@@ -137,10 +135,10 @@ void cfg_read_req(cmd_t * req, uint16_t size)
     }
     else // Read just one tag
     {
-        uint8_t data[SYS_CONFIG_MAX_CONFIGURATION_SIZE];
+        uint8_t tag_value[SYS_CONFIG_MAX_CONFIGURATION_SIZE];
         uint16_t tag = req->p.cmd_cfg_read_req.configuration_tag;
 
-        int tag_length = sys_config_get(tag, &data[0]);
+        int tag_length = sys_config_get(tag, &tag_value[0]);
 
         resp->p.cmd_cfg_read_resp.length = 0;
 
@@ -159,18 +157,25 @@ void cfg_read_req(cmd_t * req, uint16_t size)
         else // Tag is valid
         {
             resp->p.cmd_cfg_read_resp.error_code = CMD_NO_ERROR;
-            resp->p.cmd_cfg_read_resp.length = sizeof(tag) + tag_length; // We will be sending a tag along with its data
+            resp->p.cmd_cfg_read_resp.length = sizeof(tag) + tag_length; // We will be sending a tag along with its value
         }
 
-        config_if_send_priv((uint8_t *) resp, CMD_SIZE(cmd_cfg_read_resp_t)); // Send response
+        buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_cfg_read_resp_t));
+        config_if_send_priv(&config_if_send_buffer); // Send response
 
         if (tag_length >= 0) // If there was no error
         {
-            // Send the configuration tag's data
-            memcpy(&tx_buffer_working[0], &tag, sizeof(tag)); // Start of packet is the configuration tag itself
-            memcpy(&tx_buffer_working[sizeof(tag)], &data[0], tag_length);  // And now for the data
 
-            config_if_send_priv(tx_buffer_working, resp->p.cmd_cfg_read_resp.length); // Send data
+            uint8_t * data_buffer;
+            if (!buffer_write(&config_if_send_buffer, (uintptr_t *)&data_buffer))
+                Throw(EXCEPTION_TX_BUFFER_FULL);
+
+            // Send the configuration tag's value
+            memcpy(&data_buffer[0], &tag, sizeof(tag)); // Start of packet is the configuration tag itself
+            memcpy(&data_buffer[sizeof(tag)], &tag_value[0], tag_length);  // And now for the tag_value
+
+            buffer_write_advance(&config_if_send_buffer, resp->p.cmd_cfg_read_resp.length);
+            config_if_send_priv(&config_if_send_buffer); // Send tag_value
         }
 
     }
@@ -179,6 +184,7 @@ void cfg_read_req(cmd_t * req, uint16_t size)
 
 void cfg_write_req(cmd_t * req, uint16_t size)
 {
+
     // Check request size is correct
     if (CMD_SIZE(cmd_cfg_write_req_t) != size)
         Throw(EXCEPTION_REQ_WRONG_SIZE);
@@ -189,10 +195,15 @@ void cfg_write_req(cmd_t * req, uint16_t size)
     if (!length)
         return;
 
-    cmd_t * resp = (cmd_t *) tx_buffer_working;
+    cmd_t * resp;
+    if (!buffer_write(&config_if_send_buffer, (uintptr_t *)&resp))
+        Throw(EXCEPTION_TX_BUFFER_FULL);
     CMD_SET_HDR(resp, CMD_GENERIC_RESP);
+
     resp->p.cmd_cfg_read_resp.error_code = CMD_NO_ERROR;
-    config_if_send_priv((uint8_t *) resp, CMD_SIZE(cmd_generic_resp_t)); // Send response
+
+    buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_generic_resp_t));
+    config_if_send_priv(&config_if_send_buffer); // Send response
 
     if (CFG_READ_REQ_READ_ALL == length) // Read all configuration tags
     {
@@ -209,9 +220,15 @@ void cfg_write_req(cmd_t * req, uint16_t size)
     }
 
     // Return CFG_WRITE_CNF to mark completion of transfer
+    if (!buffer_write(&config_if_send_buffer, (uintptr_t *)&resp))
+        Throw(EXCEPTION_TX_BUFFER_FULL);
     CMD_SET_HDR(resp, CMD_CFG_WRITE_CNF);
+
     resp->p.cmd_cfg_write_cnf.error_code = CMD_NO_ERROR;
-    config_if_send_priv((uint8_t *) resp, CMD_SIZE(cmd_cfg_write_cnf_t)); // Send confirmation
+
+    buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_cfg_write_cnf_t));
+    config_if_send_priv(&config_if_send_buffer); // Send confirmation
+
 }
 
 void cfg_save_req(cmd_t * req, uint16_t size)
@@ -226,6 +243,7 @@ void cfg_restore_req(cmd_t * req, uint16_t size)
 
 void cfg_erase_req(cmd_t * req, uint16_t size)
 {
+    /*
     // Check request size is correct
     if (CMD_SIZE(cmd_cfg_erase_req_t) != size)
         Throw(EXCEPTION_REQ_WRONG_SIZE);
@@ -260,6 +278,7 @@ void cfg_erase_req(cmd_t * req, uint16_t size)
 
         config_if_send_priv((uint8_t *) resp, CMD_SIZE(cmd_generic_resp_t));
     }
+    */
 }
 
 void cfg_protect_req(cmd_t * req, uint16_t size)
@@ -323,7 +342,7 @@ void gps_read_req(cmd_t * req, uint16_t size)
 
 void gps_config_req(cmd_t * req, uint16_t size)
 {
-
+    /*
     // Check request size is correct
     if (CMD_SIZE(cmd_gps_config_req_t) != size)
         Throw(EXCEPTION_REQ_WRONG_SIZE);
@@ -337,7 +356,7 @@ void gps_config_req(cmd_t * req, uint16_t size)
     resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
 
     config_if_send_priv((uint8_t *) resp, CMD_SIZE(cmd_generic_resp_t));
-
+    */
 }
 
 void ble_config_req(cmd_t * req, uint16_t size)
@@ -393,14 +412,17 @@ void reset_req(cmd_t * req, uint16_t size)
         Throw(EXCEPTION_REQ_WRONG_SIZE);
 
     // Generate and send response
-    cmd_t * resp = (cmd_t *) tx_buffer_working;
+    cmd_t * resp;
+    if (!buffer_write(&config_if_send_buffer, (uintptr_t *)&resp))
+        Throw(EXCEPTION_TX_BUFFER_FULL);
     CMD_SET_HDR(resp, CMD_GENERIC_RESP);
 
     resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
 
     //DEBUG_PR_INFO("A");
 
-    config_if_send_priv((uint8_t *) resp, CMD_SIZE(cmd_generic_resp_t));
+    buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_generic_resp_t));
+    config_if_send_priv(&config_if_send_buffer);
 
     //DEBUG_PR_INFO("B");
 
@@ -474,6 +496,7 @@ int config_if_event_handler(config_if_event_t * event)
 
         case CONFIG_IF_EVENT_SEND_COMPLETE:
             DEBUG_PR_TRACE("CONFIG_IF_EVENT_SEND_COMPLETE");
+            buffer_read_advance(&config_if_send_buffer, event->send.size); // Remove it from the buffer
             config_if_tx_pending = false;
             break;
 
@@ -490,6 +513,7 @@ int config_if_event_handler(config_if_event_t * event)
         case CONFIG_IF_EVENT_DISCONNECTED:
             DEBUG_PR_TRACE("CONFIG_IF_EVENT_DISCONNECTED");
             // Clear all pending transmissions/receptions
+            buffer_reset(&config_if_send_buffer);
             config_if_tx_pending = false;
             config_if_rx_pending = false;
             config_if_rx_size = 0;
@@ -508,7 +532,7 @@ static void handle_config_if_requests(void)
     {
 
         config_if_rx_pending = false; // Mark this message as received. This maybe a bit preemptive but it
-                                      // is assumed the request handlers will receive the message appropriately
+        // is assumed the request handlers will receive the message appropriately
 
         cmd_t * req = (cmd_t *) &rx_buffer[0]; // Overlay command structure on receive buffer
 
@@ -635,6 +659,9 @@ static void handle_config_if_requests(void)
 
 void boot_state(void)
 {
+
+    setup_buffers();
+
     // Initialize all configured peripherals
     syshal_gpio_init(GPIO_LED3);
     syshal_gpio_init(GPIO_LED4);
@@ -799,6 +826,10 @@ void exception_handler(CEXCEPTION_T e)
             // We're already transmitted a response
             // This is thrown to avoid overwritting the TX buffer before it is sent
             DEBUG_PR_ERROR("EXCEPTION_RESP_TX_PENDING");
+            break;
+
+        case EXCEPTION_TX_BUFFER_FULL:
+            DEBUG_PR_ERROR("EXCEPTION_TX_BUFFER_FULL");
             break;
 
         default:
