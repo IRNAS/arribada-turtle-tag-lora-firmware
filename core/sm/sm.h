@@ -19,8 +19,7 @@
 #ifndef _SM_H_
 #define _SM_H_
 
-// Global Defines
-typedef enum sm_state_e
+typedef enum
 {
     SM_STATE_BOOT,
     SM_STATE_STANDBY_BATTERY_CHARGING,
@@ -32,15 +31,8 @@ typedef enum sm_state_e
     SM_STATE_OPERATIONAL,
 } sm_state_t;
 
-// Prototypes //
-sm_state_t sm_get_state(void);          // Returns the current state
-void sm_set_state(sm_state_t state);    // Sets the state
+sm_state_t sm_get_state(void);
+void sm_set_state(sm_state_t s);
 void sm_iterate(void);
-
-#define PARSE_RX_NO_ERROR                    (0)
-#define PARSE_RX_ERROR_INSUFFICIENT_BYTES   (-1)
-#define PARSE_RX_ERROR_MISSING_SYNC         (-2)
-#define PARSE_RX_ERROR_MSG_TOO_BIG          (-3)
-#define PARSE_RX_ERROR_MSG_PENDING          (-4)
 
 #endif /* _SM_H_ */

@@ -68,7 +68,7 @@ static const uint16_t sys_config_lookup_priv[SYS_CONFIG_TAG_TOTAL_NUMBER] =
  * @param[in]  tag   The configuration tag
  * @param[out] data  The pointer to the tags data
  *
- * @return     The length of the given configuration tag in bytes
+ * @return     The length of the given configuration tag
  * @return     SYS_CONFIG_ERROR_INVALID_TAG if the given tag is invalid
  */
 int sys_config_get_data_ptr_priv(uint16_t tag, void ** data)
@@ -260,17 +260,19 @@ int sys_config_get_data_ptr_priv(uint16_t tag, void ** data)
 }
 
 /**
- * @brief      Gets the size of the data in the given configuration tag
+ * @brief      Get data size of the given configuration tag
  *
  * @param[in]  tag   The configuration tag
  *
- * @return     The length of the given configuration tag in bytes
+ * @return     Length of data in bytes on success
  * @return     SYS_CONFIG_ERROR_INVALID_TAG if the given tag is invalid
  */
 int sys_config_size(uint16_t tag)
 {
-    void dummy_ptr;
-    return sys_config_get_data_ptr_priv(tag, &dummy_ptr);
+    void * data = NULL;
+    int return_code = sys_config_get_data_ptr_priv(tag, &data);
+
+    return return_code;
 }
 
 /**
@@ -336,13 +338,13 @@ int sys_config_unset(uint16_t tag)
  * @brief      Gets the value in the given configuration tag
  *
  * @param[in]  tag     The configuration tag
- * @param[out] value   The buffer to retrieve the value into
+ * @param[out] value   The pointer to the configuration data
  *
  * @return     The length of the data read on success
  * @return     SYS_CONFIG_ERROR_INVALID_TAG if the given tag is invalid
  * @return     SYS_CONFIG_ERROR_TAG_NOT_SET if the tag hasn't been set
  */
-int sys_config_get(uint16_t tag, void * value)
+int sys_config_get(uint16_t tag, void ** value)
 {
     // Get the address of the configuration data in RAM
     void * data = NULL;
@@ -355,13 +357,7 @@ int sys_config_get(uint16_t tag, void * value)
     if (false == ((sys_config_hdr_t *)data)->set)
         return SYS_CONFIG_ERROR_TAG_NOT_SET;
 
-    // Copy the configuration data back
-#pragma GCC diagnostic push // Suppress data = NULL warning as this cannot happen as the function returns if that is the case
-#pragma GCC diagnostic ignored "-Wnonnull"
-    if (NULL != value)
-        memcpy(value, data, return_code);
-#pragma GCC diagnostic pop
-
+    (*value) = data;
     return return_code;
 }
 
@@ -390,29 +386,22 @@ bool sys_config_is_valid(uint16_t tag)
  * @warning    This function assumes the configuration tag given is valid and
  *             will produce spurious output if it is not
  *
- * @param[in]  tag         The configuration tag
+ * @param[in]  tag         Pointer to tag value to populate
  * @param      last_index  Private variable for maintaining state. For the first
  *                         call pass a pointer to a uint32_t set to 0
  *
- * @return     The next tag on success
  * @return     SYS_CONFIG_ERROR_NO_MORE_TAGS if there are no more tags after this
  *             one
  */
-int sys_config_iterate(uint16_t tag, uint16_t * last_index)
+int sys_config_iterate(uint16_t * tag, uint16_t * last_index)
 {
-    // Find tag in lookup table
-    for (; (*last_index) < SYS_CONFIG_TAG_TOTAL_NUMBER; ++(*last_index))
-    {
-        if (tag == sys_config_lookup_priv[(*last_index)])
-            break;
-    }
-
-    (*last_index)++; // Increment to the next tag
-
-    // If this tag is the last one then there are no more tags after it
-    if (SYS_CONFIG_TAG_TOTAL_NUMBER == (*last_index))
+    uint16_t idx = *last_index;
+    if (idx >= SYS_CONFIG_TAG_TOTAL_NUMBER)
         return SYS_CONFIG_ERROR_NO_MORE_TAGS;
 
     // Return the next tag in the list
-    return sys_config_lookup_priv[(*last_index)];
+    (*last_index)++;
+    *tag = sys_config_lookup_priv[idx];
+
+    return SYS_CONFIG_NO_ERROR;
 }
