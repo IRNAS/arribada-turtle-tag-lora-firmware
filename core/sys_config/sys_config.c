@@ -390,6 +390,7 @@ bool sys_config_is_valid(uint16_t tag)
  * @param      last_index  Private variable for maintaining state. For the first
  *                         call pass a pointer to a uint32_t set to 0
  *
+ * @return     SYS_CONFIG_NO_ERROR on success
  * @return     SYS_CONFIG_ERROR_NO_MORE_TAGS if there are no more tags after this
  *             one
  */

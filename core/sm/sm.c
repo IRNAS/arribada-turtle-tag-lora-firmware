@@ -1005,32 +1005,26 @@ void boot_state(void)
 
     // Otherwise, if no configuration file is present or the current configuration is invalid then the system shall transition to the PROVISIONING_NEEDED sub-state.
 
-    /*
     // Check that all configuration tags are set
-    uint16_t last_index = 0;
-    int tag = 0; // The first tag - WARN: this relies on there being a tag ID of 0x0000
-    int return_code;
     bool tag_not_set = false;
-    do
+    int tag = 0;
+    uint16_t last_index = 0;
+
+    while (!sys_config_iterate(&tag, &last_index))
     {
-        return_code = sys_config_get(tag, NULL);
+        int return_code = sys_config_get(tag, NULL);
+
         if (SYS_CONFIG_ERROR_TAG_NOT_SET == return_code)
         {
             DEBUG_PR_WARN("Tag 0x%04X not set", tag);
             tag_not_set = true;
         }
-        tag = sys_config_iterate(tag, &last_index);
     }
-    while (SYS_CONFIG_ERROR_NO_MORE_TAGS != tag);
 
     if (tag_not_set)
-        sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED);
+        sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED); // Not all tags are set, we need provisioning
     else
-        sm_set_state(SM_STATE_OPERATIONAL);
-    */
-
-
-    sm_set_state(SM_STATE_PROVISIONING);
+        sm_set_state(SM_STATE_OPERATIONAL); // All systems go for standard operation
 
 }
 
@@ -1067,10 +1061,7 @@ void standby_provisioning_needed_state()
         blinkTimer = syshal_time_get_ticks_ms();
     }
 
-    // Queue a receive request
-    //config_if_receive(rx_buffer, sizeof(rx_buffer));
-
-    //parse_rx_buffer();
+    sm_set_state(SM_STATE_PROVISIONING); // FIXME: Temporary state change as USB detection is not implemented
 
     // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
     //if (syshal_batt_charging())
