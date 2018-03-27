@@ -19,6 +19,12 @@
 #ifndef _SYSHAL_PRESSURE_H_
 #define _SYSHAL_PRESSURE_H_
 
+// Constants
+#define SYSHAL_PRESSURE_NO_ERROR               ( 0)
+#define SYSHAL_PRESSURE_ERROR_CRC_MISMATCH     (-1)
 
+int syshal_pressure_init(void);
+int syshal_pressure_term(void);
+int syshal_pressure_get(void);
 
 #endif /* _SYSHAL_PRESSURE_H_ */
