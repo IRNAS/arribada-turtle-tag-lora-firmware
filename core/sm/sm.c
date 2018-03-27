@@ -59,11 +59,12 @@ static const char * sm_state_str[] =
 
 typedef enum
 {
-    SM_STATE_MESSAGE_IDLE,
-    SM_STATE_MESSAGE_CFG_READ_NEXT,
-    SM_STATE_MESSAGE_CFG_WRITE_NEXT,
-} sm_state_message_t;
-static sm_state_message_t message_state = SM_STATE_MESSAGE_IDLE;
+    SM_MESSAGE_STATE_IDLE,
+    SM_MESSAGE_STATE_CFG_READ_NEXT,
+    SM_MESSAGE_STATE_CFG_WRITE_NEXT,
+    SM_MESSAGE_STATE_CFG_WRITE_ERROR,
+} sm_message_state_t;
+static sm_message_state_t message_state = SM_MESSAGE_STATE_IDLE;
 
 // State specific context
 typedef struct
@@ -73,6 +74,7 @@ typedef struct
         struct
         {
             uint32_t length;
+            uint8_t error_code;
         } cfg_write;
 
         struct
@@ -122,7 +124,7 @@ static void setup_buffers(void)
 static void config_if_send_priv(volatile buffer_t * buffer)
 {
     if (config_if_tx_pending)
-        Throw(EXCEPTION_TX_BUFFER_FULL);
+        Throw(EXCEPTION_TX_BUSY);
 
     uintptr_t addr;
     uint32_t length = buffer_read(buffer, &addr);
@@ -291,7 +293,7 @@ void cfg_read_req(cmd_t * req, uint16_t size)
     if (resp->p.cmd_cfg_read_resp.length > 0)
     {
         /* Another buffer must follow the initial response */
-        message_state = SM_STATE_MESSAGE_CFG_READ_NEXT;
+        message_state = SM_MESSAGE_STATE_CFG_READ_NEXT;
     }
 }
 
@@ -316,7 +318,7 @@ void cfg_read_next_state(void)
     }
     else
     {
-        message_state = SM_STATE_MESSAGE_IDLE;
+        message_state = SM_MESSAGE_STATE_IDLE;
     }
 }
 
@@ -324,7 +326,7 @@ void cfg_read_next_state(void)
 /////////////////////////////////// CFG_WRITE //////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-void cfg_write_req(cmd_t * req, uint16_t size)
+static void cfg_write_req(cmd_t * req, uint16_t size)
 {
     // Check request size is correct
     if (CMD_SIZE(cmd_cfg_write_req_t) != size)
@@ -347,10 +349,10 @@ void cfg_write_req(cmd_t * req, uint16_t size)
 
     config_if_receive_priv(); // Queue a receive
 
-    message_state = SM_STATE_MESSAGE_CFG_WRITE_NEXT;
+    message_state = SM_MESSAGE_STATE_CFG_WRITE_NEXT;
 }
 
-void cfg_write_next_state(void)
+static void cfg_write_next_state(void)
 {
     uint8_t * read_buffer;
     volatile uint32_t length = buffer_read(&config_if_receive_buffer, (uintptr_t *)&read_buffer);
@@ -377,7 +379,12 @@ void cfg_write_next_state(void)
 
         // Check tag is valid
         if (tag_size < 0)
+        {
+            // If it is not we should exit out and return an error
+            sm_context.cfg_write.error_code = CMD_ERROR_INVALID_CONFIG_TAG;
+            message_state = SM_MESSAGE_STATE_CFG_WRITE_ERROR;
             Throw(EXCEPTION_BAD_SYS_CONFIG_ERROR_CONDITION);
+        }
 
         int ret = sys_config_set(tag, &read_buffer[buffer_offset], tag_size); // Set tag value
 
@@ -410,26 +417,41 @@ void cfg_write_next_state(void)
         buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_cfg_write_cnf_t));
         config_if_send_priv(&config_if_send_buffer); // Send response
 
-        message_state = SM_STATE_MESSAGE_IDLE;
+        message_state = SM_MESSAGE_STATE_IDLE;
     }
 
+}
+
+static void cfg_write_error_state(void)
+{
+    // Return an error code
+    cmd_t * resp;
+    if (!buffer_write(&config_if_send_buffer, (uintptr_t *)&resp))
+        Throw(EXCEPTION_TX_BUFFER_FULL);
+    CMD_SET_HDR(resp, CMD_CFG_WRITE_CNF);
+    resp->p.cmd_cfg_write_cnf.error_code = sm_context.cfg_write.error_code;
+
+    buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_cfg_write_cnf_t));
+    config_if_send_priv(&config_if_send_buffer); // Send response
+
+    message_state = SM_MESSAGE_STATE_IDLE;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////// CFG_SAVE ///////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-void cfg_save_req(cmd_t * req, uint16_t size)
+static void cfg_save_req(cmd_t * req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void cfg_restore_req(cmd_t * req, uint16_t size)
+static void cfg_restore_req(cmd_t * req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void cfg_erase_req(cmd_t * req, uint16_t size)
+static void cfg_erase_req(cmd_t * req, uint16_t size)
 {
     // Check request size is correct
     if (CMD_SIZE(cmd_cfg_erase_req_t) != size)
@@ -477,17 +499,17 @@ void cfg_erase_req(cmd_t * req, uint16_t size)
     config_if_send_priv(&config_if_send_buffer); // Send confirmation
 }
 
-void cfg_protect_req(cmd_t * req, uint16_t size)
+static void cfg_protect_req(cmd_t * req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void cfg_unprotect_req(cmd_t * req, uint16_t size)
+static void cfg_unprotect_req(cmd_t * req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void gps_write_req(cmd_t * req, uint16_t size)
+static void gps_write_req(cmd_t * req, uint16_t size)
 {
 //    // Check request size is correct
 //    if (CMD_SIZE(cmd_gps_write_req_t) != size)
@@ -520,7 +542,7 @@ void gps_write_req(cmd_t * req, uint16_t size)
 //    config_if_send_priv((uint8_t *) resp, CMD_SIZE(cmd_generic_resp_t));
 }
 
-void gps_read_req(cmd_t * req, uint16_t size)
+static void gps_read_req(cmd_t * req, uint16_t size)
 {
 //    // Check request size is correct
 //    if (CMD_SIZE(cmd_gps_read_req_t) != size)
@@ -536,7 +558,7 @@ void gps_read_req(cmd_t * req, uint16_t size)
 //    config_if_send_priv((uint8_t *) resp, CMD_SIZE(cmd_gps_read_resp_t));
 }
 
-void gps_config_req(cmd_t * req, uint16_t size)
+static void gps_config_req(cmd_t * req, uint16_t size)
 {
     /*
     // Check request size is correct
@@ -555,22 +577,22 @@ void gps_config_req(cmd_t * req, uint16_t size)
     */
 }
 
-void ble_config_req(cmd_t * req, uint16_t size)
+static void ble_config_req(cmd_t * req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void ble_write_req(cmd_t * req, uint16_t size)
+static void ble_write_req(cmd_t * req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void ble_read_req(cmd_t * req, uint16_t size)
+static void ble_read_req(cmd_t * req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void status_req(cmd_t * req, uint16_t size)
+static void status_req(cmd_t * req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 
@@ -586,22 +608,17 @@ void status_req(cmd_t * req, uint16_t size)
     */
 }
 
-void fw_send_image_req(cmd_t * req, uint16_t size)
+static void fw_send_image_req(cmd_t * req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void fw_send_image_complete_cnf(cmd_t * req, uint16_t size)
+static void fw_apply_image_req(cmd_t * req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void fw_apply_image_req(cmd_t * req, uint16_t size)
-{
-    DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
-}
-
-void reset_req(cmd_t * req, uint16_t size)
+static void reset_req(cmd_t * req, uint16_t size)
 {
     // Check request size is correct
     if (CMD_SIZE(cmd_reset_req_t) != size)
@@ -630,7 +647,7 @@ void reset_req(cmd_t * req, uint16_t size)
     for (;;) {}
 }
 
-void battery_status_req(cmd_t * req, uint16_t size)
+static void battery_status_req(cmd_t * req, uint16_t size)
 {
 //    // Check request size is correct
 //    if (size != CMD_SIZE_HDR)
@@ -659,17 +676,17 @@ void battery_status_req(cmd_t * req, uint16_t size)
 //    config_if_send_priv((uint8_t *) resp, CMD_SIZE(cmd_battery_status_resp_t));
 }
 
-void log_create_req(cmd_t * req, uint16_t size)
+static void log_create_req(cmd_t * req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void log_erase_req(cmd_t * req, uint16_t size)
+static void log_erase_req(cmd_t * req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
-void log_read_req(cmd_t * req, uint16_t size)
+static void log_read_req(cmd_t * req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
@@ -698,6 +715,7 @@ int config_if_event_handler(config_if_event_t * event)
 
         case CONFIG_IF_EVENT_CONNECTED:
             DEBUG_PR_TRACE("CONFIG_IF_EVENT_CONNECTED");
+            sm_set_state(SM_STATE_PROVISIONING);
             break;
 
         case CONFIG_IF_EVENT_DISCONNECTED:
@@ -854,7 +872,7 @@ void state_message_exception_handler(CEXCEPTION_T e)
     {
         case EXCEPTION_BAD_SYS_CONFIG_ERROR_CONDITION:
             DEBUG_PR_ERROR("EXCEPTION_BAD_SYS_CONFIG_ERROR_CONDITION");
-            message_state = SM_STATE_MESSAGE_IDLE;
+            message_state = SM_MESSAGE_STATE_IDLE;
             break;
 
         case EXCEPTION_REQ_WRONG_SIZE:
@@ -862,7 +880,11 @@ void state_message_exception_handler(CEXCEPTION_T e)
             break;
 
         case EXCEPTION_TX_BUFFER_FULL:
-            //DEBUG_PR_ERROR("EXCEPTION_TX_BUFFER_FULL");
+            DEBUG_PR_ERROR("EXCEPTION_TX_BUFFER_FULL");
+            break;
+
+        case EXCEPTION_TX_BUSY:
+            DEBUG_PR_ERROR("EXCEPTION_TX_BUSY");
             break;
 
         case EXCEPTION_RX_BUFFER_EMPTY:
@@ -875,7 +897,7 @@ void state_message_exception_handler(CEXCEPTION_T e)
 
         case EXCEPTION_PACKET_WRONG_SIZE:
             DEBUG_PR_ERROR("EXCEPTION_PACKET_WRONG_SIZE");
-            message_state = SM_STATE_MESSAGE_IDLE;
+            message_state = SM_MESSAGE_STATE_IDLE;
             break;
 
         default:
@@ -888,21 +910,29 @@ static void handle_config_if_messages(void)
 {
     CEXCEPTION_T e = CEXCEPTION_NONE;
 
+    // Don't allow the processing of anymore messages until we have a free transmit buffer
+    if (config_if_tx_pending)
+        return;
+
     Try
     {
 
         switch (message_state)
         {
-            case SM_STATE_MESSAGE_IDLE: // No message is currently being handled
+            case SM_MESSAGE_STATE_IDLE: // No message is currently being handled
                 message_idle_state();
                 break;
 
-            case SM_STATE_MESSAGE_CFG_READ_NEXT:
+            case SM_MESSAGE_STATE_CFG_READ_NEXT:
                 cfg_read_next_state();
                 break;
 
-            case SM_STATE_MESSAGE_CFG_WRITE_NEXT:
+            case SM_MESSAGE_STATE_CFG_WRITE_NEXT:
                 cfg_write_next_state();
+                break;
+
+            case SM_MESSAGE_STATE_CFG_WRITE_ERROR:
+                cfg_write_error_state();
                 break;
 
             default:
@@ -1000,7 +1030,7 @@ void boot_state(void)
     */
 
 
-    sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED);
+    sm_set_state(SM_STATE_PROVISIONING);
 
 }
 
@@ -1040,8 +1070,6 @@ void standby_provisioning_needed_state()
     // Queue a receive request
     //config_if_receive(rx_buffer, sizeof(rx_buffer));
 
-    handle_config_if_messages();
-
     //parse_rx_buffer();
 
     // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
@@ -1060,7 +1088,9 @@ void standby_trigger_pending_state()
 
 void provisioning_state(void)
 {
+    syshal_gpio_set_output_high(GPIO_LED4); // Indicate what state we're in
 
+    handle_config_if_messages();
 }
 
 void operational_state(void)
