@@ -19,6 +19,8 @@
 #ifndef _SM_H_
 #define _SM_H_
 
+#define SM_MESSAGE_INACTIVITY_TIMEOUT_MS (2000)
+
 typedef enum
 {
     SM_STATE_BOOT,

@@ -99,6 +99,14 @@ static volatile buffer_t config_if_send_buffer;
 static volatile buffer_t config_if_receive_buffer;
 static volatile uint8_t  config_if_send_buffer_pool[SYSHAL_USB_PACKET_SIZE * 2];
 static volatile uint8_t  config_if_receive_buffer_pool[SYSHAL_USB_PACKET_SIZE];
+static uint32_t          config_if_message_timeout;
+
+////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////// PROTOTYPES ///////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
+static void config_if_timeout_reset(void);
+static void message_set_state(sm_message_state_t s);
 
 ////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////// STARTUP ////////////////////////////////////
@@ -153,23 +161,6 @@ static void config_if_receive_priv(void)
             config_if_rx_queued = true;
     }
 }
-
-//static uint32_t config_if_receive_blocking(uint8_t ** data, uint32_t size)
-//{
-//    uint8_t * receive_buffer;
-//    if (!buffer_write(&config_if_receive_buffer, (uintptr_t *)&receive_buffer))
-//        Throw(EXCEPTION_RX_BUFFER_FULL);
-//
-//    config_if_receive(receive_buffer, size);
-//
-//    while (!buffer_occupancy(&config_if_receive_buffer))
-//    {}
-//
-//    uint32_t length = buffer_read(&config_if_receive_buffer, (uintptr_t *) data); // Wait for data to be received
-//    buffer_read_advance(&config_if_receive_buffer, length); // Remove this from the buffer
-//
-//    return length;
-//}
 
 ////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////// CFG_READ ///////////////////////////////////
@@ -293,7 +284,7 @@ void cfg_read_req(cmd_t * req, uint16_t size)
     if (resp->p.cmd_cfg_read_resp.length > 0)
     {
         /* Another buffer must follow the initial response */
-        message_state = SM_MESSAGE_STATE_CFG_READ_NEXT;
+        message_set_state(SM_MESSAGE_STATE_CFG_READ_NEXT);
     }
 }
 
@@ -318,7 +309,7 @@ void cfg_read_next_state(void)
     }
     else
     {
-        message_state = SM_MESSAGE_STATE_IDLE;
+        message_set_state(SM_MESSAGE_STATE_IDLE);
     }
 }
 
@@ -349,7 +340,7 @@ static void cfg_write_req(cmd_t * req, uint16_t size)
 
     config_if_receive_priv(); // Queue a receive
 
-    message_state = SM_MESSAGE_STATE_CFG_WRITE_NEXT;
+    message_set_state(SM_MESSAGE_STATE_CFG_WRITE_NEXT);
 }
 
 static void cfg_write_next_state(void)
@@ -382,7 +373,7 @@ static void cfg_write_next_state(void)
         {
             // If it is not we should exit out and return an error
             sm_context.cfg_write.error_code = CMD_ERROR_INVALID_CONFIG_TAG;
-            message_state = SM_MESSAGE_STATE_CFG_WRITE_ERROR;
+            message_set_state(SM_MESSAGE_STATE_CFG_WRITE_ERROR);
             Throw(EXCEPTION_BAD_SYS_CONFIG_ERROR_CONDITION);
         }
 
@@ -403,6 +394,7 @@ static void cfg_write_next_state(void)
     {
         // Queue a new receive
         config_if_receive_priv(); // Queue a receive
+        config_if_timeout_reset(); // Reset the message timeout counter
     }
     else
     {
@@ -417,7 +409,7 @@ static void cfg_write_next_state(void)
         buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_cfg_write_cnf_t));
         config_if_send_priv(&config_if_send_buffer); // Send response
 
-        message_state = SM_MESSAGE_STATE_IDLE;
+        message_set_state(SM_MESSAGE_STATE_IDLE);
     }
 
 }
@@ -434,7 +426,7 @@ static void cfg_write_error_state(void)
     buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_cfg_write_cnf_t));
     config_if_send_priv(&config_if_send_buffer); // Send response
 
-    message_state = SM_MESSAGE_STATE_IDLE;
+    message_set_state(SM_MESSAGE_STATE_IDLE);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -695,6 +687,14 @@ static void log_read_req(cmd_t * req, uint16_t size)
 ////////////////////////// MESSAGE STATE EXECUTION CODE ////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
+static void config_if_session_cleanup(void)
+{
+    buffer_reset(&config_if_send_buffer);
+    buffer_reset(&config_if_receive_buffer);
+    config_if_tx_pending = false;
+    config_if_rx_queued = false;
+}
+
 int config_if_event_handler(config_if_event_t * event)
 {
     // This is called from an interrupt so we'll keep it short
@@ -721,10 +721,7 @@ int config_if_event_handler(config_if_event_t * event)
         case CONFIG_IF_EVENT_DISCONNECTED:
             DEBUG_PR_TRACE("CONFIG_IF_EVENT_DISCONNECTED");
             // Clear all pending transmissions/receptions
-            buffer_reset(&config_if_send_buffer);
-            buffer_reset(&config_if_receive_buffer);
-            config_if_tx_pending = false;
-            config_if_rx_queued = false;
+            config_if_session_cleanup();
             syshal_gps_bridging = false;
             break;
 
@@ -872,7 +869,7 @@ void state_message_exception_handler(CEXCEPTION_T e)
     {
         case EXCEPTION_BAD_SYS_CONFIG_ERROR_CONDITION:
             DEBUG_PR_ERROR("EXCEPTION_BAD_SYS_CONFIG_ERROR_CONDITION");
-            message_state = SM_MESSAGE_STATE_IDLE;
+            message_set_state(SM_MESSAGE_STATE_IDLE);
             break;
 
         case EXCEPTION_REQ_WRONG_SIZE:
@@ -897,7 +894,7 @@ void state_message_exception_handler(CEXCEPTION_T e)
 
         case EXCEPTION_PACKET_WRONG_SIZE:
             DEBUG_PR_ERROR("EXCEPTION_PACKET_WRONG_SIZE");
-            message_state = SM_MESSAGE_STATE_IDLE;
+            message_set_state(SM_MESSAGE_STATE_IDLE);
             break;
 
         default:
@@ -906,9 +903,32 @@ void state_message_exception_handler(CEXCEPTION_T e)
     }
 }
 
+static inline void config_if_timeout_reset(void)
+{
+    config_if_message_timeout = syshal_time_get_ticks_ms();
+}
+
+static void message_set_state(sm_message_state_t s)
+{
+    config_if_timeout_reset();
+    message_state = s;
+}
+
 static void handle_config_if_messages(void)
 {
     CEXCEPTION_T e = CEXCEPTION_NONE;
+
+    // If this is our first time entering the function setup the timeout counter
+    if (0 == config_if_message_timeout)
+        config_if_timeout_reset();
+
+    // Has a message timeout occured?
+    if ((syshal_time_get_ticks_ms() - config_if_message_timeout) > SM_MESSAGE_INACTIVITY_TIMEOUT_MS)
+    {
+        DEBUG_PR_WARN("State: %d, MESSAGE TIMEOUT", message_state);
+        message_set_state(SM_MESSAGE_STATE_IDLE); // Return to the idle state
+        config_if_session_cleanup(); // Clear any pending messages
+    }
 
     // Don't allow the processing of anymore messages until we have a free transmit buffer
     if (config_if_tx_pending)
@@ -921,6 +941,7 @@ static void handle_config_if_messages(void)
         {
             case SM_MESSAGE_STATE_IDLE: // No message is currently being handled
                 message_idle_state();
+                config_if_timeout_reset(); // Reset the timeout counter
                 break;
 
             case SM_MESSAGE_STATE_CFG_READ_NEXT:
@@ -1007,7 +1028,7 @@ void boot_state(void)
 
     // Check that all configuration tags are set
     bool tag_not_set = false;
-    int tag = 0;
+    uint16_t tag = 0;
     uint16_t last_index = 0;
 
     while (!sys_config_iterate(&tag, &last_index))
@@ -1086,13 +1107,7 @@ void provisioning_state(void)
 
 void operational_state(void)
 {
-//    if (syshal_usb_available())
-//    {
-//        DEBUG_PR_INFO("USB message received");
-//        uint8_t buffer[100];
-//        uint32_t size = syshal_usb_receive(buffer, sizeof(buffer));
-//        syshal_usb_transfer(buffer, size);
-//    }
+
 }
 
 ////////////////////////////////////////////////////////////////////////////////
