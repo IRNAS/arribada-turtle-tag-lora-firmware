@@ -101,6 +101,8 @@ typedef enum
     CMD_ERROR_TIMEOUT,              // A timeout happened waiting on the byte stream to be received.
     CMD_ERROR_CONFIG_PROTECTED,     // Configuration operation not permitted as it is protected.
     CMD_ERROR_CONFIG_TAG_NOT_SET,   // Configuration tag has not been set.
+    CMD_ERROR_BRIDGING_DISABLED,    // Bridging is currently disabled for this module/device
+    CMD_ERROR_DATA_OVERSIZE,        // We've received more data then we were expecting
     CMD_ERROR_UNKNOWN,              // Error code for catching unknown errors. These should never occur
 } cmd_error_t;
 

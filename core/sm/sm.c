@@ -63,6 +63,7 @@ typedef enum
     SM_MESSAGE_STATE_CFG_READ_NEXT,
     SM_MESSAGE_STATE_CFG_WRITE_NEXT,
     SM_MESSAGE_STATE_CFG_WRITE_ERROR,
+    SM_MESSAGE_STATE_GPS_WRITE_NEXT,
 } sm_message_state_t;
 static sm_message_state_t message_state = SM_MESSAGE_STATE_IDLE;
 
@@ -84,6 +85,11 @@ typedef struct
             uint32_t  buffer_offset;
             uint16_t  last_index;
         } cfg_read;
+
+        struct
+        {
+            uint32_t  length;
+        } gps_write;
     };
 } sm_context_t;
 static sm_context_t sm_context;
@@ -267,7 +273,9 @@ void cfg_read_req(cmd_t * req, uint16_t size)
                 resp->p.cmd_cfg_read_resp.error_code = CMD_ERROR_CONFIG_TAG_NOT_SET;
             }
             else
+            {
                 Throw(EXCEPTION_BAD_SYS_CONFIG_ERROR_CONDITION);
+            }
         }
         else
         {
@@ -346,7 +354,7 @@ static void cfg_write_req(cmd_t * req, uint16_t size)
 static void cfg_write_next_state(void)
 {
     uint8_t * read_buffer;
-    volatile uint32_t length = buffer_read(&config_if_receive_buffer, (uintptr_t *)&read_buffer);
+    uint32_t length = buffer_read(&config_if_receive_buffer, (uintptr_t *)&read_buffer);
 
     if (!length)
         return;
@@ -354,7 +362,12 @@ static void cfg_write_next_state(void)
     buffer_read_advance(&config_if_receive_buffer, length); // Remove this packet from the receive buffer
 
     if (length > sm_context.cfg_write.length)
+    {
+        // If it is not we should exit out and return an error
+        sm_context.cfg_write.error_code = CMD_ERROR_DATA_OVERSIZE;
+        message_set_state(SM_MESSAGE_STATE_CFG_WRITE_ERROR);
         Throw(EXCEPTION_PACKET_WRONG_SIZE);
+    }
 
     // Lets deconstruct this packet of configuration data/ID pairs
     uint32_t buffer_offset = 0;
@@ -382,7 +395,8 @@ static void cfg_write_next_state(void)
         if (ret < 0)
         {
             DEBUG_PR_TRACE("sys_config_set() returned: %d()", ret);
-            Throw(EXCEPTION_BAD_SYS_CONFIG_ERROR_CONDITION);
+            message_set_state(SM_MESSAGE_STATE_IDLE);
+            Throw(EXCEPTION_BAD_SYS_CONFIG_ERROR_CONDITION); // Exit and fail silent
         }
 
         buffer_offset += tag_size;
@@ -392,7 +406,6 @@ static void cfg_write_next_state(void)
 
     if (sm_context.cfg_write.length) // Is there still data to receive?
     {
-        // Queue a new receive
         config_if_receive_priv(); // Queue a receive
         config_if_timeout_reset(); // Reset the message timeout counter
     }
@@ -438,10 +451,18 @@ static void cfg_save_req(cmd_t * req, uint16_t size)
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////// CFG_RESTORE /////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
 static void cfg_restore_req(cmd_t * req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
+
+////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////// CFG_ERASE //////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 
 static void cfg_erase_req(cmd_t * req, uint16_t size)
 {
@@ -491,48 +512,103 @@ static void cfg_erase_req(cmd_t * req, uint16_t size)
     config_if_send_priv(&config_if_send_buffer); // Send confirmation
 }
 
+////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////// CFG_PROTECT //////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
 static void cfg_protect_req(cmd_t * req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
+
+////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////// CFG_UNPROTECT /////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 
 static void cfg_unprotect_req(cmd_t * req, uint16_t size)
 {
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////// GPS_WRITE ///////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
 static void gps_write_req(cmd_t * req, uint16_t size)
 {
-//    // Check request size is correct
-//    if (CMD_SIZE(cmd_gps_write_req_t) != size)
-//        Throw(EXCEPTION_REQ_WRONG_SIZE);
-//
-//
-//    int return_code = syshal_gps_send_raw(req->p.cmd_gps_write_req.bytes, req->p.cmd_gps_write_req.length);
-//
-//    // Generate and send response
-//    cmd_t * resp = (cmd_t *) &tx_buffer[0];
-//    CMD_SET_HDR(resp, CMD_GENERIC_RESP);
-//
-//    switch (return_code)
-//    {
-//        case SYSHAL_GPS_NO_ERROR:
-//            resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
-//            break;
-//
-//        case SYSHAL_GPS_ERROR_TIMEOUT:
-//            resp->p.cmd_generic_resp.error_code = CMD_ERROR_TIMEOUT;
-//            break;
-//
-//        case SYSHAL_GPS_ERROR_BUSY:
-//        case SYSHAL_GPS_ERROR_DEVICE:
-//        default:
-//            resp->p.cmd_generic_resp.error_code = CMD_ERROR_UNKNOWN;
-//            break;
-//    }
-//
-//    config_if_send_priv((uint8_t *) resp, CMD_SIZE(cmd_generic_resp_t));
+    // Check request size is correct
+    if (CMD_SIZE(cmd_gps_write_req_t) != size)
+        Throw(EXCEPTION_REQ_WRONG_SIZE);
+
+    // Generate and send response
+    cmd_t * resp;
+    if (!buffer_write(&config_if_send_buffer, (uintptr_t *)&resp))
+        Throw(EXCEPTION_TX_BUFFER_FULL);
+    CMD_SET_HDR(resp, CMD_GENERIC_RESP);
+
+    // If bridging is enabled
+    if (syshal_gps_bridging)
+    {
+        sm_context.gps_write.length = req->p.cmd_gps_write_req.length;
+        resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
+
+        config_if_receive_priv(); // Queue a receive
+
+        message_set_state(SM_MESSAGE_STATE_GPS_WRITE_NEXT);
+    }
+    else
+    {
+        resp->p.cmd_generic_resp.error_code = CMD_ERROR_BRIDGING_DISABLED;
+    }
+
+    buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_generic_resp_t));
+    config_if_send_priv(&config_if_send_buffer);
 }
+
+static void gps_write_next_state(void)
+{
+    uint8_t * read_buffer;
+    uint32_t length = buffer_read(&config_if_receive_buffer, (uintptr_t *)&read_buffer);
+
+    if (!length)
+        return;
+
+    buffer_read_advance(&config_if_receive_buffer, length); // Remove this packet from the receive buffer
+
+    if (length > sm_context.gps_write.length)
+    {
+        message_set_state(SM_MESSAGE_STATE_IDLE);
+        Throw(EXCEPTION_PACKET_WRONG_SIZE);
+    }
+
+    int ret = syshal_gps_send_raw(read_buffer, length);
+
+    // Check send worked
+    if (ret < 0)
+    {
+        // If not we should exit out
+        message_set_state(SM_MESSAGE_STATE_IDLE);
+        Throw(EXCEPTION_GPS_SEND_ERROR);
+    }
+
+    sm_context.gps_write.length -= length;
+
+    if (sm_context.gps_write.length) // Is there still data to receive?
+    {
+        config_if_receive_priv(); // Queue a receive
+        config_if_timeout_reset(); // Reset the message timeout counter
+    }
+    else
+    {
+        // We have received all the data
+        message_set_state(SM_MESSAGE_STATE_IDLE);
+    }
+
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////// GPS_READ ///////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 
 static void gps_read_req(cmd_t * req, uint16_t size)
 {
@@ -552,7 +628,6 @@ static void gps_read_req(cmd_t * req, uint16_t size)
 
 static void gps_config_req(cmd_t * req, uint16_t size)
 {
-    /*
     // Check request size is correct
     if (CMD_SIZE(cmd_gps_config_req_t) != size)
         Throw(EXCEPTION_REQ_WRONG_SIZE);
@@ -560,13 +635,15 @@ static void gps_config_req(cmd_t * req, uint16_t size)
     syshal_gps_bridging = req->p.cmd_gps_config_req.enable; // Disable or enable GPS bridging
 
     // Generate and send response
-    cmd_t * resp = (cmd_t *) tx_buffer_working;
+    cmd_t * resp;
+    if (!buffer_write(&config_if_send_buffer, (uintptr_t *)&resp))
+        Throw(EXCEPTION_TX_BUFFER_FULL);
     CMD_SET_HDR(resp, CMD_GENERIC_RESP);
 
     resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
 
-    config_if_send_priv((uint8_t *) resp, CMD_SIZE(cmd_generic_resp_t));
-    */
+    buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_generic_resp_t));
+    config_if_send_priv(&config_if_send_buffer);
 }
 
 static void ble_config_req(cmd_t * req, uint16_t size)
@@ -586,18 +663,25 @@ static void ble_read_req(cmd_t * req, uint16_t size)
 
 static void status_req(cmd_t * req, uint16_t size)
 {
-    DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
+    // Check request size is correct
+    if (size != CMD_SIZE_HDR)
+        Throw(EXCEPTION_REQ_WRONG_SIZE);
 
-    /*
     // Generate and send response
     cmd_t * resp;
-    CMD_SET_HDR(resp, CMD_STATUS_RESP, sizeof(cmd_status_resp_t));
+    if (!buffer_write(&config_if_send_buffer, (uintptr_t *)&resp))
+        Throw(EXCEPTION_TX_BUFFER_FULL);
+    CMD_SET_HDR(resp, CMD_STATUS_RESP);
+
+    DEBUG_PR_WARN("%s() NOT IMPLEMENTED, responding with spoof data", __FUNCTION__);
 
     resp->p.cmd_status_resp.error_code = CMD_NO_ERROR;
-    resp->p.cmd_status_resp.firmware_version = ;
-    resp->p.cmd_status_resp.firmware_checksum = ;
-    resp->p.cmd_status_resp.configuration_format_version = ;
-    */
+    resp->p.cmd_status_resp.firmware_version = 0;
+    resp->p.cmd_status_resp.firmware_checksum = 0;
+    resp->p.cmd_status_resp.configuration_format_version = 0;
+
+    buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_status_resp_t));
+    config_if_send_priv(&config_if_send_buffer);
 }
 
 static void fw_send_image_req(cmd_t * req, uint16_t size)
@@ -641,31 +725,30 @@ static void reset_req(cmd_t * req, uint16_t size)
 
 static void battery_status_req(cmd_t * req, uint16_t size)
 {
-//    // Check request size is correct
-//    if (size != CMD_SIZE_HDR)
-//        Throw(EXCEPTION_REQ_WRONG_SIZE);
-//
-//    // If we're already currently responding to another request
-//    if (config_if_tx_pending)
-//        Throw(EXCEPTION_RESP_TX_PENDING);
-//
-//    DEBUG_PR_WARN("%s() NOT IMPLEMENTED, responding with spoof data", __FUNCTION__);
-//
-//    // Generate and send response
-//    cmd_t * resp = (cmd_t *) &tx_buffer[0];
-//    CMD_SET_HDR(resp, CMD_BATTERY_STATUS_RESP);
-//
-//    resp->p.cmd_battery_status_resp.error_code = CMD_NO_ERROR;
-//    resp->p.cmd_battery_status_resp.charging_indicator = 1;
-//    resp->p.cmd_battery_status_resp.charge_level = 100;
-//
-//    /*
-//    resp->p.cmd_battery_status_resp.error_code = CMD_NO_ERROR;
-//    resp->p.cmd_battery_status_resp.charging_indicator = syshal_batt_charging();
-//    resp->p.cmd_battery_status_resp.charge_level = syshal_batt_level();
-//    */
-//
-//    config_if_send_priv((uint8_t *) resp, CMD_SIZE(cmd_battery_status_resp_t));
+    // Check request size is correct
+    if (size != CMD_SIZE_HDR)
+        Throw(EXCEPTION_REQ_WRONG_SIZE);
+
+    // Generate and send response
+    cmd_t * resp;
+    if (!buffer_write(&config_if_send_buffer, (uintptr_t *)&resp))
+        Throw(EXCEPTION_TX_BUFFER_FULL);
+    CMD_SET_HDR(resp, CMD_BATTERY_STATUS_RESP);
+
+    DEBUG_PR_WARN("%s() NOT IMPLEMENTED, responding with spoof data", __FUNCTION__);
+
+    resp->p.cmd_battery_status_resp.error_code = CMD_NO_ERROR;
+    resp->p.cmd_battery_status_resp.charging_indicator = 1;
+    resp->p.cmd_battery_status_resp.charge_level = 100;
+
+    /*
+    resp->p.cmd_battery_status_resp.error_code = CMD_NO_ERROR;
+    resp->p.cmd_battery_status_resp.charging_indicator = syshal_batt_charging();
+    resp->p.cmd_battery_status_resp.charge_level = syshal_batt_level();
+    */
+
+    buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_battery_status_resp_t));
+    config_if_send_priv(&config_if_send_buffer);
 }
 
 static void log_create_req(cmd_t * req, uint16_t size)
@@ -869,7 +952,6 @@ void state_message_exception_handler(CEXCEPTION_T e)
     {
         case EXCEPTION_BAD_SYS_CONFIG_ERROR_CONDITION:
             DEBUG_PR_ERROR("EXCEPTION_BAD_SYS_CONFIG_ERROR_CONDITION");
-            message_set_state(SM_MESSAGE_STATE_IDLE);
             break;
 
         case EXCEPTION_REQ_WRONG_SIZE:
@@ -894,7 +976,10 @@ void state_message_exception_handler(CEXCEPTION_T e)
 
         case EXCEPTION_PACKET_WRONG_SIZE:
             DEBUG_PR_ERROR("EXCEPTION_PACKET_WRONG_SIZE");
-            message_set_state(SM_MESSAGE_STATE_IDLE);
+            break;
+
+        case EXCEPTION_GPS_SEND_ERROR:
+            DEBUG_PR_ERROR("EXCEPTION_GPS_SEND_ERROR");
             break;
 
         default:
@@ -954,6 +1039,10 @@ static void handle_config_if_messages(void)
 
             case SM_MESSAGE_STATE_CFG_WRITE_ERROR:
                 cfg_write_error_state();
+                break;
+
+            case SM_MESSAGE_STATE_GPS_WRITE_NEXT:
+                gps_write_next_state();
                 break;
 
             default:
