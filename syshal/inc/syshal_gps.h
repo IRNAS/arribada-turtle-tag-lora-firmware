@@ -74,6 +74,7 @@ void syshal_gps_set_baud(uint32_t baudrate);
 
 int syshal_gps_send_raw(uint8_t * data, uint32_t size);
 int syshal_gps_receive_raw(uint8_t * data, uint32_t size);
+uint32_t syshal_gps_available_raw(void);
 
 void syshal_gps_callback(syshal_gps_event_t event);
 

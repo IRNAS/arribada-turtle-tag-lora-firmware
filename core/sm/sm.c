@@ -64,6 +64,7 @@ typedef enum
     SM_MESSAGE_STATE_CFG_WRITE_NEXT,
     SM_MESSAGE_STATE_CFG_WRITE_ERROR,
     SM_MESSAGE_STATE_GPS_WRITE_NEXT,
+    SM_MESSAGE_STATE_GPS_READ_NEXT,
 } sm_message_state_t;
 static sm_message_state_t message_state = SM_MESSAGE_STATE_IDLE;
 
@@ -90,6 +91,11 @@ typedef struct
         {
             uint32_t  length;
         } gps_write;
+
+        struct
+        {
+            uint32_t  length;
+        } gps_read;
     };
 } sm_context_t;
 static sm_context_t sm_context;
@@ -135,6 +141,11 @@ static void setup_buffers(void)
 ////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////// HELPER FUNCTIONS ///////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
+
+#define MIN(a,b) \
+   ({ __typeof__ (a) _a = (a); \
+       __typeof__ (b) _b = (b); \
+     _a < _b ? _a : _b; })
 
 static void config_if_send_priv(volatile buffer_t * buffer)
 {
@@ -610,6 +621,7 @@ static void gps_write_req(cmd_t * req, uint16_t size)
     }
     else
     {
+        // Bridging is not enabled so return an error code
         resp->p.cmd_generic_resp.error_code = CMD_ERROR_BRIDGING_DISABLED;
     }
 
@@ -664,19 +676,72 @@ static void gps_write_next_state(void)
 
 static void gps_read_req(cmd_t * req, uint16_t size)
 {
-//    // Check request size is correct
-//    if (CMD_SIZE(cmd_gps_read_req_t) != size)
-//        Throw(EXCEPTION_REQ_WRONG_SIZE);
-//
-//    // Generate and send response
-//    cmd_t * resp = (cmd_t *) tx_buffer_working;
-//    CMD_SET_HDR(resp, CMD_GPS_READ_RESP);
-//
-//    resp->p.cmd_gps_read_resp.length = syshal_gps_receive_raw(resp->p.cmd_gps_read_resp.bytes, req->p.cmd_gps_read_req.length);
-//    resp->p.cmd_gps_read_resp.error_code = CMD_NO_ERROR;
-//
-//    config_if_send_priv((uint8_t *) resp, CMD_SIZE(cmd_gps_read_resp_t));
+    // Check request size is correct
+    if (CMD_SIZE(cmd_gps_read_req_t) != size)
+        Throw(EXCEPTION_REQ_WRONG_SIZE);
+
+    // Generate and send response
+    cmd_t * resp;
+    if (!buffer_write(&config_if_send_buffer, (uintptr_t *)&resp))
+        Throw(EXCEPTION_TX_BUFFER_FULL);
+    CMD_SET_HDR(resp, CMD_GPS_READ_RESP);
+
+    // If bridging is enabled
+    if (syshal_gps_bridging)
+    {
+        sm_context.gps_read.length = syshal_gps_available_raw();
+
+        resp->p.cmd_gps_read_resp.length = sm_context.gps_read.length;
+        resp->p.cmd_gps_read_resp.error_code = CMD_NO_ERROR;
+    }
+    else
+    {
+        // Bridging is not enabled so return an error code
+        resp->p.cmd_gps_read_resp.length = 0;
+        resp->p.cmd_gps_read_resp.error_code = CMD_ERROR_BRIDGING_DISABLED;
+    }
+
+    // Send response
+    buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_gps_read_resp_t));
+    config_if_send_priv(&config_if_send_buffer);
+
+    if (sm_context.gps_read.length > 0)
+        message_set_state(SM_MESSAGE_STATE_GPS_READ_NEXT);
 }
+
+static void gps_read_next_state(void)
+{
+    // Generate and send response
+    uint8_t * resp;
+    if (!buffer_write(&config_if_send_buffer, (uintptr_t *)&resp))
+        Throw(EXCEPTION_TX_BUFFER_FULL);
+
+    // Don't read more than the maximum packet size
+    uint32_t bytes_to_read = MIN(sm_context.gps_read.length, SYSHAL_USB_PACKET_SIZE);
+
+    // Receive data from the GPS module
+    uint32_t bytes_actually_read = syshal_gps_receive_raw(resp, bytes_to_read);
+
+    sm_context.gps_read.length -= bytes_actually_read;
+
+    // Send response
+    buffer_write_advance(&config_if_send_buffer, bytes_actually_read);
+    config_if_send_priv(&config_if_send_buffer);
+
+    if (sm_context.gps_read.length) // Is there still data to send?
+    {
+        config_if_timeout_reset(); // Reset the message timeout counter
+    }
+    else
+    {
+        // We have sent all the data
+        message_set_state(SM_MESSAGE_STATE_IDLE);
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////// GPS_CONFIG_REQ ////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 
 static void gps_config_req(cmd_t * req, uint16_t size)
 {
@@ -1096,6 +1161,10 @@ static void handle_config_if_messages(void)
                 gps_write_next_state();
                 break;
 
+            case SM_MESSAGE_STATE_GPS_READ_NEXT:
+                gps_read_next_state();
+                break;
+
             default:
                 // TODO: add an illegal error state here for catching
                 // invalid state changes
@@ -1234,11 +1303,12 @@ void provisioning_state(void)
 {
     syshal_gpio_set_output_high(GPIO_LED4); // Indicate what state we're in
 
-    handle_config_if_messages();
+    handle_config_if_messages(); // Process any config_if messages
 
     // Has our configuration interface been disconnected?
     if (!config_if_connected)
     {
+        // If so we should change state
         if (configuration_tags_set())
             sm_set_state(SM_STATE_OPERATIONAL); // All systems go for standard operation
         else
@@ -1248,7 +1318,9 @@ void provisioning_state(void)
 
 void operational_state(void)
 {
-
+    // If GPS bridging is disabled
+    if (!syshal_gps_bridging)
+        syshal_gps_tick(); // Process GPS messages
 }
 
 ////////////////////////////////////////////////////////////////////////////////
