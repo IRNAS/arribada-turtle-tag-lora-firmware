@@ -1028,8 +1028,8 @@ static void status_req(cmd_t * req, uint16_t size)
     DEBUG_PR_WARN("%s() NOT IMPLEMENTED, responding with spoof data", __FUNCTION__);
 
     resp->p.cmd_status_resp.error_code = CMD_NO_ERROR;
-    resp->p.cmd_status_resp.firmware_version = 0;
-    resp->p.cmd_status_resp.firmware_checksum = 0;
+    resp->p.cmd_status_resp.stm_firmware_version = 0;
+    resp->p.cmd_status_resp.ble_firmware_version = 0;
     resp->p.cmd_status_resp.configuration_format_version = 0;
 
     buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_status_resp_t));

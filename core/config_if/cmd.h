@@ -186,8 +186,8 @@ typedef struct __attribute__((__packed__))
 typedef struct __attribute__((__packed__))
 {
     uint8_t error_code;
-    uint32_t firmware_version;
-    uint32_t firmware_checksum;
+    uint32_t stm_firmware_version;
+    uint32_t ble_firmware_version;
     uint32_t configuration_format_version;
 } cmd_status_resp_t;
 
