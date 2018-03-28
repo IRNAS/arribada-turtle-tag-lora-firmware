@@ -24,6 +24,7 @@
 #include "config_if.h"
 #include "debug.h"
 #include "exceptions.h"
+#include "fs.h"
 #include "sm.h"
 #include "sys_config.h"
 #include "syshal_batt.h"
@@ -104,6 +105,12 @@ static sm_context_t sm_context;
 ////////////////////////////////// GLOBALS /////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
+#define FS_FILE_ID_CONF             (0) // The File ID of the configuration data
+#define FS_FILE_ID_STM32_IMAGE      (1) // STM32 application image
+#define FS_FILE_ID_BLE_APP_IMAGE    (2) // BLE application image
+#define FS_FILE_ID_BLE_SOFT_IMAGE   (3) // BLE soft-device image
+#define FS_FILE_ID_LOG              (4) // Sensor log file
+
 static volatile bool     config_if_tx_pending;
 static volatile bool     config_if_rx_queued;
 static bool              syshal_gps_bridging;
@@ -113,6 +120,7 @@ static volatile uint8_t  config_if_send_buffer_pool[SYSHAL_USB_PACKET_SIZE * 2];
 static volatile uint8_t  config_if_receive_buffer_pool[SYSHAL_USB_PACKET_SIZE];
 static uint32_t          config_if_message_timeout;
 static volatile bool     config_if_connected = false;
+static fs_t              file_system;
 
 ////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////// PROTOTYPES ///////////////////////////////////
@@ -228,6 +236,123 @@ static bool configuration_tags_set(void)
     }
 
     return !tag_not_set;
+}
+
+/**
+ * @brief      Create the configuration file in FLASH memory
+ *
+ * @return     @ref FS_NO_ERROR on success.
+ * @return     @ref FS_ERROR_FILE_ALREADY_EXISTS if the configuration file has
+ *             already been created.
+ * @return     @ref FS_ERROR_FLASH_MEDIA if the amount of data written to the file
+ *             is not of expected length
+ * @return     @ref FS_ERROR_NO_FREE_HANDLE if no file handle could be allocated.
+ */
+static int fs_create_configuration_data(void)
+{
+    // The configuration file does not exist so lets make one
+    fs_handle_t file_system_handle;
+    uint8_t user_flags;
+    int ret = fs_open(file_system, &file_system_handle, FS_FILE_ID_CONF, FS_MODE_CREATE, &user_flags);
+
+    if (FS_NO_ERROR != ret)
+        return ret; // An unrecoverable error has occured
+
+    // We have now created and opened our unformatted configuration file
+    // So lets write our blank configuration data to it
+    uint32_t bytes_written;
+    ret = fs_write(file_system_handle, &sys_config, sizeof(sys_config), &bytes_written);
+
+    if (FS_NO_ERROR != ret)
+        return ret; // An unrecoverable error has occured
+
+    if (bytes_written != sizeof(sys_config))
+    {
+        DEBUG_PR_WARN("%s() size mismatch", __FUNCTION__);
+        return FS_ERROR_FLASH_MEDIA;
+    }
+
+    fs_close(file_system_handle); // Close the newly created file and flush any data
+
+    return FS_NO_ERROR;
+}
+
+/**
+ * @brief      Write our configuration data from RAM to FLASH
+ *
+ * @return     @ref FS_NO_ERROR on success.
+ * @return     @ref FS_ERROR_FILE_NOT_FOUND if the configuration file was not
+ *             found.
+ * @return     @ref FS_ERROR_FILE_PROTECTED if the configuration file is write
+ *             protected
+ * @return     @ref FS_ERROR_FLASH_MEDIA if the amount of data written to the file
+ *             is not of expected length
+ * @return     @ref FS_ERROR_NO_FREE_HANDLE if no file handle could be allocated.
+ */
+static int fs_set_configuration_data(void)
+{
+    fs_handle_t file_system_handle;
+    uint8_t user_flags;
+    int ret = fs_open(file_system, &file_system_handle, FS_FILE_ID_CONF, FS_MODE_WRITEONLY, &user_flags);
+
+    if (FS_NO_ERROR != ret)
+        return ret; // An unrecoverable error has occured
+
+    // We have now created and opened our unformatted configuration file
+    // So lets write our configuration data to it
+    uint32_t bytes_written;
+    ret = fs_write(file_system_handle, &sys_config, sizeof(sys_config), &bytes_written);
+
+    if (FS_NO_ERROR != ret)
+        return ret; // An unrecoverable error has occured
+
+    if (bytes_written != sizeof(sys_config))
+    {
+        DEBUG_PR_WARN("%s() size mismatch", __FUNCTION__);
+        return FS_ERROR_FLASH_MEDIA;
+    }
+
+    fs_close(file_system_handle); // Close the newly created file and flush any data
+
+    return FS_NO_ERROR;
+}
+
+/**
+ * @brief      Load the configuration data from FLASH.
+ *
+ * @return     @ref FS_NO_ERROR on success.
+ * @return     @ref FS_ERROR_FILE_NOT_FOUND if the configuration file was not
+ *             found.
+ * @return     @ref FS_ERROR_FLASH_MEDIA if the amount of data written to the file
+ *             is not of expected length
+ * @return     @ref FS_ERROR_NO_FREE_HANDLE if no file handle could be allocated.
+ */
+static int fs_get_configuration_data(void)
+{
+    fs_handle_t file_system_handle;
+    uint8_t user_flags;
+    // Attempt to open the configuration file
+    int ret = fs_open(file_system, &file_system_handle, FS_FILE_ID_CONF, FS_MODE_READONLY, &user_flags);
+
+    if (FS_NO_ERROR != ret)
+        return ret; // An unrecoverable error has occured
+
+    // We have opened the configuration file, so now we need to load the data from it
+    uint32_t bytes_read;
+    ret = fs_read(file_system_handle, &sys_config, sizeof(sys_config), &bytes_read);
+
+    if (FS_NO_ERROR != ret)
+        return ret; // An unrecoverable error has occured
+
+    if (bytes_read != sizeof(sys_config))
+    {
+        DEBUG_PR_WARN("%s() size mismatch", __FUNCTION__);
+        return FS_ERROR_FLASH_MEDIA;
+    }
+
+    fs_close(file_system_handle); // We're done reading from this file
+
+    return FS_NO_ERROR;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -511,7 +636,34 @@ static void cfg_write_error_state(void)
 
 static void cfg_save_req(cmd_t * req, uint16_t size)
 {
-    DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
+    // Check request size is correct
+    if (size != CMD_SIZE_HDR)
+        Throw(EXCEPTION_REQ_WRONG_SIZE);
+
+    cmd_t * resp;
+    if (!buffer_write(&config_if_send_buffer, (uintptr_t *)&resp))
+        Throw(EXCEPTION_TX_BUFFER_FULL);
+    CMD_SET_HDR(resp, CMD_GENERIC_RESP);
+
+    int ret = fs_set_configuration_data();
+
+    switch (ret)
+    {
+        case FS_NO_ERROR:
+            resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
+            break;
+
+        case FS_ERROR_FILE_PROTECTED:
+            resp->p.cmd_generic_resp.error_code = CMD_ERROR_CONFIG_PROTECTED;
+            break;
+
+        default:
+            resp->p.cmd_generic_resp.error_code = CMD_ERROR_UNKNOWN;
+            break;
+    }
+
+    buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_generic_resp_t));
+    config_if_send_priv(&config_if_send_buffer); // Send confirmation
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -520,7 +672,34 @@ static void cfg_save_req(cmd_t * req, uint16_t size)
 
 static void cfg_restore_req(cmd_t * req, uint16_t size)
 {
-    DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
+    // Check request size is correct
+    if (size != CMD_SIZE_HDR)
+        Throw(EXCEPTION_REQ_WRONG_SIZE);
+
+    cmd_t * resp;
+    if (!buffer_write(&config_if_send_buffer, (uintptr_t *)&resp))
+        Throw(EXCEPTION_TX_BUFFER_FULL);
+    CMD_SET_HDR(resp, CMD_GENERIC_RESP);
+
+    int ret = fs_get_configuration_data();
+
+    switch (ret)
+    {
+        case FS_NO_ERROR:
+            resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
+            break;
+
+        case FS_ERROR_FILE_NOT_FOUND:
+            resp->p.cmd_generic_resp.error_code = CMD_ERROR_FILE_NOT_FOUND;
+            break;
+
+        default:
+            resp->p.cmd_generic_resp.error_code = CMD_ERROR_UNKNOWN;
+            break;
+    }
+
+    buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_generic_resp_t));
+    config_if_send_priv(&config_if_send_buffer); // Send confirmation
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -581,7 +760,35 @@ static void cfg_erase_req(cmd_t * req, uint16_t size)
 
 static void cfg_protect_req(cmd_t * req, uint16_t size)
 {
-    DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
+    // Check request size is correct
+    if (size != CMD_SIZE_HDR)
+        Throw(EXCEPTION_REQ_WRONG_SIZE);
+
+    cmd_t * resp;
+    if (!buffer_write(&config_if_send_buffer, (uintptr_t *)&resp))
+        Throw(EXCEPTION_TX_BUFFER_FULL);
+    CMD_SET_HDR(resp, CMD_GENERIC_RESP);
+
+    int ret = fs_protect(file_system, FS_FILE_ID_LOG);
+
+    switch (ret)
+    {
+        case FS_NO_ERROR:
+            resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
+            break;
+
+        case FS_ERROR_FILE_NOT_FOUND:
+            resp->p.cmd_generic_resp.error_code = CMD_ERROR_FILE_NOT_FOUND;
+            break;
+
+        default:
+            resp->p.cmd_generic_resp.error_code = CMD_ERROR_UNKNOWN;
+            break;
+    }
+
+    // Send the response
+    buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_generic_resp_t));
+    config_if_send_priv(&config_if_send_buffer);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -590,7 +797,35 @@ static void cfg_protect_req(cmd_t * req, uint16_t size)
 
 static void cfg_unprotect_req(cmd_t * req, uint16_t size)
 {
-    DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
+    // Check request size is correct
+    if (size != CMD_SIZE_HDR)
+        Throw(EXCEPTION_REQ_WRONG_SIZE);
+
+    cmd_t * resp;
+    if (!buffer_write(&config_if_send_buffer, (uintptr_t *)&resp))
+        Throw(EXCEPTION_TX_BUFFER_FULL);
+    CMD_SET_HDR(resp, CMD_GENERIC_RESP);
+
+    int ret = fs_unprotect(file_system, FS_FILE_ID_LOG);
+
+    switch (ret)
+    {
+        case FS_NO_ERROR:
+            resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
+            break;
+
+        case FS_ERROR_FILE_NOT_FOUND:
+            resp->p.cmd_generic_resp.error_code = CMD_ERROR_FILE_NOT_FOUND;
+            break;
+
+        default:
+            resp->p.cmd_generic_resp.error_code = CMD_ERROR_UNKNOWN;
+            break;
+    }
+
+    // Send the response
+    buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_generic_resp_t));
+    config_if_send_priv(&config_if_send_buffer);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1202,14 +1437,29 @@ void boot_state(void)
     //syshal_gps_init();
     //syshal_usb_init();
 
-    config_if_init(CONFIG_IF_BACKEND_USB);
-
     // Print General System Info
     DEBUG_PR_SYS("Arribada Tracker Device");
     DEBUG_PR_SYS("Version:  %s", GIT_VERSION);
     DEBUG_PR_SYS("Compiled: %s %s With %s", COMPILE_DATE, COMPILE_TIME, COMPILER_NAME);
 
-    syshal_gpio_set_output_high(GPIO_LED3); // Indicate boot passed
+    config_if_init(CONFIG_IF_BACKEND_USB);
+
+    // Load the file system
+    fs_init(FS_DEVICE);
+    fs_mount(FS_DEVICE, &file_system);
+
+    int ret = fs_get_configuration_data();
+
+    if (FS_ERROR_FILE_NOT_FOUND == ret)
+    {
+        // The configuration file does not exist
+        if (FS_NO_ERROR != fs_create_configuration_data())
+            Throw(EXCEPTION_FS_ERROR);
+    }
+    else if (FS_NO_ERROR != ret)
+    {
+        Throw(EXCEPTION_FS_ERROR);
+    }
 
     // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
     //if (syshal_batt_charging())
@@ -1233,19 +1483,18 @@ void boot_state(void)
     date_time.contents.seconds = 6;
     sys_config_set(SYS_CONFIG_TAG_RTC_CURRENT_DATE_AND_TIME, &date_time.contents, SYS_CONFIG_TAG_DATA_SIZE(sys_config_rtc_current_date_and_time_t));
 
-    // Otherwise, if no configuration file is present or the current configuration is invalid then the system shall transition to the PROVISIONING_NEEDED sub-state.
-
     if (configuration_tags_set()) // Check that all configuration tags are set
         sm_set_state(SM_STATE_OPERATIONAL); // All systems go for standard operation
     else
     {
+        // Not all required configuration data is set
         if (config_if_connected)
             sm_set_state(SM_STATE_PROVISIONING);
         else
             sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED);
     }
 
-
+    syshal_gpio_set_output_high(GPIO_LED3); // Indicate boot passed
 
 }
 

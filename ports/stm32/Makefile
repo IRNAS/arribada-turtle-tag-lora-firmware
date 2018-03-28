@@ -35,10 +35,12 @@ $(CORE_DIR)/buffer/buffer.c \
 $(CORE_DIR)/cexception/cexception.c \
 $(CORE_DIR)/config_if/config_if.c \
 $(CORE_DIR)/debug/debug.c \
+$(CORE_DIR)/fs/fs.c \
 $(CORE_DIR)/sm/sm.c \
 $(CORE_DIR)/sys_config/sys_config.c \
 $(DEVICE_DIR)/battery/BQ27621/BQ27621.c \
 $(DEVICE_DIR)/gps/M8N/M8N.c \
+$(DEVICE_DIR)/flash/S25FL128/S25FL128.c \
 $(STMHAL_DIR)/Src/stm32f0xx_hal.c \
 $(STMHAL_DIR)/Src/stm32f0xx_hal_cortex.c \
 $(STMHAL_DIR)/Src/stm32f0xx_hal_dma.c \
@@ -131,11 +133,13 @@ C_INCLUDES =  \
 -I$(CORE_DIR)/config \
 -I$(CORE_DIR)/config_if \
 -I$(CORE_DIR)/debug \
+-I$(CORE_DIR)/fs \
 -I$(CORE_DIR)/ring_buffer \
 -I$(CORE_DIR)/sm \
 -I$(CORE_DIR)/sys_config \
 -I$(DEVICE_DIR)/battery/BQ27621/ \
 -I$(DEVICE_DIR)/gps/M8N/ \
+-I$(DEVICE_DIR)/flash/S25FL128/ \
 -I$(STMHAL_DIR)/Inc \
 -I$(STMHAL_DIR)/Inc/Legacy \
 -I$(USB_DIR)/Core/Inc \

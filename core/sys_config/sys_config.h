@@ -451,6 +451,9 @@ typedef struct __attribute__((__packed__))
     sys_config_bluetooth_beacon_advertising_configuration_t     sys_config_bluetooth_beacon_advertising_configuration;
 } sys_config_t;
 
+// Exposed variables
+extern sys_config_t sys_config;
+
 // Functions
 int sys_config_set(uint16_t tag, void * value, uint32_t length);
 int sys_config_unset(uint16_t tag);

@@ -134,4 +134,7 @@ extern const UART_InitTypeDefAndInst_t UART_Inits[UART_TOTAL_NUMBER];
 ///////////////////////////////// GPS definitions /////////////////////////////////
 #define GPS_UART UART_3
 
+//////////////////////////////// FLASH definitions ////////////////////////////////
+#define FS_DEVICE (0)
+
 #endif /* _BSP_H_ */
