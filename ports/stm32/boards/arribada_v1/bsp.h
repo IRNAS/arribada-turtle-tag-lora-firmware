@@ -33,6 +33,7 @@
 ///////////////////////////////// GPIO definitions ////////////////////////////////
 typedef enum
 {
+    GPIO_USB_ID,
     GPIO_BUTTON1,
     GPIO_LED3,
     GPIO_LED4,

@@ -17,6 +17,7 @@
  */
 
 #include "bsp.h"
+#include "syshal_gpio.h"
 #include "syshal_usb.h"
 #include "usbd_conf.h"
 #include "usbd_core.h"
@@ -41,6 +42,24 @@ static USBD_HandleTypeDef hUsbDeviceFS; // USB Device Core handle declaration
 
 static ring_buffer_t rx_buffer;
 static uint8_t rx_data[USB_RX_BUF_SIZE];
+
+static void syshal_usb_connected_callback_priv(void)
+{
+    syshal_usb_event_t event;
+
+    if (syshal_gpio_get_input(GPIO_USB_ID))
+    {
+        // We've detected a rising edge on the USB_ID pin
+        event.id = SYSHAL_USB_EVENT_CONNECTED;
+        syshal_usb_event_handler(&event);
+    }
+    else
+    {
+        // We've detected a falling edge on the USB_ID pin
+        event.id = SYSHAL_USB_EVENT_DISCONNECTED;
+        syshal_usb_event_handler(&event);
+    }
+}
 
 /**
  * @brief      Initialise the USB instance
@@ -70,6 +89,18 @@ int syshal_usb_init(void)
     retVal = USBD_Start(&hUsbDeviceFS);
     if (retVal != USBD_OK)
         return hal_error_map[retVal];
+
+    // Set up the GPIO USB_ID pin to generate interrupts for USB connection state detection
+    syshal_gpio_init(GPIO_USB_ID);
+
+    syshal_gpio_enable_interrupt(GPIO_USB_ID, &syshal_usb_connected_callback_priv);
+
+    if (syshal_gpio_get_input(GPIO_USB_ID)) // Are we currently connected?
+    {
+        syshal_usb_event_t event;
+        event.id = SYSHAL_USB_EVENT_CONNECTED;
+        syshal_usb_event_handler(&event);
+    }
 
     return hal_error_map[retVal];
 }

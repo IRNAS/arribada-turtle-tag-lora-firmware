@@ -37,22 +37,22 @@ typedef struct
 
 static syshal_gpio_irq_conf_t syshal_gpio_irq_conf[SYSHAL_GPIO_NUMBER_EXTI] =
 {
-    {EXTI0_1_IRQn,  NULL,}, // GPIO_PIN_0
-    {EXTI0_1_IRQn,  NULL,}, // GPIO_PIN_1
-    {EXTI2_3_IRQn,  NULL,}, // GPIO_PIN_2
-    {EXTI2_3_IRQn,  NULL,}, // GPIO_PIN_3
-    {EXTI4_15_IRQn, NULL,}, // GPIO_PIN_4
-    {EXTI4_15_IRQn, NULL,}, // GPIO_PIN_5
-    {EXTI4_15_IRQn, NULL,}, // GPIO_PIN_6
-    {EXTI4_15_IRQn, NULL,}, // GPIO_PIN_7
-    {EXTI4_15_IRQn, NULL,}, // GPIO_PIN_8
-    {EXTI4_15_IRQn, NULL,}, // GPIO_PIN_9
-    {EXTI4_15_IRQn, NULL,}, // GPIO_PIN_10
-    {EXTI4_15_IRQn, NULL,}, // GPIO_PIN_11
-    {EXTI4_15_IRQn, NULL,}, // GPIO_PIN_12
-    {EXTI4_15_IRQn, NULL,}, // GPIO_PIN_13
-    {EXTI4_15_IRQn, NULL,}, // GPIO_PIN_14
-    {EXTI4_15_IRQn, NULL,}  // GPIO_PIN_15
+    {EXTI0_1_IRQn,  NULL}, // GPIO_PIN_0
+    {EXTI0_1_IRQn,  NULL}, // GPIO_PIN_1
+    {EXTI2_3_IRQn,  NULL}, // GPIO_PIN_2
+    {EXTI2_3_IRQn,  NULL}, // GPIO_PIN_3
+    {EXTI4_15_IRQn, NULL}, // GPIO_PIN_4
+    {EXTI4_15_IRQn, NULL}, // GPIO_PIN_5
+    {EXTI4_15_IRQn, NULL}, // GPIO_PIN_6
+    {EXTI4_15_IRQn, NULL}, // GPIO_PIN_7
+    {EXTI4_15_IRQn, NULL}, // GPIO_PIN_8
+    {EXTI4_15_IRQn, NULL}, // GPIO_PIN_9
+    {EXTI4_15_IRQn, NULL}, // GPIO_PIN_10
+    {EXTI4_15_IRQn, NULL}, // GPIO_PIN_11
+    {EXTI4_15_IRQn, NULL}, // GPIO_PIN_12
+    {EXTI4_15_IRQn, NULL}, // GPIO_PIN_13
+    {EXTI4_15_IRQn, NULL}, // GPIO_PIN_14
+    {EXTI4_15_IRQn, NULL}  // GPIO_PIN_15
 };
 
 /**
