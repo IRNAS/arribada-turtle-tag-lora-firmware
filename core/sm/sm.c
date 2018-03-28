@@ -66,6 +66,8 @@ typedef enum
     SM_MESSAGE_STATE_CFG_WRITE_ERROR,
     SM_MESSAGE_STATE_GPS_WRITE_NEXT,
     SM_MESSAGE_STATE_GPS_READ_NEXT,
+    SM_MESSAGE_STATE_LOG_READ_NEXT,
+    SM_MESSAGE_STATE_LOG_READ_CONFIRMATION,
 } sm_message_state_t;
 static sm_message_state_t message_state = SM_MESSAGE_STATE_IDLE;
 
@@ -97,6 +99,14 @@ typedef struct
         {
             uint32_t  length;
         } gps_read;
+
+        struct
+        {
+            uint32_t length;
+            uint32_t start_offset;
+            fs_handle_t file_handle;
+            uint8_t error_code;
+        } log_read;
     };
 } sm_context_t;
 static sm_context_t sm_context;
@@ -1013,6 +1023,10 @@ static void ble_read_req(cmd_t * req, uint16_t size)
     DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
 }
 
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////// STATUS_REQ //////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
 static void status_req(cmd_t * req, uint16_t size)
 {
     // Check request size is correct
@@ -1075,6 +1089,9 @@ static void reset_req(cmd_t * req, uint16_t size)
     for (;;) {}
 }
 
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////// BATTERY_STATUS_REQ //////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 static void battery_status_req(cmd_t * req, uint16_t size)
 {
     // Check request size is correct
@@ -1103,19 +1120,243 @@ static void battery_status_req(cmd_t * req, uint16_t size)
     config_if_send_priv(&config_if_send_buffer);
 }
 
+////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////// LOG_CREATE_REQ ////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
 static void log_create_req(cmd_t * req, uint16_t size)
 {
-    DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
+    // Check request size is correct
+    if (CMD_SIZE(cmd_log_create_req_t) != size)
+        Throw(EXCEPTION_REQ_WRONG_SIZE);
+
+    // Generate and send response
+    cmd_t * resp;
+    if (!buffer_write(&config_if_send_buffer, (uintptr_t *)&resp))
+        Throw(EXCEPTION_TX_BUFFER_FULL);
+    CMD_SET_HDR(resp, CMD_GENERIC_RESP);
+
+    // Get request's parameters
+    uint8_t mode = req->p.cmd_log_create_req.mode;
+    uint8_t sync_enable = req->p.cmd_log_create_req.sync_enable;
+    uint8_t max_file_size = req->p.cmd_log_create_req.max_file_size;
+
+    UNUSED(max_file_size); // FIXME: This should be used
+
+    // Attempt to create the log file
+    if (FS_MODE_CREATE == mode || FS_MODE_CREATE_CIRCULAR == mode)
+    {
+        fs_handle_t file_system_handle;
+        int ret = fs_open(file_system, &file_system_handle, FS_FILE_ID_LOG, mode, &sync_enable);
+
+        switch (ret)
+        {
+            case FS_NO_ERROR:
+                resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
+                break;
+
+            case FS_ERROR_FILE_ALREADY_EXISTS:
+                resp->p.cmd_generic_resp.error_code = CMD_ERROR_FILE_ALREADY_EXISTS;
+                break;
+
+            default:
+                resp->p.cmd_generic_resp.error_code = CMD_ERROR_UNKNOWN;
+                break;
+        }
+    }
+    else
+    {
+        resp->p.cmd_generic_resp.error_code = CMD_ERROR_INVALID_PARAMETER;
+    }
+
+    buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_generic_resp_t));
+    config_if_send_priv(&config_if_send_buffer);
 }
+
+////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////// LOG_ERASE_REQ /////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 
 static void log_erase_req(cmd_t * req, uint16_t size)
 {
-    DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
+    // Check request size is correct
+    if (size != CMD_SIZE_HDR)
+        Throw(EXCEPTION_REQ_WRONG_SIZE);
+
+    // Generate response
+    cmd_t * resp;
+    if (!buffer_write(&config_if_send_buffer, (uintptr_t *)&resp))
+        Throw(EXCEPTION_TX_BUFFER_FULL);
+    CMD_SET_HDR(resp, CMD_GENERIC_RESP);
+
+    int ret = fs_delete(file_system, FS_FILE_ID_LOG);
+
+    switch (ret)
+    {
+        case FS_NO_ERROR:
+            resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
+            break;
+
+        case FS_ERROR_FILE_NOT_FOUND:
+            resp->p.cmd_generic_resp.error_code = CMD_ERROR_FILE_NOT_FOUND;
+            break;
+
+        case FS_ERROR_FILE_PROTECTED:
+            resp->p.cmd_generic_resp.error_code = CMD_ERROR_CONFIG_PROTECTED;
+            break;
+
+        default:
+            resp->p.cmd_generic_resp.error_code = CMD_ERROR_UNKNOWN;
+            break;
+    }
+
+    buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_generic_resp_t));
+    config_if_send_priv(&config_if_send_buffer);
 }
+
+////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////// LOG_READ_REQ /////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 
 static void log_read_req(cmd_t * req, uint16_t size)
 {
-    DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
+    // Check request size is correct
+    if (CMD_SIZE(cmd_log_read_req_t) != size)
+        Throw(EXCEPTION_REQ_WRONG_SIZE);
+
+    // Generate response
+    cmd_t * resp;
+    if (!buffer_write(&config_if_send_buffer, (uintptr_t *)&resp))
+        Throw(EXCEPTION_TX_BUFFER_FULL);
+    CMD_SET_HDR(resp, CMD_LOG_READ_RESP);
+
+    sm_context.log_read.length = 0;
+
+    fs_stat_t stat;
+    int ret = fs_stat(file_system, FS_FILE_ID_LOG, &stat);
+
+    switch (ret)
+    {
+        case FS_NO_ERROR:
+            sm_context.log_read.length = req->p.cmd_log_read_req.length;
+            sm_context.log_read.start_offset = req->p.cmd_log_read_req.start_offset;
+
+            // Check if both parameters are zero. If they are the client is requesting a full log file
+            if ((0 == sm_context.log_read.length) && (0 == sm_context.log_read.start_offset))
+                sm_context.log_read.length = stat.size;
+
+            if (sm_context.log_read.start_offset >= stat.size) // Is the offset beyond the end of the file?
+            {
+                resp->p.cmd_log_read_resp.error_code = CMD_ERROR_INVALID_PARAMETER;
+            }
+            else
+            {
+                // Do we have this amount of data ready to read?
+                if ((sm_context.log_read.length + sm_context.log_read.start_offset) > stat.size)
+                {
+                    // If the length requested is greater than what we have then reduce the length
+                    sm_context.log_read.length = stat.size - sm_context.log_read.start_offset;
+                }
+
+                // Open the file
+                uint8_t user_flags;
+                ret = fs_open(file_system, &sm_context.log_read.file_handle, FS_FILE_ID_CONF, FS_MODE_READONLY, &user_flags);
+
+                if (FS_NO_ERROR == ret)
+                {
+                    resp->p.cmd_log_read_resp.error_code = CMD_NO_ERROR;
+                    message_set_state(SM_MESSAGE_STATE_LOG_READ_NEXT);
+                }
+                else
+                {
+                    resp->p.cmd_log_read_resp.error_code = CMD_ERROR_UNKNOWN;
+                }
+            }
+            break;
+
+        case FS_ERROR_FILE_NOT_FOUND:
+            resp->p.cmd_log_read_resp.error_code = CMD_ERROR_FILE_NOT_FOUND;
+            break;
+
+        default:
+            resp->p.cmd_log_read_resp.error_code = CMD_ERROR_UNKNOWN;
+            break;
+    }
+
+    resp->p.cmd_log_read_resp.length = sm_context.log_read.length;
+
+    buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_log_read_resp_t));
+    config_if_send_priv(&config_if_send_buffer);
+}
+
+static void log_read_next_state()
+{
+    uint32_t bytes_to_read;
+    uint32_t bytes_actually_read;
+    int ret;
+
+    // Get write buffer
+    uint8_t * read_buffer;
+    if (!buffer_write(&config_if_send_buffer, (uintptr_t *)&read_buffer))
+        Throw(EXCEPTION_TX_BUFFER_FULL);
+
+    // Is there a reading offset?
+    while (sm_context.log_read.start_offset)
+    {
+        // If so move to this location in packet sized chunks
+        bytes_to_read = MIN(sm_context.log_read.start_offset, SYSHAL_USB_PACKET_SIZE);
+
+        ret = fs_read(sm_context.log_read.file_handle, &read_buffer, bytes_to_read, &bytes_actually_read);
+        if (FS_NO_ERROR != ret)
+        {
+            sm_context.log_read.error_code = CMD_ERROR_UNKNOWN;
+            message_set_state(SM_MESSAGE_STATE_LOG_READ_CONFIRMATION);
+            Throw(EXCEPTION_FS_ERROR);
+        }
+
+        sm_context.log_read.start_offset -= bytes_actually_read;
+    }
+
+    // Read data out
+    bytes_to_read = MIN(sm_context.log_read.length, SYSHAL_USB_PACKET_SIZE);
+
+    ret = fs_read(sm_context.log_read.file_handle, &read_buffer, bytes_to_read, &bytes_actually_read);
+    if (FS_NO_ERROR != ret)
+    {
+        sm_context.log_read.error_code = CMD_ERROR_UNKNOWN;
+        message_set_state(SM_MESSAGE_STATE_LOG_READ_CONFIRMATION);
+        Throw(EXCEPTION_FS_ERROR);
+    }
+
+    sm_context.log_read.length -= bytes_actually_read;
+
+    if (sm_context.log_read.length) // Is there still data to send?
+    {
+        config_if_timeout_reset(); // Reset the message timeout counter
+    }
+    else
+    {
+        // We have sent all the data
+        sm_context.log_read.error_code = CMD_NO_ERROR;
+        message_set_state(SM_MESSAGE_STATE_LOG_READ_CONFIRMATION);
+    }
+
+}
+
+static void log_read_confirmation_state(void)
+{
+    // Generate response
+    cmd_t * resp;
+    if (!buffer_write(&config_if_send_buffer, (uintptr_t *)&resp))
+        Throw(EXCEPTION_TX_BUFFER_FULL);
+    CMD_SET_HDR(resp, CMD_GENERIC_RESP);
+
+    resp->p.cmd_generic_resp.error_code = sm_context.log_read.error_code;
+
+    buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_generic_resp_t));
+    config_if_send_priv(&config_if_send_buffer);
+
+    message_set_state(SM_MESSAGE_STATE_IDLE);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1398,6 +1639,14 @@ static void handle_config_if_messages(void)
 
             case SM_MESSAGE_STATE_GPS_READ_NEXT:
                 gps_read_next_state();
+                break;
+
+            case SM_MESSAGE_STATE_LOG_READ_NEXT:
+                log_read_next_state();
+                break;
+
+            case SM_MESSAGE_STATE_LOG_READ_CONFIRMATION:
+                log_read_confirmation_state();
                 break;
 
             default:

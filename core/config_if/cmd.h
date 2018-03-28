@@ -103,6 +103,7 @@ typedef enum
     CMD_ERROR_CONFIG_TAG_NOT_SET,   // Configuration tag has not been set.
     CMD_ERROR_BRIDGING_DISABLED,    // Bridging is currently disabled for this module/device
     CMD_ERROR_DATA_OVERSIZE,        // We've received more data then we were expecting
+    CMD_ERROR_INVALID_PARAMETER,    // An invalid parameter has been provided 
     CMD_ERROR_UNKNOWN,              // Error code for catching unknown errors. These should never occur
 } cmd_error_t;
 
