@@ -26,6 +26,56 @@
 #include "syshal_gpio.h"
 #include "bsp.h"
 
+#define SYSHAL_GPIO_NUMBER_EXTI   (16)
+
+// Create a structure for holding all GPIO interrupt callbacks
+typedef struct
+{
+    IRQn_Type irqnb;
+    void (*callback)(void);
+} syshal_gpio_irq_conf_t;
+
+static syshal_gpio_irq_conf_t syshal_gpio_irq_conf[SYSHAL_GPIO_NUMBER_EXTI] =
+{
+    {EXTI0_1_IRQn,  NULL,}, // GPIO_PIN_0
+    {EXTI0_1_IRQn,  NULL,}, // GPIO_PIN_1
+    {EXTI2_3_IRQn,  NULL,}, // GPIO_PIN_2
+    {EXTI2_3_IRQn,  NULL,}, // GPIO_PIN_3
+    {EXTI4_15_IRQn, NULL,}, // GPIO_PIN_4
+    {EXTI4_15_IRQn, NULL,}, // GPIO_PIN_5
+    {EXTI4_15_IRQn, NULL,}, // GPIO_PIN_6
+    {EXTI4_15_IRQn, NULL,}, // GPIO_PIN_7
+    {EXTI4_15_IRQn, NULL,}, // GPIO_PIN_8
+    {EXTI4_15_IRQn, NULL,}, // GPIO_PIN_9
+    {EXTI4_15_IRQn, NULL,}, // GPIO_PIN_10
+    {EXTI4_15_IRQn, NULL,}, // GPIO_PIN_11
+    {EXTI4_15_IRQn, NULL,}, // GPIO_PIN_12
+    {EXTI4_15_IRQn, NULL,}, // GPIO_PIN_13
+    {EXTI4_15_IRQn, NULL,}, // GPIO_PIN_14
+    {EXTI4_15_IRQn, NULL,}  // GPIO_PIN_15
+};
+
+/**
+  * @brief      This function converts the GPIO_PIN_0 value to its index in the
+  *             syshal_gpio_irq_conf table
+  *
+  * @param[in]  pin   The HAL pin name
+  *
+  * @return     The pin index in the syshal_gpio_irq_conf table
+  */
+static uint8_t syshal_gpio_get_pin_id_priv(uint16_t pin)
+{
+    uint8_t id = 0;
+
+    while (pin != 0x0001)
+    {
+        pin = pin >> 1;
+        id++;
+    }
+
+    return id;
+}
+
 /**
  * @brief      Initialise the given GPIO pin
  *
@@ -100,4 +150,89 @@ void syshal_gpio_set_output_high(uint32_t pin)
 bool syshal_gpio_get_input(uint32_t pin)
 {
     return ( (bool) HAL_GPIO_ReadPin(GPIO_Inits[pin].Port, GPIO_Inits[pin].Init.Pin) );
+}
+
+
+/**
+ * @brief      This function enables the interrupt on the given pin and will
+ *             generate a callback event when triggered
+ *
+ * @param[in]  pin                The pin
+ * @param[in]  callback_function  The callback function to be called on an
+ *                                interrupt on the given pin
+ */
+void syshal_gpio_enable_interrupt(uint32_t pin, void (*callback_function)(void))
+{
+    uint8_t id = syshal_gpio_get_pin_id_priv(GPIO_Inits[pin].Init.Pin);
+
+    syshal_gpio_irq_conf[id].callback = callback_function;
+
+    // Enable and set interrupt to the lowest priority
+    HAL_NVIC_SetPriority(syshal_gpio_irq_conf[id].irqnb, 0x06, 0);
+    HAL_NVIC_EnableIRQ(syshal_gpio_irq_conf[id].irqnb);
+}
+
+/**
+  * @brief      This function disable the interrupt on the given pin
+  *
+  * @param[in]  pin   The pin
+  */
+void syshal_gpio_disable_interrupt(uint32_t pin)
+{
+    uint8_t id = syshal_gpio_get_pin_id_priv(GPIO_Inits[pin].Init.Pin);
+
+    syshal_gpio_irq_conf[id].callback = NULL;
+
+    HAL_NVIC_DisableIRQ(syshal_gpio_irq_conf[id].irqnb);
+}
+
+/**
+  * @brief      This function his called by the HAL if the IRQ is valid
+  *
+  * @param      GPIO_Pin  : one of the gpio pins
+  */
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+    uint8_t irq_id = syshal_gpio_get_pin_id_priv(GPIO_Pin);
+
+    if (syshal_gpio_irq_conf[irq_id].callback != NULL)
+    {
+        syshal_gpio_irq_conf[irq_id].callback();
+    }
+}
+
+/**
+  * @brief      This function handles external line 0 to 1 interrupt requests
+  */
+void EXTI0_1_IRQHandler(void)
+{
+    uint32_t pin;
+    for (pin = GPIO_PIN_0; pin <= GPIO_PIN_1; pin = pin << 1)
+    {
+        HAL_GPIO_EXTI_IRQHandler(pin);
+    }
+}
+
+/**
+  * @brief      This function handles external line 2 to 3 interrupt requests
+  */
+void EXTI2_3_IRQHandler(void)
+{
+    uint32_t pin;
+    for (pin = GPIO_PIN_2; pin <= GPIO_PIN_3; pin = pin << 1)
+    {
+        HAL_GPIO_EXTI_IRQHandler(pin);
+    }
+}
+
+/**
+  * @brief      This function handles external line 4 to 15 interrupt requests
+  */
+void EXTI4_15_IRQHandler(void)
+{
+    uint32_t pin;
+    for (pin = GPIO_PIN_4; pin <= GPIO_PIN_15; pin = pin << 1)
+    {
+        HAL_GPIO_EXTI_IRQHandler(pin);
+    }
 }
