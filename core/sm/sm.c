@@ -168,6 +168,56 @@ static void config_if_receive_priv(void)
     }
 }
 
+/**
+ * @brief      Determines if any essential configuration tags are not set
+ *
+ * @return     True if essential configuration tags are not set
+ */
+static bool configuration_tags_not_set(void)
+{
+    // Check that all configuration tags are set
+    bool tag_not_set = false;
+    uint16_t tag = 0;
+    uint16_t last_index = 0;
+
+    bool ble_beacon_enabled = false;
+
+    while (!sys_config_iterate(&tag, &last_index))
+    {
+        if (SYS_CONFIG_TAG_RTC_CURRENT_DATE_AND_TIME == tag)
+            continue; // Skip the date and time as this is always set
+
+        if (!ble_beacon_enabled) // If ble beacon is disabled
+        {
+            if (SYS_CONFIG_TAG_BLUETOOTH_BEACON_GEO_FENCE_TRIGGER_LOCATION == tag ||
+                SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_INTERVAL == tag ||
+                SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_CONFIGURATION == tag)
+            {
+                continue; // Then don't check the beacon tags
+            }
+        }
+
+        void * src;
+        int return_code = sys_config_get(tag, &src);
+
+        if (SYS_CONFIG_ERROR_TAG_NOT_SET == return_code)
+        {
+            tag_not_set = true;
+        }
+        else if (SYS_CONFIG_TAG_BLUETOOTH_BEACON_ENABLE == tag)
+        {
+            ble_beacon_enabled = ((sys_config_bluetooth_beacon_enable_t *) src)->contents.enable;
+        }
+    }
+
+    if (tag_not_set)
+    {
+        DEBUG_PR_WARN("Configuration tags not set");
+    }
+
+    return tag_not_set;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////// CFG_READ ///////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -264,6 +314,7 @@ void cfg_read_req(cmd_t * req, uint16_t size)
 
         if (ret < 0)
         {
+            resp->p.cmd_cfg_read_resp.length = 0;
             if (SYS_CONFIG_ERROR_INVALID_TAG == ret)  // Tag is not valid. Return an error code
             {
                 resp->p.cmd_cfg_read_resp.error_code = CMD_ERROR_INVALID_CONFIG_TAG;
@@ -805,6 +856,8 @@ int config_if_event_handler(config_if_event_t * event)
             DEBUG_PR_TRACE("CONFIG_IF_EVENT_DISCONNECTED");
             // Clear all pending transmissions/receptions
             config_if_session_cleanup();
+            if (configuration_tags_not_set())
+                sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED);
             syshal_gps_bridging = false;
             break;
 
@@ -1115,23 +1168,7 @@ void boot_state(void)
 
     // Otherwise, if no configuration file is present or the current configuration is invalid then the system shall transition to the PROVISIONING_NEEDED sub-state.
 
-    // Check that all configuration tags are set
-    bool tag_not_set = false;
-    uint16_t tag = 0;
-    uint16_t last_index = 0;
-
-    while (!sys_config_iterate(&tag, &last_index))
-    {
-        int return_code = sys_config_get(tag, NULL);
-
-        if (SYS_CONFIG_ERROR_TAG_NOT_SET == return_code)
-        {
-            DEBUG_PR_WARN("Tag 0x%04X not set", tag);
-            tag_not_set = true;
-        }
-    }
-
-    if (tag_not_set)
+    if (configuration_tags_not_set()) // Check that all configuration tags are set
         sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED); // Not all tags are set, we need provisioning
     else
         sm_set_state(SM_STATE_OPERATIONAL); // All systems go for standard operation
@@ -1171,7 +1208,7 @@ void standby_provisioning_needed_state()
         blinkTimer = syshal_time_get_ticks_ms();
     }
 
-    sm_set_state(SM_STATE_PROVISIONING); // FIXME: Temporary state change as USB detection is not implemented
+    //sm_set_state(SM_STATE_PROVISIONING); // FIXME: Temporary state change as USB detection is not implemented
 
     // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
     //if (syshal_batt_charging())
