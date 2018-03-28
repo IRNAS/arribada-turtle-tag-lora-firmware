@@ -106,6 +106,7 @@ static volatile buffer_t config_if_receive_buffer;
 static volatile uint8_t  config_if_send_buffer_pool[SYSHAL_USB_PACKET_SIZE * 2];
 static volatile uint8_t  config_if_receive_buffer_pool[SYSHAL_USB_PACKET_SIZE];
 static uint32_t          config_if_message_timeout;
+static volatile bool     config_if_connected = false;
 
 ////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////// PROTOTYPES ///////////////////////////////////
@@ -173,7 +174,7 @@ static void config_if_receive_priv(void)
  *
  * @return     True if essential configuration tags are not set
  */
-static bool configuration_tags_not_set(void)
+static bool configuration_tags_set(void)
 {
     // Check that all configuration tags are set
     bool tag_not_set = false;
@@ -215,7 +216,7 @@ static bool configuration_tags_not_set(void)
         DEBUG_PR_WARN("Configuration tags not set");
     }
 
-    return tag_not_set;
+    return !tag_not_set;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -849,15 +850,16 @@ int config_if_event_handler(config_if_event_t * event)
 
         case CONFIG_IF_EVENT_CONNECTED:
             DEBUG_PR_TRACE("CONFIG_IF_EVENT_CONNECTED");
-            sm_set_state(SM_STATE_PROVISIONING);
+            config_if_session_cleanup(); // Clean up any previous session
+            config_if_timeout_reset(); // Reset our timeout counter
+            config_if_connected = true;
             break;
 
         case CONFIG_IF_EVENT_DISCONNECTED:
             DEBUG_PR_TRACE("CONFIG_IF_EVENT_DISCONNECTED");
             // Clear all pending transmissions/receptions
             config_if_session_cleanup();
-            if (configuration_tags_not_set())
-                sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED);
+            config_if_connected = false;
             syshal_gps_bridging = false;
             break;
 
@@ -1056,10 +1058,6 @@ static void handle_config_if_messages(void)
 {
     CEXCEPTION_T e = CEXCEPTION_NONE;
 
-    // If this is our first time entering the function setup the timeout counter
-    if (0 == config_if_message_timeout)
-        config_if_timeout_reset();
-
     // Has a message timeout occured?
     if ((syshal_time_get_ticks_ms() - config_if_message_timeout) > SM_MESSAGE_INACTIVITY_TIMEOUT_MS)
     {
@@ -1168,10 +1166,17 @@ void boot_state(void)
 
     // Otherwise, if no configuration file is present or the current configuration is invalid then the system shall transition to the PROVISIONING_NEEDED sub-state.
 
-    if (configuration_tags_not_set()) // Check that all configuration tags are set
-        sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED); // Not all tags are set, we need provisioning
-    else
+    if (configuration_tags_set()) // Check that all configuration tags are set
         sm_set_state(SM_STATE_OPERATIONAL); // All systems go for standard operation
+    else
+    {
+        if (config_if_connected)
+            sm_set_state(SM_STATE_PROVISIONING);
+        else
+            sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED);
+    }
+
+
 
 }
 
@@ -1208,7 +1213,8 @@ void standby_provisioning_needed_state()
         blinkTimer = syshal_time_get_ticks_ms();
     }
 
-    //sm_set_state(SM_STATE_PROVISIONING); // FIXME: Temporary state change as USB detection is not implemented
+    if (config_if_connected)
+        sm_set_state(SM_STATE_PROVISIONING); // Not all tags are set, we need provisioning
 
     // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
     //if (syshal_batt_charging())
@@ -1229,6 +1235,15 @@ void provisioning_state(void)
     syshal_gpio_set_output_high(GPIO_LED4); // Indicate what state we're in
 
     handle_config_if_messages();
+
+    // Has our configuration interface been disconnected?
+    if (!config_if_connected)
+    {
+        if (configuration_tags_set())
+            sm_set_state(SM_STATE_OPERATIONAL); // All systems go for standard operation
+        else
+            sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED); // We still need provisioning
+    }
 }
 
 void operational_state(void)
