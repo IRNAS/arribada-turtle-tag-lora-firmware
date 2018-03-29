@@ -68,7 +68,6 @@ typedef enum
     SM_MESSAGE_STATE_GPS_WRITE_NEXT,
     SM_MESSAGE_STATE_GPS_READ_NEXT,
     SM_MESSAGE_STATE_LOG_READ_NEXT,
-    SM_MESSAGE_STATE_LOG_READ_CONFIRMATION,
 } sm_message_state_t;
 static sm_message_state_t message_state = SM_MESSAGE_STATE_IDLE;
 
@@ -106,7 +105,6 @@ typedef struct
             uint32_t length;
             uint32_t start_offset;
             fs_handle_t file_handle;
-            uint8_t error_code;
         } log_read;
     };
 } sm_context_t;
@@ -218,7 +216,7 @@ static bool check_configuration_tags_set(void)
     sys_config_bluetooth_beacon_enable_t tag_data;
     ret = sys_config_get(SYS_CONFIG_TAG_BLUETOOTH_BEACON_ENABLE, (void *) &tag_data.contents);
     if (ret < 0) {
-        ble_beacon_enabled = false; // Tag is either not set or invalid
+        ble_beacon_enabled = false; // Tag is either not set or invalid, so default to disabled
     } else {
         ble_beacon_enabled = tag_data.contents.enable;
     }
@@ -1367,26 +1365,9 @@ static void log_read_next_state()
     {
         // We have sent all the data
         fs_close(sm_context.log_read.file_handle); // Close the file
-        sm_context.log_read.error_code = CMD_NO_ERROR;
-        message_set_state(SM_MESSAGE_STATE_LOG_READ_CONFIRMATION);
+        message_set_state(SM_MESSAGE_STATE_IDLE);
     }
 
-}
-
-static void log_read_confirmation_state(void)
-{
-    // Generate response
-    cmd_t * resp;
-    if (!buffer_write(&config_if_send_buffer, (uintptr_t *)&resp))
-        Throw(EXCEPTION_TX_BUFFER_FULL);
-    CMD_SET_HDR(resp, CMD_GENERIC_RESP);
-
-    resp->p.cmd_generic_resp.error_code = sm_context.log_read.error_code;
-
-    buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_generic_resp_t));
-    config_if_send_priv(&config_if_send_buffer);
-
-    message_set_state(SM_MESSAGE_STATE_IDLE);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1673,10 +1654,6 @@ static void handle_config_if_messages(void)
 
             case SM_MESSAGE_STATE_LOG_READ_NEXT:
                 log_read_next_state();
-                break;
-
-            case SM_MESSAGE_STATE_LOG_READ_CONFIRMATION:
-                log_read_confirmation_state();
                 break;
 
             default:
