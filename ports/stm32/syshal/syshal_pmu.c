@@ -57,3 +57,11 @@ void syshal_pmu_set_level(syshal_pmu_power_level_t level)
     }
 
 }
+
+/**
+ * @brief      Causes a software reset of the MCU
+ */
+void syshal_pmu_reset(void)
+{
+    NVIC_SystemReset();
+}

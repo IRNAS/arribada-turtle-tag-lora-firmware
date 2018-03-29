@@ -44,6 +44,12 @@ typedef struct __attribute__((__packed__))
     uint8_t cmd;
 } cmd_hdr_t;
 
+enum
+{
+    CMD_LOG_CREATE_REQ_MODE_FILL,
+    CMD_LOG_CREATE_REQ_MODE_CIRCULAR
+};
+
 typedef enum
 {
     CMD_GENERIC_RESP, // Generic response message sent where only an error response is needed
@@ -103,8 +109,7 @@ typedef enum
     CMD_ERROR_CONFIG_TAG_NOT_SET,   // Configuration tag has not been set.
     CMD_ERROR_BRIDGING_DISABLED,    // Bridging is currently disabled for this module/device
     CMD_ERROR_DATA_OVERSIZE,        // We've received more data then we were expecting
-    CMD_ERROR_INVALID_PARAMETER,    // An invalid parameter has been provided 
-    CMD_ERROR_UNKNOWN,              // Error code for catching unknown errors. These should never occur
+    CMD_ERROR_INVALID_PARAMETER,    // An invalid parameter has been provided
 } cmd_error_t;
 
 // Exposed functions

@@ -31,6 +31,7 @@
 #include "syshal_gpio.h"
 #include "syshal_gps.h"
 #include "syshal_i2c.h"
+#include "syshal_pmu.h"
 #include "syshal_spi.h"
 #include "syshal_uart.h"
 #include "syshal_usb.h"
@@ -114,6 +115,8 @@ static sm_context_t sm_context;
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////// GLOBALS /////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
+
+#define DUMMY_BATTERY_MONITOR // Spoof any reads from the battery monitor
 
 #define FS_FILE_ID_CONF             (0) // The File ID of the configuration data
 #define FS_FILE_ID_STM32_IMAGE      (1) // STM32 application image
@@ -203,14 +206,16 @@ static void config_if_receive_priv(void)
  *
  * @return     True if essential configuration tags are not set
  */
-static bool configuration_tags_set(void)
+static bool check_configuration_tags_set(void)
 {
     // Check that all configuration tags are set
     bool tag_not_set = false;
-    uint16_t tag = 0;
-    uint16_t last_index = 0;
+    uint16_t tag, last_index = 0;
 
-    bool ble_beacon_enabled = false;
+    // Determine if Bluetooth beaconing is enabled
+    sys_config_bluetooth_beacon_enable_t tag_data;
+    sys_config_get(SYS_CONFIG_TAG_BLUETOOTH_BEACON_ENABLE, (void *) &tag_data.contents);
+    bool ble_beacon_enabled = tag_data.contents.enable;
 
     while (!sys_config_iterate(&tag, &last_index))
     {
@@ -220,8 +225,8 @@ static bool configuration_tags_set(void)
         if (!ble_beacon_enabled) // If ble beacon is disabled
         {
             if (SYS_CONFIG_TAG_BLUETOOTH_BEACON_GEO_FENCE_TRIGGER_LOCATION == tag ||
-                SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_INTERVAL == tag ||
-                SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_CONFIGURATION == tag)
+                    SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_INTERVAL == tag ||
+                    SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_CONFIGURATION == tag)
             {
                 continue; // Then don't check the beacon tags
             }
@@ -233,10 +238,6 @@ static bool configuration_tags_set(void)
         if (SYS_CONFIG_ERROR_TAG_NOT_SET == return_code)
         {
             tag_not_set = true;
-        }
-        else if (SYS_CONFIG_TAG_BLUETOOTH_BEACON_ENABLE == tag)
-        {
-            ble_beacon_enabled = ((sys_config_bluetooth_beacon_enable_t *) src)->contents.enable;
         }
     }
 
@@ -262,8 +263,7 @@ static int fs_create_configuration_data(void)
 {
     // The configuration file does not exist so lets make one
     fs_handle_t file_system_handle;
-    uint8_t user_flags;
-    int ret = fs_open(file_system, &file_system_handle, FS_FILE_ID_CONF, FS_MODE_CREATE, &user_flags);
+    int ret = fs_open(file_system, &file_system_handle, FS_FILE_ID_CONF, FS_MODE_CREATE, NULL);
 
     if (FS_NO_ERROR != ret)
         return ret; // An unrecoverable error has occured
@@ -272,6 +272,8 @@ static int fs_create_configuration_data(void)
     // So lets write our blank configuration data to it
     uint32_t bytes_written;
     ret = fs_write(file_system_handle, &sys_config, sizeof(sys_config), &bytes_written);
+
+    fs_close(file_system_handle); // Close the newly created file and flush any data
 
     if (FS_NO_ERROR != ret)
         return ret; // An unrecoverable error has occured
@@ -282,9 +284,26 @@ static int fs_create_configuration_data(void)
         return FS_ERROR_FLASH_MEDIA;
     }
 
-    fs_close(file_system_handle); // Close the newly created file and flush any data
-
     return FS_NO_ERROR;
+}
+
+/**
+ * @brief      Deletes our configuration data file in FLASH
+ *
+ * @return     @ref FS_NO_ERROR on success.
+ * @return     @ref FS_ERROR_FILE_NOT_FOUND if the configuration file was not
+ *             found.
+ * @return     @ref FS_ERROR_FILE_PROTECTED if the configuration file is write
+ *             protected
+ * @return     @ref FS_ERROR_FLASH_MEDIA if the amount of data written to the file
+ *             is not of expected length
+ * @return     @ref FS_ERROR_NO_FREE_HANDLE if no file handle could be allocated.
+ */
+static int fs_delete_configuration_data(void)
+{
+    int ret = fs_delete(file_system, FS_FILE_ID_LOG);
+
+    return ret;
 }
 
 /**
@@ -302,8 +321,7 @@ static int fs_create_configuration_data(void)
 static int fs_set_configuration_data(void)
 {
     fs_handle_t file_system_handle;
-    uint8_t user_flags;
-    int ret = fs_open(file_system, &file_system_handle, FS_FILE_ID_CONF, FS_MODE_WRITEONLY, &user_flags);
+    int ret = fs_open(file_system, &file_system_handle, FS_FILE_ID_CONF, FS_MODE_WRITEONLY, NULL);
 
     if (FS_NO_ERROR != ret)
         return ret; // An unrecoverable error has occured
@@ -313,6 +331,8 @@ static int fs_set_configuration_data(void)
     uint32_t bytes_written;
     ret = fs_write(file_system_handle, &sys_config, sizeof(sys_config), &bytes_written);
 
+    fs_close(file_system_handle); // Close the file and flush any data
+
     if (FS_NO_ERROR != ret)
         return ret; // An unrecoverable error has occured
 
@@ -321,8 +341,6 @@ static int fs_set_configuration_data(void)
         DEBUG_PR_WARN("%s() size mismatch", __FUNCTION__);
         return FS_ERROR_FLASH_MEDIA;
     }
-
-    fs_close(file_system_handle); // Close the newly created file and flush any data
 
     return FS_NO_ERROR;
 }
@@ -340,9 +358,8 @@ static int fs_set_configuration_data(void)
 static int fs_get_configuration_data(void)
 {
     fs_handle_t file_system_handle;
-    uint8_t user_flags;
     // Attempt to open the configuration file
-    int ret = fs_open(file_system, &file_system_handle, FS_FILE_ID_CONF, FS_MODE_READONLY, &user_flags);
+    int ret = fs_open(file_system, &file_system_handle, FS_FILE_ID_CONF, FS_MODE_READONLY, NULL);
 
     if (FS_NO_ERROR != ret)
         return ret; // An unrecoverable error has occured
@@ -350,6 +367,8 @@ static int fs_get_configuration_data(void)
     // We have opened the configuration file, so now we need to load the data from it
     uint32_t bytes_read;
     ret = fs_read(file_system_handle, &sys_config, sizeof(sys_config), &bytes_read);
+
+    fs_close(file_system_handle); // We're done reading from this file
 
     if (FS_NO_ERROR != ret)
         return ret; // An unrecoverable error has occured
@@ -359,8 +378,6 @@ static int fs_get_configuration_data(void)
         DEBUG_PR_WARN("%s() size mismatch", __FUNCTION__);
         return FS_ERROR_FLASH_MEDIA;
     }
-
-    fs_close(file_system_handle); // We're done reading from this file
 
     return FS_NO_ERROR;
 }
@@ -655,11 +672,20 @@ static void cfg_save_req(cmd_t * req, uint16_t size)
         Throw(EXCEPTION_TX_BUFFER_FULL);
     CMD_SET_HDR(resp, CMD_GENERIC_RESP);
 
-    int ret = fs_set_configuration_data();
+    int ret = fs_delete_configuration_data(); // Must first delete our configuration data
 
     switch (ret)
     {
         case FS_NO_ERROR:
+
+            ret = fs_create_configuration_data(); // Recreate the file
+            if (FS_NO_ERROR != ret)
+                Throw(EXCEPTION_FS_ERROR);
+
+            ret = fs_set_configuration_data(); // Flush our RAM configuration data to the file
+            if (FS_NO_ERROR != ret)
+                Throw(EXCEPTION_FS_ERROR);
+
             resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
             break;
 
@@ -668,7 +694,7 @@ static void cfg_save_req(cmd_t * req, uint16_t size)
             break;
 
         default:
-            resp->p.cmd_generic_resp.error_code = CMD_ERROR_UNKNOWN;
+            Throw(EXCEPTION_FS_ERROR);
             break;
     }
 
@@ -704,7 +730,7 @@ static void cfg_restore_req(cmd_t * req, uint16_t size)
             break;
 
         default:
-            resp->p.cmd_generic_resp.error_code = CMD_ERROR_UNKNOWN;
+            Throw(EXCEPTION_FS_ERROR);
             break;
     }
 
@@ -755,7 +781,7 @@ static void cfg_erase_req(cmd_t * req, uint16_t size)
                 break;
 
             default:
-                resp->p.cmd_generic_resp.error_code = CMD_ERROR_UNKNOWN;
+                Throw(EXCEPTION_FS_ERROR);
                 break;
         }
     }
@@ -792,7 +818,7 @@ static void cfg_protect_req(cmd_t * req, uint16_t size)
             break;
 
         default:
-            resp->p.cmd_generic_resp.error_code = CMD_ERROR_UNKNOWN;
+            Throw(EXCEPTION_FS_ERROR);
             break;
     }
 
@@ -829,7 +855,7 @@ static void cfg_unprotect_req(cmd_t * req, uint16_t size)
             break;
 
         default:
-            resp->p.cmd_generic_resp.error_code = CMD_ERROR_UNKNOWN;
+            Throw(EXCEPTION_FS_ERROR);
             break;
     }
 
@@ -1081,9 +1107,7 @@ static void reset_req(cmd_t * req, uint16_t size)
     while (config_if_tx_pending)
     {}
 
-#ifdef __CORTEX_M // FIXME: find and replace with the ARM macro
-    NVIC_SystemReset();
-#endif
+    syshal_pmu_reset();
 
     // If a system reset isn't available then block until a watchdog reset
     for (;;) {}
@@ -1106,15 +1130,15 @@ static void battery_status_req(cmd_t * req, uint16_t size)
 
     DEBUG_PR_WARN("%s() NOT IMPLEMENTED, responding with spoof data", __FUNCTION__);
 
+#ifdef DUMMY_BATTERY_MONITOR
     resp->p.cmd_battery_status_resp.error_code = CMD_NO_ERROR;
     resp->p.cmd_battery_status_resp.charging_indicator = 1;
     resp->p.cmd_battery_status_resp.charge_level = 100;
-
-    /*
+#else
     resp->p.cmd_battery_status_resp.error_code = CMD_NO_ERROR;
     resp->p.cmd_battery_status_resp.charging_indicator = syshal_batt_charging();
     resp->p.cmd_battery_status_resp.charge_level = syshal_batt_level();
-    */
+#endif
 
     buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_battery_status_resp_t));
     config_if_send_priv(&config_if_send_buffer);
@@ -1141,18 +1165,26 @@ static void log_create_req(cmd_t * req, uint16_t size)
     uint8_t sync_enable = req->p.cmd_log_create_req.sync_enable;
     uint8_t max_file_size = req->p.cmd_log_create_req.max_file_size;
 
-    UNUSED(max_file_size); // FIXME: This should be used
+    UNUSED(max_file_size);
 
     // Attempt to create the log file
-    if (FS_MODE_CREATE == mode || FS_MODE_CREATE_CIRCULAR == mode)
+    if (CMD_LOG_CREATE_REQ_MODE_FILL == mode || CMD_LOG_CREATE_REQ_MODE_CIRCULAR == mode)
     {
+        // Convert from create mode to fs_mode_t
+        fs_mode_t fs_mode;
+        if (CMD_LOG_CREATE_REQ_MODE_FILL == mode)
+            fs_mode = FS_MODE_CREATE;
+        else if (CMD_LOG_CREATE_REQ_MODE_CIRCULAR == mode)
+            fs_mode = FS_MODE_CREATE_CIRCULAR;
+
         fs_handle_t file_system_handle;
-        int ret = fs_open(file_system, &file_system_handle, FS_FILE_ID_LOG, mode, &sync_enable);
+        int ret = fs_open(file_system, &file_system_handle, FS_FILE_ID_LOG, fs_mode, &sync_enable);
 
         switch (ret)
         {
             case FS_NO_ERROR:
                 resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
+                fs_close(file_system_handle); // Close the file
                 break;
 
             case FS_ERROR_FILE_ALREADY_EXISTS:
@@ -1160,7 +1192,7 @@ static void log_create_req(cmd_t * req, uint16_t size)
                 break;
 
             default:
-                resp->p.cmd_generic_resp.error_code = CMD_ERROR_UNKNOWN;
+                Throw(EXCEPTION_FS_ERROR);
                 break;
         }
     }
@@ -1206,7 +1238,7 @@ static void log_erase_req(cmd_t * req, uint16_t size)
             break;
 
         default:
-            resp->p.cmd_generic_resp.error_code = CMD_ERROR_UNKNOWN;
+            Throw(EXCEPTION_FS_ERROR);
             break;
     }
 
@@ -1259,8 +1291,7 @@ static void log_read_req(cmd_t * req, uint16_t size)
                 }
 
                 // Open the file
-                uint8_t user_flags;
-                ret = fs_open(file_system, &sm_context.log_read.file_handle, FS_FILE_ID_CONF, FS_MODE_READONLY, &user_flags);
+                ret = fs_open(file_system, &sm_context.log_read.file_handle, FS_FILE_ID_LOG, FS_MODE_READONLY, NULL);
 
                 if (FS_NO_ERROR == ret)
                 {
@@ -1269,7 +1300,7 @@ static void log_read_req(cmd_t * req, uint16_t size)
                 }
                 else
                 {
-                    resp->p.cmd_log_read_resp.error_code = CMD_ERROR_UNKNOWN;
+                    Throw(EXCEPTION_FS_ERROR);
                 }
             }
             break;
@@ -1279,7 +1310,7 @@ static void log_read_req(cmd_t * req, uint16_t size)
             break;
 
         default:
-            resp->p.cmd_log_read_resp.error_code = CMD_ERROR_UNKNOWN;
+            Throw(EXCEPTION_FS_ERROR);
             break;
     }
 
@@ -1309,8 +1340,6 @@ static void log_read_next_state()
         ret = fs_read(sm_context.log_read.file_handle, &read_buffer, bytes_to_read, &bytes_actually_read);
         if (FS_NO_ERROR != ret)
         {
-            sm_context.log_read.error_code = CMD_ERROR_UNKNOWN;
-            message_set_state(SM_MESSAGE_STATE_LOG_READ_CONFIRMATION);
             Throw(EXCEPTION_FS_ERROR);
         }
 
@@ -1323,8 +1352,6 @@ static void log_read_next_state()
     ret = fs_read(sm_context.log_read.file_handle, &read_buffer, bytes_to_read, &bytes_actually_read);
     if (FS_NO_ERROR != ret)
     {
-        sm_context.log_read.error_code = CMD_ERROR_UNKNOWN;
-        message_set_state(SM_MESSAGE_STATE_LOG_READ_CONFIRMATION);
         Throw(EXCEPTION_FS_ERROR);
     }
 
@@ -1337,6 +1364,7 @@ static void log_read_next_state()
     else
     {
         // We have sent all the data
+        fs_close(sm_context.log_read.file_handle); // Close the file
         sm_context.log_read.error_code = CMD_NO_ERROR;
         message_set_state(SM_MESSAGE_STATE_LOG_READ_CONFIRMATION);
     }
@@ -1682,7 +1710,11 @@ void boot_state(void)
     syshal_spi_init(SPI_2);
     syshal_i2c_init(I2C_1);
     syshal_i2c_init(I2C_2);
-    //syshal_batt_init(I2C_1);
+
+#ifndef DUMMY_BATTERY_MONITOR
+    syshal_batt_init(I2C_1);
+#endif
+
     //syshal_gps_init();
     //syshal_usb_init();
 
@@ -1710,17 +1742,19 @@ void boot_state(void)
         Throw(EXCEPTION_FS_ERROR);
     }
 
+#ifndef DUMMY_BATTERY_MONITOR
     // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
-    //if (syshal_batt_charging())
-    //    sm_set_state(SM_STATE_STANDBY_BATTERY_CHARGING);
+    if (syshal_batt_charging())
+        sm_set_state(SM_STATE_STANDBY_BATTERY_CHARGING);
 
     // If the battery level is too low then the system shall transition to the BATTERY_LEVEL_LOW state
-    //if (syshal_batt_state() == POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL)
-    //    sm_set_state(SM_STATE_STANDBY_BATTERY_LEVEL_LOW);
+    if (syshal_batt_state() == POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL)
+        sm_set_state(SM_STATE_STANDBY_BATTERY_LEVEL_LOW);
 
     // If either the USB 5V input signal or the BLE reed switch are active and the battery level is sufficient then it shall be possible to transition directly to the PROVISIONING state.
-    //if (syshal_gpio_get_input(GPIO_USB_DETECT) || syshal_gpio_get_input(GPIO_BLE_REED))
-    //    sm_set_state(SM_STATE_PROVISIONING);
+    if (config_if_connected)
+        sm_set_state(SM_STATE_PROVISIONING);
+#endif
 
     // Generate spoof time/date data
     sys_config_rtc_current_date_and_time_t date_time;
@@ -1732,16 +1766,10 @@ void boot_state(void)
     date_time.contents.seconds = 6;
     sys_config_set(SYS_CONFIG_TAG_RTC_CURRENT_DATE_AND_TIME, &date_time.contents, SYS_CONFIG_TAG_DATA_SIZE(sys_config_rtc_current_date_and_time_t));
 
-    if (configuration_tags_set()) // Check that all configuration tags are set
-        sm_set_state(SM_STATE_OPERATIONAL); // All systems go for standard operation
+    if (!check_configuration_tags_set()) // Check that all configuration tags are set
+        sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED); // Not all required configuration data is set
     else
-    {
-        // Not all required configuration data is set
-        if (config_if_connected)
-            sm_set_state(SM_STATE_PROVISIONING);
-        else
-            sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED);
-    }
+        sm_set_state(SM_STATE_OPERATIONAL); // All systems go for standard operation
 
     syshal_gpio_set_output_high(GPIO_LED3); // Indicate boot passed
 
@@ -1781,15 +1809,26 @@ void standby_provisioning_needed_state()
     }
 
     if (config_if_connected)
+    {
         sm_set_state(SM_STATE_PROVISIONING); // Not all tags are set, we need provisioning
+        return;
+    }
 
+#ifndef DUMMY_BATTERY_MONITOR
     // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
-    //if (syshal_batt_charging())
-    //    sm_set_state(SM_STATE_STANDBY_BATTERY_CHARGING);
+    if (syshal_batt_charging())
+    {
+        sm_set_state(SM_STATE_STANDBY_BATTERY_CHARGING);
+        return;
+    }
 
     // If the battery level is too low then the system shall transition to the BATTERY_LEVEL_LOW state
-    //if (syshal_batt_state() == POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL)
-    //    sm_set_state(SM_STATE_STANDBY_BATTERY_LEVEL_LOW);
+    if (syshal_batt_state() == POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL)
+    {
+        sm_set_state(SM_STATE_STANDBY_BATTERY_LEVEL_LOW);
+        return;
+    }
+#endif
 }
 
 void standby_trigger_pending_state()
@@ -1807,7 +1846,7 @@ void provisioning_state(void)
     if (!config_if_connected)
     {
         // If so we should change state
-        if (configuration_tags_set())
+        if (check_configuration_tags_set())
             sm_set_state(SM_STATE_OPERATIONAL); // All systems go for standard operation
         else
             sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED); // We still need provisioning
