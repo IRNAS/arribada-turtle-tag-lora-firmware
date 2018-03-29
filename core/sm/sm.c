@@ -211,11 +211,17 @@ static bool check_configuration_tags_set(void)
     // Check that all configuration tags are set
     bool tag_not_set = false;
     uint16_t tag, last_index = 0;
+    int ret;
+    bool ble_beacon_enabled;
 
     // Determine if Bluetooth beaconing is enabled
     sys_config_bluetooth_beacon_enable_t tag_data;
-    sys_config_get(SYS_CONFIG_TAG_BLUETOOTH_BEACON_ENABLE, (void *) &tag_data.contents);
-    bool ble_beacon_enabled = tag_data.contents.enable;
+    ret = sys_config_get(SYS_CONFIG_TAG_BLUETOOTH_BEACON_ENABLE, (void *) &tag_data.contents);
+    if (ret < 0) {
+        ble_beacon_enabled = false; // Tag is either not set or invalid
+    } else {
+        ble_beacon_enabled = tag_data.contents.enable;
+    }
 
     while (!sys_config_iterate(&tag, &last_index))
     {
@@ -233,9 +239,9 @@ static bool check_configuration_tags_set(void)
         }
 
         void * src;
-        int return_code = sys_config_get(tag, &src);
+    ret = sys_config_get(tag, &src);
 
-        if (SYS_CONFIG_ERROR_TAG_NOT_SET == return_code)
+        if (SYS_CONFIG_ERROR_TAG_NOT_SET == ret)
         {
             tag_not_set = true;
         }
@@ -295,15 +301,11 @@ static int fs_create_configuration_data(void)
  *             found.
  * @return     @ref FS_ERROR_FILE_PROTECTED if the configuration file is write
  *             protected
- * @return     @ref FS_ERROR_FLASH_MEDIA if the amount of data written to the file
- *             is not of expected length
  * @return     @ref FS_ERROR_NO_FREE_HANDLE if no file handle could be allocated.
  */
 static int fs_delete_configuration_data(void)
 {
-    int ret = fs_delete(file_system, FS_FILE_ID_LOG);
-
-    return ret;
+    return(fs_delete(file_system, FS_FILE_ID_LOG));
 }
 
 /**
