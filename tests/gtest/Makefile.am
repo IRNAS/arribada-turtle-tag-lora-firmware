@@ -3,17 +3,25 @@ core_srcdir=$(basedir)/core
 devices_srcdir=$(basedir)/devices
 syshal_srcdir=$(basedir)/syshal
 gtest_srcdir=$(top_srcdir)/gtest
+ports_srcdir=$(basedir)/ports/stm32
+boards_srcdir=$(ports_srcdir)/boards/arribada_v1
+CMSIS_srcdir=$(ports_srcdir)/drivers/CMSIS
+device_srcdir=$(CMSIS_srcdir)/Device/ST/STM32F0xx
+hal_srcdir=$(ports_srcdir)/drivers/STM32F0xx_HAL_Driver
 hw_platform=arribada_v1
 cpu_platform=stm32
 
 AM_CPPFLAGS = -I$(syshal_srcdir)/inc \
               -I$(top_srcdir)/gtest/mocks \
               -g -Wall -DUNITTESTING -O0 \
-              -DBASEDIR=\"$(abspath $(gtest_srcdir))/\"
+              -DBASEDIR=\"$(abspath $(gtest_srcdir))/\" \
+              -DSTM32F072xB \
+              -DGTEST \
+              -DDEBUG_DISABLED
 
 HW_DEFS =
 AM_CXXFLAGS = -std=c++0x -g -pg -fprofile-arcs -ftest-coverage \
-              -I$(GTEST_INCLUDE) -O0 $(HW_DEFS) -DGTEST
+              -I$(GTEST_INCLUDE) -O0 $(HW_DEFS) -DGTEST -DDEBUG_DISABLED
 
 AM_CFLAGS = -std=gnu99 -fprofile-arcs -ftest-coverage -O0 $(HW_DEFS) -DGTEST -DCMOCK_MEM_SIZE=0x400000
 
@@ -63,6 +71,40 @@ nodist_Ble_nRF52_SOURCES = $(gtest_srcdir)/Ble_nRF52.cpp \
 Ble_nRF52_LDADD = $(COMMON_LDADD)
 Ble_nRF52_CPPFLAGS = $(AM_CPPFLAGS) -I$(devices_srcdir)/ble/nRF52x
 TESTS += Ble_nRF52.test
+
+check_PROGRAMS += Sm
+nodist_Sm_SOURCES = $(gtest_srcdir)/Sm.cpp \
+                    $(gtest_srcdir)/mocks/cmock.c \
+                    $(gtest_srcdir)/mocks/Mockconfig_if.c \
+                    $(gtest_srcdir)/mocks/Mocksyshal_gpio.c \
+                    $(gtest_srcdir)/mocks/Mocksyshal_gps.c \
+                    $(gtest_srcdir)/mocks/Mocksyshal_i2c.c \
+                    $(gtest_srcdir)/mocks/Mocksyshal_pmu.c \
+                    $(gtest_srcdir)/mocks/Mocksyshal_spi.c \
+                    $(gtest_srcdir)/mocks/Mocksyshal_time.c \
+                    $(gtest_srcdir)/mocks/Mocksyshal_uart.c \
+                    $(gtest_srcdir)/mocks/Mockfs.c \
+                    $(core_srcdir)/cexception/cexception.c \
+                    $(core_srcdir)/buffer/buffer.c \
+                    $(core_srcdir)/sys_config/sys_config.c \
+                    $(core_srcdir)/sm/sm.c
+
+Sm_LDADD = $(COMMON_LDADD)
+Sm_CPPFLAGS = $(AM_CPPFLAGS) \
+						  -I$(core_srcdir)/sm \
+						  -I$(core_srcdir)/buffer \
+						  -I$(core_srcdir)/cexception \
+						  -I$(core_srcdir)/config_if \
+              -I$(core_srcdir)/sys_config \
+						  -I$(core_srcdir)/debug \
+						  -I$(core_srcdir)/fs \
+						  -I$(core_srcdir)/config \
+						  -I$(ports_srcdir) \
+						  -I$(boards_srcdir) \
+						  -I$(hal_srcdir)/Inc \
+						  -I$(device_srcdir)/Include \
+						  -I$(CMSIS_srcdir)/Include
+TESTS += Sm.test
 
 LINT_FLAGS  = -"A(C++2010)"
 LINT_FLAGS += -e537 # Ignore repeated includes
