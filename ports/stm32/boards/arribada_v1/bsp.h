@@ -30,6 +30,11 @@
 #define SWCLK_Pin GPIO_PIN_14
 #define SWCLK_GPIO_Port GPIOA
 
+// Logical device mappings to physical devices
+#define GPS_UART        UART_1
+#define SPI_BLE         SPI_1
+#define SPI_FLASH       SPI_2
+
 ///////////////////////////////// GPIO definitions ////////////////////////////////
 typedef enum
 {
