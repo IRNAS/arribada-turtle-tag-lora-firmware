@@ -52,4 +52,10 @@
 #define NRF52_INT_FLASH_PROGRAMMING_DONE    0x08
 #define NRF52_INT_ERROR_INDICATION          0x10
 
+#define NRF52_ERROR_NONE                    0
+#define NRF52_ERROR_CRC                     1
+#define NRF52_ERROR_TIMEOUT                 2
+#define NRF52_ERROR_LENGTH                  3
+#define NRF52_ERROR_FW_TYPE                 4
+
 #endif /* _NRF52x_REGS_H_ */

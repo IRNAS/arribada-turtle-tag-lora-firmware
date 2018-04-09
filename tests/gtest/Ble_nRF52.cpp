@@ -45,6 +45,9 @@ static unsigned int rx_buf_wr = 0;
 static unsigned int rx_buf_rd = 0;
 static unsigned int tx_buf_wr = 0;
 static unsigned int tx_buf_rd = 0;
+static uint8_t event_id;
+static uint32_t event_error;
+static uint16_t event_length;
 
 #define EXPECT_ARRAY_EQ(TARTYPE, reference, actual, element_count) \
     {\
@@ -55,11 +58,21 @@ static unsigned int tx_buf_rd = 0;
     }\
     }
 
+void syshal_ble_event_handler(syshal_ble_event_t *event)
+{
+    event_id = event->event_id;
+    event_error = event->error;
+    event_length = event->send_complete.length;
+}
+
 class BleTest : public ::testing::Test {
 
     virtual void SetUp() {
         Mocksyshal_spi_Init();
         syshal_spi_transfer_StubWithCallback(syshal_spi_transfer_Callback);
+        event_id = -1;
+        event_error = -1;
+        event_length = -1;
     }
 
     virtual void TearDown() {
@@ -260,6 +273,70 @@ public:
         memcpy(&buf[1], scan_payload, 31);
         SpiTransfer(buf, NULL, sizeof(buf));
     }
+
+    void SendData(uint8_t *buffer, uint16_t size)
+    {
+        uint8_t buf[513];
+        buf[0] = NRF52_REG_ADDR_TX_DATA_PORT | NRF52_SPI_WRITE_NOT_READ_ADDR;
+        memcpy(&buf[1], buffer, size);
+        SpiTransfer(buf, NULL, size + 1);
+    }
+
+    void ReadIntStatus(uint8_t int_status)
+    {
+        uint8_t out[2], in[2];
+        memset(out, 0, sizeof(out));
+        out[0] = in[0] = NRF52_REG_ADDR_INT_STATUS;
+        in[1] = int_status;
+        SpiTransfer(out, in, 2);
+    }
+
+    void ReadErrorCode(uint8_t error_code)
+    {
+        uint8_t out[2], in[2];
+        memset(out, 0, sizeof(out));
+        out[0] = in[0] = NRF52_REG_ADDR_ERROR_CODE;
+        in[1] = error_code;
+        SpiTransfer(out, in, 2);
+    }
+
+    void ReadTxDataLength(uint16_t length)
+    {
+        uint8_t out[3], in[3];
+        memset(out, 0, sizeof(out));
+        out[0] = in[0] = NRF52_REG_ADDR_TX_DATA_LENGTH;
+        in[1] = length;
+        in[2] = length >> 8;
+        SpiTransfer(out, in, 3);
+    }
+
+    void ReadRxDataLength(uint16_t length)
+    {
+        uint8_t out[3], in[3];
+        memset(out, 0, sizeof(out));
+        out[0] = in[0] = NRF52_REG_ADDR_RX_DATA_LENGTH;
+        in[1] = length;
+        in[2] = length >> 8;
+        SpiTransfer(out, in, 3);
+    }
+
+    void ReadRxDataPort(uint8_t *buffer, uint16_t length)
+    {
+        uint8_t out[513], in[513];
+        memset(out, 0, sizeof(out));
+        out[0] = in[0] = NRF52_REG_ADDR_RX_DATA_PORT;
+        memcpy(&in[1], buffer, length);
+        SpiTransfer(out, in, length + 1);
+    }
+
+    void ExpectEvent(uint8_t id, uint32_t error, uint16_t length)
+    {
+        EXPECT_EQ(id, event_id);
+        EXPECT_EQ(error, event_error);
+        if (id == SYSHAL_BLE_EVENT_SEND_COMPLETE ||
+            id == SYSHAL_BLE_EVENT_RECEIVE_COMPLETE)
+            EXPECT_EQ(length, event_length);
+    }
 };
 
 TEST_F(BleTest, BleInitOk)
@@ -376,4 +453,71 @@ TEST_F(BleTest, BleConfigScanResponse)
     Init();
     SetScanResponse(scan_payload);
     EXPECT_EQ(SYSHAL_BLE_NO_ERROR, syshal_ble_config_scan_response(scan_payload));
+}
+
+TEST_F(BleTest, BleSend)
+{
+    uint8_t buffer[512];
+    for (unsigned int i = 0; i < 512; i++)
+        buffer[i] = (uint8_t)i;
+    Init();
+    SendData(buffer, 64);
+    EXPECT_EQ(SYSHAL_BLE_NO_ERROR, syshal_ble_send(buffer, 64));
+    ReadIntStatus(NRF52_INT_TX_DATA_SENT);
+    ReadTxDataLength(64);
+    EXPECT_EQ(SYSHAL_BLE_NO_ERROR, syshal_ble_tick());
+    ExpectEvent(SYSHAL_BLE_EVENT_SEND_COMPLETE, SYSHAL_BLE_NO_ERROR, 64);
+}
+
+TEST_F(BleTest, BleReceive)
+{
+    uint8_t expected_buffer[512];
+    uint8_t buffer[512];
+    for (unsigned int i = 0; i < 512; i++)
+        expected_buffer[i] = (uint8_t)i;
+    memset(buffer, 0, sizeof(buffer));
+    Init();
+    EXPECT_EQ(SYSHAL_BLE_NO_ERROR, syshal_ble_receive(buffer, 512));
+    ReadIntStatus(NRF52_INT_RX_DATA_READY);
+    ReadRxDataLength(64);
+    ReadRxDataPort(expected_buffer, 64);
+    EXPECT_EQ(SYSHAL_BLE_NO_ERROR, syshal_ble_tick());
+    ExpectEvent(SYSHAL_BLE_EVENT_RECEIVE_COMPLETE, SYSHAL_BLE_NO_ERROR, 64);
+    EXPECT_ARRAY_EQ(uint8_t, expected_buffer, buffer, 64);
+}
+
+TEST_F(BleTest, BleGattConnnectedDisconnected)
+{
+    Init();
+    ReadIntStatus(NRF52_INT_GATT_CONNECTED);
+    EXPECT_EQ(SYSHAL_BLE_NO_ERROR, syshal_ble_tick());
+    ExpectEvent(SYSHAL_BLE_EVENT_CONNECTED, SYSHAL_BLE_NO_ERROR, 0);
+    ReadIntStatus(0);
+    EXPECT_EQ(SYSHAL_BLE_NO_ERROR, syshal_ble_tick());
+    ExpectEvent(SYSHAL_BLE_EVENT_DISCONNECTED, SYSHAL_BLE_NO_ERROR, 0);
+    ReadIntStatus(NRF52_INT_GATT_CONNECTED);
+    EXPECT_EQ(SYSHAL_BLE_NO_ERROR, syshal_ble_tick());
+    ExpectEvent(SYSHAL_BLE_EVENT_CONNECTED, SYSHAL_BLE_NO_ERROR, 0);
+    ReadIntStatus(0);
+    EXPECT_EQ(SYSHAL_BLE_NO_ERROR, syshal_ble_tick());
+    ExpectEvent(SYSHAL_BLE_EVENT_DISCONNECTED, SYSHAL_BLE_NO_ERROR, 0);
+}
+
+TEST_F(BleTest, BleFwUpgradeComplete)
+{
+    Init();
+    SetMode(SYSHAL_BLE_MODE_FW_UPGRADE);
+    EXPECT_EQ(SYSHAL_BLE_NO_ERROR, syshal_ble_set_mode(SYSHAL_BLE_MODE_FW_UPGRADE));
+    ReadIntStatus(NRF52_INT_FLASH_PROGRAMMING_DONE);
+    EXPECT_EQ(SYSHAL_BLE_NO_ERROR, syshal_ble_tick());
+    ExpectEvent(SYSHAL_BLE_EVENT_FW_UPGRADE_COMPLETE, SYSHAL_BLE_NO_ERROR, 0);
+}
+
+TEST_F(BleTest, BleErrorIndication)
+{
+    Init();
+    ReadIntStatus(NRF52_INT_ERROR_INDICATION);
+    ReadErrorCode(NRF52_ERROR_CRC);
+    EXPECT_EQ(SYSHAL_BLE_NO_ERROR, syshal_ble_tick());
+    ExpectEvent(SYSHAL_BLE_EVENT_ERROR_INDICATION, SYSHAL_BLE_ERROR_CRC, 0);
 }

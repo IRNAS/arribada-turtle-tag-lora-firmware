@@ -246,8 +246,8 @@ int syshal_ble_tick(void)
         /* This will abort any pending FW update */
         fw_update_pending = false;
         syshal_ble_event_t event = {
-            .error = SYSHAL_BLE_NO_ERROR,
-            .event_id = SYSHAL_BLE_EVENT_ERROR_INDICIATION
+            .error = (uint32_t)-error_indication,
+            .event_id = SYSHAL_BLE_EVENT_ERROR_INDICATION
         };
         syshal_ble_event_handler(&event);
     }
