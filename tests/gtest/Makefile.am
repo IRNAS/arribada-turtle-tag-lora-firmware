@@ -76,6 +76,7 @@ check_PROGRAMS += Sm
 nodist_Sm_SOURCES = $(gtest_srcdir)/Sm.cpp \
                     $(gtest_srcdir)/mocks/cmock.c \
                     $(gtest_srcdir)/mocks/Mockconfig_if.c \
+                    $(gtest_srcdir)/mocks/Mocksyshal_batt.c \
                     $(gtest_srcdir)/mocks/Mocksyshal_gpio.c \
                     $(gtest_srcdir)/mocks/Mocksyshal_gps.c \
                     $(gtest_srcdir)/mocks/Mocksyshal_i2c.c \

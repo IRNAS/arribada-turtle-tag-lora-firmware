@@ -114,7 +114,7 @@ static sm_context_t sm_context;
 ////////////////////////////////// GLOBALS /////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-#define DUMMY_BATTERY_MONITOR // Spoof any reads from the battery monitor
+//#define DUMMY_BATTERY_MONITOR // Spoof any reads from the battery monitor
 
 #define FS_FILE_ID_CONF             (0) // The File ID of the configuration data
 #define FS_FILE_ID_STM32_IMAGE      (1) // STM32 application image
@@ -215,9 +215,12 @@ static bool check_configuration_tags_set(void)
     // Determine if Bluetooth beaconing is enabled
     sys_config_bluetooth_beacon_enable_t tag_data;
     ret = sys_config_get(SYS_CONFIG_TAG_BLUETOOTH_BEACON_ENABLE, (void *) &tag_data.contents);
-    if (ret < 0) {
+    if (ret < 0)
+    {
         ble_beacon_enabled = false; // Tag is either not set or invalid, so default to disabled
-    } else {
+    }
+    else
+    {
         ble_beacon_enabled = tag_data.contents.enable;
     }
 
@@ -229,15 +232,15 @@ static bool check_configuration_tags_set(void)
         if (!ble_beacon_enabled) // If ble beacon is disabled
         {
             if (SYS_CONFIG_TAG_BLUETOOTH_BEACON_GEO_FENCE_TRIGGER_LOCATION == tag ||
-                    SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_INTERVAL == tag ||
-                    SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_CONFIGURATION == tag)
+                SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_INTERVAL == tag ||
+                SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_CONFIGURATION == tag)
             {
                 continue; // Then don't check the beacon tags
             }
         }
 
         void * src;
-    ret = sys_config_get(tag, &src);
+        ret = sys_config_get(tag, &src);
 
         if (SYS_CONFIG_ERROR_TAG_NOT_SET == ret)
         {
@@ -303,7 +306,7 @@ static int fs_create_configuration_data(void)
  */
 static int fs_delete_configuration_data(void)
 {
-    return(fs_delete(file_system, FS_FILE_ID_LOG));
+    return (fs_delete(file_system, FS_FILE_ID_LOG));
 }
 
 /**
@@ -1724,11 +1727,17 @@ void boot_state(void)
 #ifndef DUMMY_BATTERY_MONITOR
     // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
     if (syshal_batt_charging())
+    {
         sm_set_state(SM_STATE_STANDBY_BATTERY_CHARGING);
+        return;
+    }
 
     // If the battery level is too low then the system shall transition to the BATTERY_LEVEL_LOW state
     if (syshal_batt_state() == POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL)
+    {
         sm_set_state(SM_STATE_STANDBY_BATTERY_LEVEL_LOW);
+        return;
+    }
 
     // If either the USB 5V input signal or the BLE reed switch are active and the battery level is sufficient then it shall be possible to transition directly to the PROVISIONING state.
     if (config_if_connected)
