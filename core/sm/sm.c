@@ -67,6 +67,8 @@ typedef enum
     SM_MESSAGE_STATE_CFG_WRITE_ERROR,
     SM_MESSAGE_STATE_GPS_WRITE_NEXT,
     SM_MESSAGE_STATE_GPS_READ_NEXT,
+    SM_MESSAGE_STATE_BLE_WRITE_NEXT,
+    SM_MESSAGE_STATE_BLE_READ_NEXT,
     SM_MESSAGE_STATE_LOG_READ_NEXT,
 } sm_message_state_t;
 static sm_message_state_t message_state = SM_MESSAGE_STATE_IDLE;
@@ -89,6 +91,18 @@ typedef struct
             uint32_t  buffer_offset;
             uint16_t  last_index;
         } cfg_read;
+
+        struct
+        {
+            uint8_t   address;
+            uint16_t  length;
+        } ble_write;
+
+        struct
+        {
+            uint8_t   address;
+            uint16_t  length;
+        } ble_read;
 
         struct
         {
@@ -122,13 +136,15 @@ static sm_context_t sm_context;
 #define FS_FILE_ID_BLE_SOFT_IMAGE   (3) // BLE soft-device image
 #define FS_FILE_ID_LOG              (4) // Sensor log file
 
-static volatile bool     config_if_tx_pending;
-static volatile bool     config_if_rx_queued;
-static bool              syshal_gps_bridging;
+static volatile bool     config_if_tx_pending = false;
+static volatile bool     config_if_rx_queued = false;
+static bool              syshal_gps_bridging = false;
+static bool              syshal_ble_bridging = false;
 static volatile buffer_t config_if_send_buffer;
 static volatile buffer_t config_if_receive_buffer;
 static volatile uint8_t  config_if_send_buffer_pool[SYSHAL_USB_PACKET_SIZE * 2];
 static volatile uint8_t  config_if_receive_buffer_pool[SYSHAL_USB_PACKET_SIZE];
+static volatile uint8_t  spi_bridge_buffer[SYSHAL_USB_PACKET_SIZE + 1];
 static uint32_t          config_if_message_timeout;
 static volatile bool     config_if_connected = false;
 static fs_t              file_system;
@@ -1036,17 +1052,171 @@ static void gps_config_req(cmd_t * req, uint16_t size)
 
 static void ble_config_req(cmd_t * req, uint16_t size)
 {
-    DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
+    // Check request size is correct
+    if (CMD_SIZE(cmd_ble_config_req_t) != size)
+        Throw(EXCEPTION_REQ_WRONG_SIZE);
+
+    syshal_ble_bridging = req->p.cmd_gps_config_req.enable; // Disable or enable BLE bridging
+
+    // Generate and send response
+    cmd_t * resp;
+    if (!buffer_write(&config_if_send_buffer, (uintptr_t *)&resp))
+        Throw(EXCEPTION_TX_BUFFER_FULL);
+    CMD_SET_HDR(resp, CMD_GENERIC_RESP);
+
+    resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
+
+    buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_generic_resp_t));
+    config_if_send_priv(&config_if_send_buffer);
 }
 
 static void ble_write_req(cmd_t * req, uint16_t size)
 {
-    DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
+    // Check request size is correct
+    if (CMD_SIZE(cmd_ble_write_req_t) != size)
+        Throw(EXCEPTION_REQ_WRONG_SIZE);
+
+    // Generate and send response
+    cmd_t * resp;
+    if (!buffer_write(&config_if_send_buffer, (uintptr_t *)&resp))
+        Throw(EXCEPTION_TX_BUFFER_FULL);
+    CMD_SET_HDR(resp, CMD_GENERIC_RESP);
+
+    // If bridging is enabled
+    if (syshal_ble_bridging)
+    {
+        sm_context.ble_write.address = req->p.cmd_ble_write_req.address;
+        sm_context.ble_write.length = req->p.cmd_ble_write_req.length;
+        resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
+
+        config_if_receive_priv(); // Queue a receive
+
+        message_set_state(SM_MESSAGE_STATE_BLE_WRITE_NEXT);
+    }
+    else
+    {
+        // Bridging is not enabled so return an error code
+        resp->p.cmd_generic_resp.error_code = CMD_ERROR_BRIDGING_DISABLED;
+    }
+
+    buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_generic_resp_t));
+    config_if_send_priv(&config_if_send_buffer);
+}
+
+static void gps_write_next_state(void)
+{
+    uint8_t *read_buffer;
+    uint32_t length = buffer_read(&config_if_receive_buffer, (uintptr_t *)&read_buffer);
+
+    if (!length)
+        return;
+
+    buffer_read_advance(&config_if_receive_buffer, length); // Remove this packet from the receive buffer
+
+    if (length > sm_context.ble_write.length)
+    {
+        message_set_state(SM_MESSAGE_STATE_IDLE);
+        Throw(EXCEPTION_PACKET_WRONG_SIZE);
+    }
+
+    spi_bridge_buffer[0] = sm_context.ble_write.address;
+    memcpy(&spi_bridge_buffer[1], read_buffer, length);
+
+    // Check send worked
+    if (syshal_spi_transfer(SPI_BLE, spi_bridge_buffer, NULL, length + 1))
+    {
+        // If not we should exit out
+        message_set_state(SM_MESSAGE_STATE_IDLE);
+        Throw(EXCEPTION_SPI_ERROR);
+    }
+
+    sm_context.ble_write.length -= length;
+
+    if (sm_context.ble_write.length) // Is there still data to receive?
+    {
+        config_if_receive_priv(); // Queue a receive
+        config_if_timeout_reset(); // Reset the message timeout counter
+    }
+    else
+    {
+        // We have received all the data
+        message_set_state(SM_MESSAGE_STATE_IDLE);
+    }
 }
 
 static void ble_read_req(cmd_t * req, uint16_t size)
 {
-    DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
+    // Check request size is correct
+    if (CMD_SIZE(cmd_ble_read_req_t) != size)
+        Throw(EXCEPTION_REQ_WRONG_SIZE);
+
+    // Generate and send response
+    cmd_t * resp;
+    if (!buffer_write(&config_if_send_buffer, (uintptr_t *)&resp))
+        Throw(EXCEPTION_TX_BUFFER_FULL);
+    CMD_SET_HDR(resp, CMD_GENERIC_RESP);
+
+    // If bridging is enabled
+    if (syshal_ble_bridging)
+    {
+        sm_context.ble_read.address = req->p.cmd_ble_read_req.address;
+        sm_context.ble_read.length = req->p.cmd_ble_read_req.length;
+        resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
+    }
+    else
+    {
+        // Bridging is not enabled so return an error code
+        sm_context.ble_read.length = 0;
+        resp->p.cmd_generic_resp.error_code = CMD_ERROR_BRIDGING_DISABLED;
+    }
+
+    // Send response
+    buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_gps_read_resp_t));
+    config_if_send_priv(&config_if_send_buffer);
+
+    if (sm_context.ble_read.length > 0)
+        message_set_state(SM_MESSAGE_STATE_GPS_READ_NEXT);
+}
+
+static void ble_read_next_state(void)
+{
+    // Generate and send response
+    uint8_t * resp;
+    if (!buffer_write(&config_if_send_buffer, (uintptr_t *)&resp))
+        Throw(EXCEPTION_TX_BUFFER_FULL);
+
+    // Don't read more than the maximum packet size less one byte which shall
+    // be used for storing the SPI bus address
+    uint32_t bytes_to_read = MIN(sm_context.ble_read.length, SYSHAL_USB_PACKET_SIZE);
+
+    // Read data from the specified SPI bus address
+    memset(spi_bridge_buffer, 0, sizeof(spi_bridge_buffer));
+    spi_bridge_buffer[0] = sm_context.ble_read.address;
+    if (syshal_spi_transfer(SPI_BLE, spi_bridge_buffer, spi_bridge_buffer, bytes_to_read + 1))
+    {
+        // If not we should exit out
+        message_set_state(SM_MESSAGE_STATE_IDLE);
+        Throw(EXCEPTION_SPI_ERROR);
+    }
+
+    sm_context.ble_read.length -= bytes_to_read;
+
+    // Copy data from bridge buffer into USB buffer
+    memcpy(resp, &spi_bridge_buffer[1], bytes_to_read);
+
+    // Send response
+    buffer_write_advance(&config_if_send_buffer, bytes_to_read);
+    config_if_send_priv(&config_if_send_buffer);
+
+    if (sm_context.ble_read.length) // Is there still data to send?
+    {
+        config_if_timeout_reset(); // Reset the message timeout counter
+    }
+    else
+    {
+        // We have sent all the data
+        message_set_state(SM_MESSAGE_STATE_IDLE);
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1650,6 +1820,14 @@ static void handle_config_if_messages(void)
 
             case SM_MESSAGE_STATE_GPS_READ_NEXT:
                 gps_read_next_state();
+                break;
+
+            case SM_MESSAGE_STATE_BLE_READ_NEXT:
+                ble_read_next_state();
+                break;
+
+            case SM_MESSAGE_STATE_BLE_WRITE_NEXT:
+                ble_write_next_state();
                 break;
 
             case SM_MESSAGE_STATE_LOG_READ_NEXT:
