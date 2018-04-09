@@ -19,6 +19,9 @@
 #ifndef _SYSHAL_UART_H_
 #define _SYSHAL_UART_H_
 
+#include <stdint.h>
+#include <stdbool.h>
+
 #include "bsp.h"
 
 // Constants

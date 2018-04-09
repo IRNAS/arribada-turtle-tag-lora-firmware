@@ -19,6 +19,8 @@
 #ifndef _SYSHAL_TIME_H_
 #define _SYSHAL_TIME_H_
 
+#include <stdint.h>
+
 uint32_t syshal_time_get_ticks_ms(void);
 void syshal_time_delay_ms(uint32_t ms);
 

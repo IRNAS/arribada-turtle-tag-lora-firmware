@@ -20,6 +20,7 @@
 #define _FS_H_
 
 #include <stdint.h>
+#include <stdbool.h>
 
 /* Constants */
 
