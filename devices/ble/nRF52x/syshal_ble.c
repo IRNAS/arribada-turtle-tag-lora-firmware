@@ -17,6 +17,7 @@
  */
 
 #include <stddef.h>
+#include <string.h>
 #include <stdbool.h>
 #include "syshal_ble.h"
 #include "syshal_spi.h"
@@ -43,7 +44,7 @@ static int read_register(uint16_t address, uint8_t *data, uint16_t size)
 {
     memset(xfer_buffer, 0, sizeof(xfer_buffer));
     xfer_buffer[0] = address;
-    if (syshal_spi_transfer(spi_device, xfer_buffer, xfer_buffer, size))
+    if (syshal_spi_transfer(spi_device, xfer_buffer, xfer_buffer, size + 1))
         return SYSHAL_BLE_ERROR_COMMS;
     memcpy(data, &xfer_buffer[1], size);
     return SYSHAL_BLE_NO_ERROR;
@@ -53,7 +54,7 @@ static int write_register(uint16_t address, uint8_t *data, uint16_t size)
 {
     xfer_buffer[0] = address | NRF52_SPI_WRITE_NOT_READ_ADDR;
     memcpy(&xfer_buffer[1], data, size);
-    if (syshal_spi_transfer(spi_device, xfer_buffer, NULL, size))
+    if (syshal_spi_transfer(spi_device, xfer_buffer, xfer_buffer, size + 1))
         return SYSHAL_BLE_ERROR_COMMS;
     return SYSHAL_BLE_NO_ERROR;
 }
@@ -64,6 +65,9 @@ int syshal_ble_init(uint32_t comms_device)
 {
     spi_device = comms_device;
     uint16_t app_version;
+
+    if (syshal_spi_init(comms_device))
+        return SYSHAL_BLE_ERROR_DEVICE;
 
     /* Read version register to make sure the device is present */
     if (read_register(NRF52_REG_ADDR_APP_VERSION, (uint8_t *)&app_version, sizeof(app_version)))
@@ -78,6 +82,9 @@ int syshal_ble_init(uint32_t comms_device)
 
 int syshal_ble_term(void)
 {
+    if (syshal_spi_term(spi_device))
+        return SYSHAL_BLE_ERROR_DEVICE;
+
     return SYSHAL_BLE_NO_ERROR;
 }
 
@@ -100,7 +107,13 @@ int syshal_ble_set_mode(syshal_ble_mode_t mode)
 
 int syshal_ble_get_mode(syshal_ble_mode_t *mode)
 {
-    return read_register(NRF52_REG_ADDR_MODE, (uint8_t *)mode, sizeof(uint8_t));
+    uint8_t rd_mode;
+    int ret;
+
+    ret = read_register(NRF52_REG_ADDR_MODE, &rd_mode, sizeof(rd_mode));
+    *mode = (syshal_ble_mode_t)rd_mode;
+
+    return ret;
 }
 
 int syshal_ble_get_version(uint32_t *version)
@@ -127,7 +140,7 @@ int syshal_ble_get_target_uuid(uint8_t uuid[SYSHAL_BLE_UUID_SIZE])
 
 int syshal_ble_set_target_uuid(uint8_t uuid[SYSHAL_BLE_UUID_SIZE])
 {
-    return read_register(NRF52_REG_ADDR_TARGET_UUID, uuid, SYSHAL_BLE_UUID_SIZE);
+    return write_register(NRF52_REG_ADDR_TARGET_UUID, uuid, SYSHAL_BLE_UUID_SIZE);
 }
 
 int syshal_ble_config_fw_upgrade(syshal_ble_fw_upgrade_type_t type, uint32_t size, uint32_t crc)
@@ -169,7 +182,7 @@ int syshal_ble_send(uint8_t *buffer, uint16_t size)
     /* Keep track of pending bytes written into nRF52x's FIFO */
     tx_buffer_pending_size += size;
 
-    ret |= write_register(NRF52_REG_ADDR_TX_DATA_PORT, buffer, size);
+    ret = write_register(NRF52_REG_ADDR_TX_DATA_PORT, buffer, size);
     if (ret)
     {
         /* Transmission was unsuccessful */

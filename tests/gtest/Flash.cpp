@@ -1,4 +1,4 @@
-// Fs.cpp - Filesystem unit tests
+// Flash.cpp - Flash driver unit tests
 //
 // Copyright (C) 2018 Arribada
 //

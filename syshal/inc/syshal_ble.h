@@ -19,6 +19,90 @@
 #ifndef _SYSHAL_BLE_H_
 #define _SYSHAL_BLE_H_
 
+#include <stdint.h>
 
+/* Constants */
+
+#define SYSHAL_BLE_MAX_BUFFER_SIZE          512
+#define SYSHAL_BLE_UUID_SIZE                16
+#define SYSHAL_BLE_ADVERTISING_SIZE         31
+
+#define SYSHAL_BLE_NO_ERROR                 0
+#define SYSHAL_BLE_ERROR_CRC               -1
+#define SYSHAL_BLE_ERROR_TIMEOUT           -2
+#define SYSHAL_BLE_ERROR_LENGTH            -3
+#define SYSHAL_BLE_ERROR_FW_TYPE           -4
+#define SYSHAL_BLE_ERROR_COMMS             -100
+#define SYSHAL_BLE_ERROR_NOT_DETECTED      -101
+#define SYSHAL_BLE_ERROR_RECEIVE_PENDING   -102
+#define SYSHAL_BLE_ERROR_BUFFER_FULL       -103
+#define SYSHAL_BLE_ERROR_DEVICE            -104
+
+/* Macros */
+
+/* Types */
+
+typedef enum
+{
+    SYSHAL_BLE_FW_UPGRADE_TYPE_APP,
+    SYSHAL_BLE_FW_UPGRADE_TYPE_SOFT_DEV,
+} syshal_ble_fw_upgrade_type_t;
+
+typedef enum
+{
+    SYSHAL_BLE_EVENT_CONNECTED,
+    SYSHAL_BLE_EVENT_DISCONNECTED,
+    SYSHAL_BLE_EVENT_SEND_COMPLETE,
+    SYSHAL_BLE_EVENT_RECEIVE_COMPLETE,
+    SYSHAL_BLE_EVENT_FW_UPGRADE_COMPLETE,
+    SYSHAL_BLE_EVENT_ERROR_INDICIATION
+} syshal_ble_event_id_t;
+
+typedef enum
+{
+    SYSHAL_BLE_MODE_IDLE,
+    SYSHAL_BLE_MODE_FW_UPGRADE,
+    SYSHAL_BLE_MODE_BEACON,
+    SYSHAL_BLE_MODE_GATT_SERVER,
+    SYSHAL_BLE_MODE_GATT_CLIENT,
+    SYSHAL_BLE_MODE_SCAN,
+    SYSHAL_BLE_MODE_DEEP_SLEEP
+} syshal_ble_mode_t;
+
+typedef struct
+{
+    syshal_ble_event_id_t event_id;
+    int                   error;
+    union
+    {
+        struct
+        {
+            uint16_t length;
+        } send_complete;
+        struct
+        {
+            uint16_t length;
+        } receive_complete;
+    };
+} syshal_ble_event_t;
+
+/* Functions */
+
+int syshal_ble_init(uint32_t comms_device);
+int syshal_ble_term(void);
+int syshal_ble_set_mode(syshal_ble_mode_t mode);
+int syshal_ble_get_mode(syshal_ble_mode_t *mode);
+int syshal_ble_get_version(uint32_t *version);
+int syshal_ble_set_own_uuid(uint8_t uuid[SYSHAL_BLE_UUID_SIZE]);
+int syshal_ble_get_target_uuid(uint8_t uuid[SYSHAL_BLE_UUID_SIZE]);
+int syshal_ble_set_target_uuid(uint8_t uuid[SYSHAL_BLE_UUID_SIZE]);
+int syshal_ble_config_fw_upgrade(syshal_ble_fw_upgrade_type_t type, uint32_t size, uint32_t crc);
+int syshal_ble_config_beacon(uint16_t interval_ms, uint8_t beacon_payload[SYSHAL_BLE_ADVERTISING_SIZE]);
+int syshal_ble_config_scan_response(uint8_t scan_payload[SYSHAL_BLE_ADVERTISING_SIZE]);
+int syshal_ble_reset(void);
+int syshal_ble_send(uint8_t *buffer, uint16_t size);
+int syshal_ble_receive(uint8_t *buffer, uint16_t size);
+int syshal_ble_tick(void);
+__attribute__((weak)) void syshal_ble_event_handler(syshal_ble_event_t *event);
 
 #endif /* _SYSHAL_BLE_H_ */

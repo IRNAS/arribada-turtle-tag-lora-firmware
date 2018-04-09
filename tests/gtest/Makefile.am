@@ -54,6 +54,16 @@ Ring_Buffer_LDADD = $(COMMON_LDADD)
 Ring_Buffer_CPPFLAGS = $(AM_CPPFLAGS) -I$(core_srcdir)/ring_buffer
 TESTS += Ring_Buffer.test
 
+check_PROGRAMS += Ble_nRF52
+nodist_Ble_nRF52_SOURCES = $(gtest_srcdir)/Ble_nRF52.cpp \
+                    $(gtest_srcdir)/mocks/cmock.c \
+                    $(gtest_srcdir)/mocks/Mocksyshal_spi.c \
+                    $(devices_srcdir)/ble/nRF52x/syshal_ble.c
+
+Ble_nRF52_LDADD = $(COMMON_LDADD)
+Ble_nRF52_CPPFLAGS = $(AM_CPPFLAGS) -I$(devices_srcdir)/ble/nRF52x
+TESTS += Ble_nRF52.test
+
 LINT_FLAGS  = -"A(C++2010)"
 LINT_FLAGS += -e537 # Ignore repeated includes
 LINT_FLAGS += -e160 # Allow GNU statement expression extension

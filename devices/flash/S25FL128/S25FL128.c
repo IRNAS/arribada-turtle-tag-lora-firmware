@@ -44,7 +44,7 @@ static uint32_t spi_devices[S25FL128_MAX_DEVICES];
  * command byte plus 3 bytes of addressing.
  */
 static uint8_t  spi_tx_buf[S25FL128_PAGE_SIZE + 4];
-static uint8_t  spi_rx_buf[S25FL128_PAGE_SIZE + 4];
+static uint8_t  *spi_rx_buf = spi_tx_buf;
 
 /* Static Functions */
 
