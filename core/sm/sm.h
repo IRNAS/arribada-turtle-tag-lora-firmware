@@ -37,4 +37,9 @@ sm_state_t sm_get_state(void);
 void sm_set_state(sm_state_t s);
 void sm_iterate(void);
 
+#ifdef GTEST
+// If we are doing a gtest, expose the event handler so we can mock events
+int config_if_event_handler(config_if_event_t * event);
+#endif
+
 #endif /* _SM_H_ */

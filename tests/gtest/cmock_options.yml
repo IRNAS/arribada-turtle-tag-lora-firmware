@@ -2,5 +2,7 @@
   :plugins:
      - :callback
      - :ignore
+  :strippables:
+     - ['__attribute__\(\(weak\)\)\s[^;]*.']
   :ignore:
       :args_only

@@ -1962,6 +1962,7 @@ void standby_provisioning_needed_state()
 // The system shall continue to monitor the battery level and charging status and may enter into the BATTERY_LEVEL_LOW or BATTERY_CHARGING sub-states.
 // The system shall also monitor the USB 5V input signal and the BLE reed switch and if the battery level is sufficient it shall be possible to transition to the PROVISIONING state.
 
+#ifndef GTEST
     // Blink an LED to indicate this state
     static uint32_t blinkTimer = 0;
     const uint32_t blinkTimeMs = 1000;
@@ -1973,6 +1974,7 @@ void standby_provisioning_needed_state()
         syshal_gpio_set_output_low(GPIO_LED4);
         blinkTimer = syshal_time_get_ticks_ms();
     }
+#endif
 
     if (config_if_connected)
     {
@@ -2004,7 +2006,9 @@ void standby_trigger_pending_state()
 
 void provisioning_state(void)
 {
+#ifndef GTEST
     syshal_gpio_set_output_high(GPIO_LED4); // Indicate what state we're in
+#endif
 
     handle_config_if_messages(); // Process any config_if messages
 
