@@ -1106,7 +1106,7 @@ static void ble_write_req(cmd_t * req, uint16_t size)
     config_if_send_priv(&config_if_send_buffer);
 }
 
-static void gps_write_next_state(void)
+static void ble_write_next_state(void)
 {
     uint8_t *read_buffer;
     uint32_t length = buffer_read(&config_if_receive_buffer, (uintptr_t *)&read_buffer);
