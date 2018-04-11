@@ -100,6 +100,14 @@ int fs_write_callback(fs_handle_t handle, const void * src, uint32_t size, uint3
 int fs_close_callback(fs_handle_t handle, int cmock_num_calls)
 {
     file_currently_open = false;
+    return FS_NO_ERROR;
+}
+
+// fs_delete callback function
+int fs_delete_callback(fs_t fs, uint8_t file_id, int cmock_num_calls)
+{
+    file_currently_open = false;
+    return FS_NO_ERROR;
 }
 
 // syshal_time_get_ticks_ms callback function
@@ -145,6 +153,7 @@ class SmTest : public ::testing::Test
         fs_read_StubWithCallback(fs_read_callback);
         fs_write_StubWithCallback(fs_write_callback);
         fs_close_StubWithCallback(fs_close_callback);
+        fs_delete_StubWithCallback(fs_delete_callback);
         syshal_time_get_ticks_ms_StubWithCallback(syshal_time_get_ticks_ms_callback);
         config_if_receive_StubWithCallback(config_if_receive_callback);
         config_if_send_StubWithCallback(config_if_send_callback);
@@ -236,6 +245,18 @@ public:
         fs_write_return_value = FS_NO_ERROR;
     }
 
+    // A call to fs_set_configuration_data where the configuration data is correctly stored
+    void fs_set_configuration_data_success()
+    {
+        // fs_open
+        fs_open_expected_file_id.push(FS_FILE_ID_CONF);
+        fs_open_expected_mode.push(FS_MODE_WRITEONLY);
+        fs_open_return_value.push(FS_NO_ERROR);
+
+        // fs_write
+        fs_write_return_value = FS_NO_ERROR;
+    }
+
     void set_all_configuration_tags()
     {
         uint8_t empty_buffer[SYS_CONFIG_MAX_DATA_SIZE];
@@ -308,6 +329,39 @@ public:
         return message;
     }
 
+    // Create a config_if connection event
+    void connect(void)
+    {
+        config_if_event_t event;
+        event.id = CONFIG_IF_EVENT_CONNECTED;
+        config_if_event_handler(&event);
+    }
+
+    // Create a config_if disconnect event
+    void disconnect(void)
+    {
+        config_if_event_t event;
+        event.id = CONFIG_IF_EVENT_DISCONNECTED;
+        config_if_event_handler(&event);
+    }
+
+    void startup_provisioning_needed(void)
+    {
+        sm_set_state(SM_STATE_BOOT);
+        HardwareInit();
+
+        fs_get_configuration_data_success(); // Successful read of a configuration file
+
+        syshal_batt_charging_ExpectAndReturn(false);
+        syshal_batt_state_ExpectAndReturn(POWER_SUPPLY_CAPACITY_LEVEL_FULL);
+
+        syshal_gpio_set_output_high_Expect(GPIO_LED3); // Status LED
+
+        sm_iterate();
+
+        EXPECT_EQ(SM_STATE_STANDBY_PROVISIONING_NEEDED, sm_get_state());
+    }
+
 };
 
 TEST_F(SmTest, StateSet)
@@ -322,7 +376,6 @@ TEST_F(SmTest, BootConfigurationDataDoesNotExist)
     HardwareInit();
 
     fs_get_configuration_data_no_file(); // No configuration file present
-    fs_create_configuration_data_success(); // Successfully create a file
 
     syshal_batt_charging_ExpectAndReturn(false);
     syshal_batt_state_ExpectAndReturn(POWER_SUPPLY_CAPACITY_LEVEL_FULL);
@@ -401,25 +454,9 @@ TEST_F(SmTest, BootConfigurationComplete)
 
 TEST_F(SmTest, ProvisioningNeededState)
 {
-    sm_set_state(SM_STATE_BOOT);
-    HardwareInit();
+    startup_provisioning_needed(); // Boot and transition to provisioning needed state
 
-    fs_get_configuration_data_success(); // Successful read of a configuration file
-
-    syshal_batt_charging_ExpectAndReturn(false);
-    syshal_batt_state_ExpectAndReturn(POWER_SUPPLY_CAPACITY_LEVEL_FULL);
-
-    syshal_gpio_set_output_high_Expect(GPIO_LED3); // Status LED
-
-    sm_iterate();
-
-    EXPECT_EQ(SM_STATE_STANDBY_PROVISIONING_NEEDED, sm_get_state());
-
-    // Generate an configuration interface connection event
-    config_if_event_t event;
-    event.id = CONFIG_IF_EVENT_CONNECTED;
-
-    config_if_event_handler(&event);
+    connect(); // Connect the config_if
 
     sm_iterate();
 
@@ -428,25 +465,9 @@ TEST_F(SmTest, ProvisioningNeededState)
 
 TEST_F(SmTest, ProvisioningDisconnect)
 {
-    sm_set_state(SM_STATE_BOOT);
-    HardwareInit();
+    startup_provisioning_needed(); // Boot and transition to provisioning needed state
 
-    fs_get_configuration_data_success(); // Successful read of a configuration file
-
-    syshal_batt_charging_ExpectAndReturn(false);
-    syshal_batt_state_ExpectAndReturn(POWER_SUPPLY_CAPACITY_LEVEL_FULL);
-
-    syshal_gpio_set_output_high_Expect(GPIO_LED3); // Status LED
-
-    sm_iterate();
-
-    EXPECT_EQ(SM_STATE_STANDBY_PROVISIONING_NEEDED, sm_get_state());
-
-    // Generate an configuration interface connection event
-    config_if_event_t event;
-    event.id = CONFIG_IF_EVENT_CONNECTED;
-
-    config_if_event_handler(&event);
+    connect(); // Connect the config_if
 
     sm_iterate();
 
@@ -454,9 +475,7 @@ TEST_F(SmTest, ProvisioningDisconnect)
 
     config_if_receive_IgnoreAndReturn(CONFIG_IF_NO_ERROR);
 
-    // Generate a configuration interface disconnect event
-    event.id = CONFIG_IF_EVENT_DISCONNECTED;
-    config_if_event_handler(&event);
+    disconnect(); // Disconnect the config_if
 
     sm_iterate();
 
@@ -465,24 +484,9 @@ TEST_F(SmTest, ProvisioningDisconnect)
 
 TEST_F(SmTest, StatusRequest)
 {
-    sm_set_state(SM_STATE_BOOT);
-    HardwareInit();
+    startup_provisioning_needed(); // Boot and transition to provisioning needed state
 
-    fs_get_configuration_data_success(); // Successful read of a configuration file
-
-    syshal_batt_charging_ExpectAndReturn(false);
-    syshal_batt_state_ExpectAndReturn(POWER_SUPPLY_CAPACITY_LEVEL_FULL);
-
-    syshal_gpio_set_output_high_Expect(GPIO_LED3); // Status LED
-
-    sm_iterate();
-
-    EXPECT_EQ(SM_STATE_STANDBY_PROVISIONING_NEEDED, sm_get_state());
-
-    // Generate an configuration interface connection event
-    config_if_event_t event;
-    event.id = CONFIG_IF_EVENT_CONNECTED;
-    config_if_event_handler(&event);
+    connect(); // Connect the config_if
 
     sm_iterate();
 
@@ -509,26 +513,9 @@ TEST_F(SmTest, StatusRequest)
 
 TEST_F(SmTest, CfgWriteOne)
 {
-    cmd_t resp;
+    startup_provisioning_needed(); // Boot and transition to provisioning needed state
 
-    sm_set_state(SM_STATE_BOOT);
-    HardwareInit();
-
-    fs_get_configuration_data_success(); // Successful read of a configuration file
-
-    syshal_batt_charging_ExpectAndReturn(false);
-    syshal_batt_state_ExpectAndReturn(POWER_SUPPLY_CAPACITY_LEVEL_FULL);
-
-    syshal_gpio_set_output_high_Expect(GPIO_LED3); // Status LED
-
-    sm_iterate();
-
-    EXPECT_EQ(SM_STATE_STANDBY_PROVISIONING_NEEDED, sm_get_state());
-
-    // Generate an configuration interface connection event
-    config_if_event_t event;
-    event.id = CONFIG_IF_EVENT_CONNECTED;
-    config_if_event_handler(&event);
+    connect(); // Connect the config_if
 
     sm_iterate();
 
@@ -545,6 +532,7 @@ TEST_F(SmTest, CfgWriteOne)
     sm_iterate(); // Process the message
 
     // Check the response
+    cmd_t resp;
     resp = receive_message();
     EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
     EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
@@ -573,26 +561,9 @@ TEST_F(SmTest, CfgWriteOne)
 
 TEST_F(SmTest, CfgWriteOneInvalidTag)
 {
-    cmd_t resp;
+    startup_provisioning_needed(); // Boot and transition to provisioning needed state
 
-    sm_set_state(SM_STATE_BOOT);
-    HardwareInit();
-
-    fs_get_configuration_data_success(); // Successful read of a configuration file
-
-    syshal_batt_charging_ExpectAndReturn(false);
-    syshal_batt_state_ExpectAndReturn(POWER_SUPPLY_CAPACITY_LEVEL_FULL);
-
-    syshal_gpio_set_output_high_Expect(GPIO_LED3); // Status LED
-
-    sm_iterate();
-
-    EXPECT_EQ(SM_STATE_STANDBY_PROVISIONING_NEEDED, sm_get_state());
-
-    // Generate an configuration interface connection event
-    config_if_event_t event;
-    event.id = CONFIG_IF_EVENT_CONNECTED;
-    config_if_event_handler(&event);
+    connect(); // Connect the config_if
 
     sm_iterate();
 
@@ -609,6 +580,7 @@ TEST_F(SmTest, CfgWriteOneInvalidTag)
     sm_iterate(); // Process the message
 
     // Check the response
+    cmd_t resp;
     resp = receive_message();
     EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
     EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
@@ -632,4 +604,79 @@ TEST_F(SmTest, CfgWriteOneInvalidTag)
     EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
     EXPECT_EQ(CMD_CFG_WRITE_CNF, resp.h.cmd);
     EXPECT_EQ(CMD_ERROR_INVALID_CONFIG_TAG, resp.p.cmd_cfg_write_cnf.error_code);
+}
+
+TEST_F(SmTest, CfgReadOne)
+{
+    // Set a tag up for reading later
+    sys_config.sys_config_logging_group_sensor_readings_enable.contents.enable = true;
+    sys_config.sys_config_logging_group_sensor_readings_enable.hdr.set = true;
+
+    startup_provisioning_needed(); // Boot and transition to provisioning needed state
+
+    connect(); // Connect the config_if
+
+    sm_iterate();
+
+    EXPECT_EQ(SM_STATE_PROVISIONING, sm_get_state());
+
+    sm_iterate(); // Queue the first receive
+
+    // Generate cfg read request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_CFG_READ_REQ);
+    req.p.cmd_cfg_read_req.configuration_tag = SYS_CONFIG_TAG_LOGGING_GROUP_SENSOR_READINGS_ENABLE;
+    send_message(req, CMD_SIZE(cmd_cfg_read_req_t));
+
+    sm_iterate(); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_CFG_READ_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_cfg_read_resp.error_code);
+    uint32_t expected_length = resp.p.cmd_cfg_read_resp.length;
+
+    sm_iterate(); // Send the data packet
+    resp = receive_message();
+    uint8_t * message = (uint8_t *) &resp;
+
+    uint16_t tag = 0;
+    tag |= (uint16_t) message[0] & 0x00FF;
+    tag |= (uint16_t) (message[1] << 8) & 0xFF00;
+    EXPECT_EQ(SYS_CONFIG_TAG_LOGGING_GROUP_SENSOR_READINGS_ENABLE, tag);
+
+    // Check the tag was correctly read
+    EXPECT_TRUE(message[2]);
+}
+
+TEST_F(SmTest, CfgSave)
+{
+    startup_provisioning_needed(); // Boot and transition to provisioning needed state
+
+    connect(); // Connect the config_if
+
+    sm_iterate();
+
+    EXPECT_EQ(SM_STATE_PROVISIONING, sm_get_state());
+
+    sm_iterate(); // Queue the first receive
+
+    // Generate cfg save request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_CFG_SAVE_REQ);
+    send_message(req, CMD_SIZE_HDR);
+
+    fs_create_configuration_data_success(); // Create file
+    fs_set_configuration_data_success(); // Write to file
+
+    sm_iterate(); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
 }

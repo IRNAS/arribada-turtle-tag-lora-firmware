@@ -291,21 +291,7 @@ static int fs_create_configuration_data(void)
     if (FS_NO_ERROR != ret)
         return ret; // An unrecoverable error has occured
 
-    // We have now created and opened our unformatted configuration file
-    // So lets write our blank configuration data to it
-    uint32_t bytes_written;
-    ret = fs_write(file_system_handle, &sys_config, sizeof(sys_config), &bytes_written);
-
     fs_close(file_system_handle); // Close the newly created file and flush any data
-
-    if (FS_NO_ERROR != ret)
-        return ret; // An unrecoverable error has occured
-
-    if (bytes_written != sizeof(sys_config))
-    {
-        DEBUG_PR_WARN("%s() size mismatch", __FUNCTION__);
-        return FS_ERROR_FLASH_MEDIA;
-    }
 
     return FS_NO_ERROR;
 }
@@ -695,9 +681,10 @@ static void cfg_save_req(cmd_t * req, uint16_t size)
 
     switch (ret)
     {
+        case FS_ERROR_FILE_NOT_FOUND: // If there is no configuration file, then make one
         case FS_NO_ERROR:
-
-            ret = fs_create_configuration_data(); // Recreate the file
+ 
+            ret = fs_create_configuration_data(); // Re/Create the file
             if (FS_NO_ERROR != ret)
                 Throw(EXCEPTION_FS_ERROR);
 
@@ -1108,7 +1095,7 @@ static void ble_write_req(cmd_t * req, uint16_t size)
 
 static void ble_write_next_state(void)
 {
-    uint8_t *read_buffer;
+    uint8_t * read_buffer;
     uint32_t length = buffer_read(&config_if_receive_buffer, (uintptr_t *)&read_buffer);
 
     if (!length)
@@ -1891,16 +1878,8 @@ void boot_state(void)
 
     int ret = fs_get_configuration_data();
 
-    if (FS_ERROR_FILE_NOT_FOUND == ret)
-    {
-        // The configuration file does not exist
-        if (FS_NO_ERROR != fs_create_configuration_data())
-            Throw(EXCEPTION_FS_ERROR);
-    }
-    else if (FS_NO_ERROR != ret)
-    {
+    if (!(FS_NO_ERROR == ret || FS_ERROR_FILE_NOT_FOUND == ret))
         Throw(EXCEPTION_FS_ERROR);
-    }
 
 #ifndef DUMMY_BATTERY_MONITOR
     // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
