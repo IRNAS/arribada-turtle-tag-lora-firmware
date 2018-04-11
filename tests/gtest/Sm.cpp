@@ -277,6 +277,37 @@ public:
         sys_config_set(SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_CONFIGURATION, &empty_buffer, SYS_CONFIG_TAG_DATA_SIZE(sys_config_bluetooth_beacon_advertising_configuration_t));
     }
 
+    // Send config_if message to the state machine
+    void send_message(cmd_t message, uint32_t size)
+    {
+        // Copy message into receive buffer
+        memcpy(config_if_receive_buffer, &message, size);
+
+        // Generate receive request event
+        config_if_event_t event;
+        event.id = CONFIG_IF_EVENT_RECEIVE_COMPLETE;
+        event.receive.buffer = config_if_receive_buffer;
+        event.receive.size = size;
+        config_if_event_handler(&event);
+    }
+
+    // Receive config_if message from the state machine
+    cmd_t receive_message(void)
+    {
+        // Copy message into receive buffer
+        cmd_t message;
+        memcpy(&message, config_if_send_buffer, config_if_send_size);
+
+        // Generate receive request event
+        config_if_event_t event;
+        event.id = CONFIG_IF_EVENT_SEND_COMPLETE;
+        event.receive.buffer = config_if_send_buffer;
+        event.receive.size = config_if_send_size;
+        config_if_event_handler(&event);
+
+        return message;
+    }
+
 };
 
 TEST_F(SmTest, StateSet)
@@ -460,23 +491,145 @@ TEST_F(SmTest, StatusRequest)
     sm_iterate(); // Queue the first receive
 
     // Generate reset request message
-    cmd_t * req = (cmd_t *) config_if_receive_buffer;
-    CMD_SET_HDR(req, CMD_STATUS_REQ);
-
-    // Generate receive request
-    event.id = CONFIG_IF_EVENT_RECEIVE_COMPLETE;
-    event.receive.buffer = config_if_receive_buffer;
-    event.receive.size = CMD_SIZE_HDR;
-    config_if_event_handler(&event);
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_STATUS_REQ);
+    send_message(req, CMD_SIZE_HDR);
 
     sm_iterate(); // Process the message
 
     // Check the response
-    cmd_t * resp = (cmd_t *) config_if_send_buffer;
-    EXPECT_EQ(CMD_SYNCWORD, resp->h.sync);
-    EXPECT_EQ(CMD_STATUS_RESP, resp->h.cmd);
-    EXPECT_EQ(CMD_NO_ERROR, resp->p.cmd_status_resp.error_code);
-    EXPECT_EQ(0, resp->p.cmd_status_resp.stm_firmware_version);
-    EXPECT_EQ(0, resp->p.cmd_status_resp.ble_firmware_version);
-    EXPECT_EQ(0, resp->p.cmd_status_resp.configuration_format_version);
+    cmd_t resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_STATUS_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_status_resp.error_code);
+    EXPECT_EQ(0, resp.p.cmd_status_resp.stm_firmware_version);
+    EXPECT_EQ(0, resp.p.cmd_status_resp.ble_firmware_version);
+    EXPECT_EQ(0, resp.p.cmd_status_resp.configuration_format_version);
+}
+
+TEST_F(SmTest, CfgWriteOne)
+{
+    cmd_t resp;
+
+    sm_set_state(SM_STATE_BOOT);
+    HardwareInit();
+
+    fs_get_configuration_data_success(); // Successful read of a configuration file
+
+    syshal_batt_charging_ExpectAndReturn(false);
+    syshal_batt_state_ExpectAndReturn(POWER_SUPPLY_CAPACITY_LEVEL_FULL);
+
+    syshal_gpio_set_output_high_Expect(GPIO_LED3); // Status LED
+
+    sm_iterate();
+
+    EXPECT_EQ(SM_STATE_STANDBY_PROVISIONING_NEEDED, sm_get_state());
+
+    // Generate an configuration interface connection event
+    config_if_event_t event;
+    event.id = CONFIG_IF_EVENT_CONNECTED;
+    config_if_event_handler(&event);
+
+    sm_iterate();
+
+    EXPECT_EQ(SM_STATE_PROVISIONING, sm_get_state());
+
+    sm_iterate(); // Queue the first receive
+
+    // Generate cfg write request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_CFG_WRITE_REQ);
+    req.p.cmd_cfg_write_req.length = SYS_CONFIG_TAG_ID_SIZE + SYS_CONFIG_TAG_DATA_SIZE(sys_config_logging_group_sensor_readings_enable_t);
+    send_message(req, CMD_SIZE(cmd_cfg_write_req_t));
+
+    sm_iterate(); // Process the message
+
+    // Check the response
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+
+    // Generate cfg tag data packet
+    uint8_t tag_data_packet[3];
+    tag_data_packet[0] = uint16_t(SYS_CONFIG_TAG_LOGGING_GROUP_SENSOR_READINGS_ENABLE) & 0x00FF;
+    tag_data_packet[1] = (uint16_t(SYS_CONFIG_TAG_LOGGING_GROUP_SENSOR_READINGS_ENABLE) & 0xFF00) >> 8;
+    tag_data_packet[2] = true; // Enable
+
+    cmd_t * message = (cmd_t *) &tag_data_packet;
+    send_message(*message, sizeof(tag_data_packet));
+
+    sm_iterate(); // Process the message
+
+    // Check the response
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_CFG_WRITE_CNF, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_cfg_write_cnf.error_code);
+
+    // Check the tag was correctly set
+    EXPECT_TRUE(sys_config.sys_config_logging_group_sensor_readings_enable.contents.enable);
+}
+
+TEST_F(SmTest, CfgWriteOneInvalidTag)
+{
+    cmd_t resp;
+
+    sm_set_state(SM_STATE_BOOT);
+    HardwareInit();
+
+    fs_get_configuration_data_success(); // Successful read of a configuration file
+
+    syshal_batt_charging_ExpectAndReturn(false);
+    syshal_batt_state_ExpectAndReturn(POWER_SUPPLY_CAPACITY_LEVEL_FULL);
+
+    syshal_gpio_set_output_high_Expect(GPIO_LED3); // Status LED
+
+    sm_iterate();
+
+    EXPECT_EQ(SM_STATE_STANDBY_PROVISIONING_NEEDED, sm_get_state());
+
+    // Generate an configuration interface connection event
+    config_if_event_t event;
+    event.id = CONFIG_IF_EVENT_CONNECTED;
+    config_if_event_handler(&event);
+
+    sm_iterate();
+
+    EXPECT_EQ(SM_STATE_PROVISIONING, sm_get_state());
+
+    sm_iterate(); // Queue the first receive
+
+    // Generate cfg write request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_CFG_WRITE_REQ);
+    req.p.cmd_cfg_write_req.length = SYS_CONFIG_TAG_ID_SIZE + SYS_CONFIG_TAG_DATA_SIZE(sys_config_logging_group_sensor_readings_enable_t);
+    send_message(req, CMD_SIZE(cmd_cfg_write_req_t));
+
+    sm_iterate(); // Process the message
+
+    // Check the response
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+
+    // Generate cfg tag data packet
+    uint8_t tag_data_packet[3];
+    uint16_t invalid_tag_ID = 0xABAB;
+    tag_data_packet[0] = invalid_tag_ID & 0x00FF;
+    tag_data_packet[1] = (invalid_tag_ID & 0xFF00) >> 8;
+    tag_data_packet[2] = true; // Enable
+
+    cmd_t * message = (cmd_t *) &tag_data_packet;
+    send_message(*message, sizeof(tag_data_packet));
+
+    sm_iterate(); // Process the message
+    sm_iterate(); // Generate the error response
+
+    // Check the response
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_CFG_WRITE_CNF, resp.h.cmd);
+    EXPECT_EQ(CMD_ERROR_INVALID_CONFIG_TAG, resp.p.cmd_cfg_write_cnf.error_code);
 }
