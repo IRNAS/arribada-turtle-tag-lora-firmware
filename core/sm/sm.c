@@ -811,7 +811,7 @@ static void cfg_protect_req(cmd_t * req, uint16_t size)
         Throw(EXCEPTION_TX_BUFFER_FULL);
     CMD_SET_HDR(resp, CMD_GENERIC_RESP);
 
-    int ret = fs_protect(file_system, FS_FILE_ID_LOG);
+    int ret = fs_protect(file_system, FS_FILE_ID_CONF);
 
     switch (ret)
     {
@@ -848,7 +848,7 @@ static void cfg_unprotect_req(cmd_t * req, uint16_t size)
         Throw(EXCEPTION_TX_BUFFER_FULL);
     CMD_SET_HDR(resp, CMD_GENERIC_RESP);
 
-    int ret = fs_unprotect(file_system, FS_FILE_ID_LOG);
+    int ret = fs_unprotect(file_system, FS_FILE_ID_CONF);
 
     switch (ret)
     {

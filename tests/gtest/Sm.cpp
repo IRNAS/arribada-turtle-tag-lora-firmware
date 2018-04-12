@@ -613,7 +613,7 @@ TEST_F(SmTest, CfgReadOne)
     EXPECT_TRUE(message[2]);
 }
 
-TEST_F(SmTest, CfgSave)
+TEST_F(SmTest, CfgSaveSuccess)
 {
     startup_provisioning_needed(); // Boot and transition to provisioning needed state
 
@@ -665,7 +665,6 @@ TEST_F(SmTest, CfgSave)
     }
 
     EXPECT_FALSE(RAM_FLASH_mismatch);
-
 }
 
 TEST_F(SmTest, CfgRestoreNoFile)
@@ -732,4 +731,132 @@ TEST_F(SmTest, CfgRestoreSuccess)
     EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
     EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
     EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+}
+
+TEST_F(SmTest, CfgProtectSuccess)
+{
+    startup_provisioning_needed(); // Boot and transition to provisioning needed state
+
+    connect(); // Connect the config_if
+
+    sm_iterate();
+
+    EXPECT_EQ(SM_STATE_PROVISIONING, sm_get_state());
+
+    sm_iterate(); // Queue the first receive
+
+    // Generate the configuration file in FLASH
+    fs_t file_system;
+    fs_handle_t file_system_handle;
+
+    EXPECT_EQ(FS_NO_ERROR, fs_init(FS_DEVICE));
+    EXPECT_EQ(FS_NO_ERROR, fs_mount(FS_DEVICE, &file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_format(file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_open(file_system, &file_system_handle, FS_FILE_ID_CONF, FS_MODE_CREATE, NULL));
+    EXPECT_EQ(FS_NO_ERROR, fs_close(file_system_handle));
+
+    // Generate cfg save request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_CFG_PROTECT_REQ);
+    send_message(req, CMD_SIZE_HDR);
+
+    sm_iterate(); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+}
+
+TEST_F(SmTest, CfgProtectNoFile)
+{
+    startup_provisioning_needed(); // Boot and transition to provisioning needed state
+
+    connect(); // Connect the config_if
+
+    sm_iterate();
+
+    EXPECT_EQ(SM_STATE_PROVISIONING, sm_get_state());
+
+    sm_iterate(); // Queue the first receive
+
+    // Generate cfg save request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_CFG_PROTECT_REQ);
+    send_message(req, CMD_SIZE_HDR);
+
+    sm_iterate(); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_ERROR_FILE_NOT_FOUND, resp.p.cmd_generic_resp.error_code);
+}
+
+TEST_F(SmTest, CfgUnprotectSuccess)
+{
+    startup_provisioning_needed(); // Boot and transition to provisioning needed state
+
+    connect(); // Connect the config_if
+
+    sm_iterate();
+
+    EXPECT_EQ(SM_STATE_PROVISIONING, sm_get_state());
+
+    sm_iterate(); // Queue the first receive
+
+    // Generate the configuration file in FLASH
+    fs_t file_system;
+    fs_handle_t file_system_handle;
+
+    EXPECT_EQ(FS_NO_ERROR, fs_init(FS_DEVICE));
+    EXPECT_EQ(FS_NO_ERROR, fs_mount(FS_DEVICE, &file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_format(file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_open(file_system, &file_system_handle, FS_FILE_ID_CONF, FS_MODE_CREATE, NULL));
+    EXPECT_EQ(FS_NO_ERROR, fs_close(file_system_handle));
+
+    // Generate cfg save request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_CFG_UNPROTECT_REQ);
+    send_message(req, CMD_SIZE_HDR);
+
+    sm_iterate(); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+}
+
+TEST_F(SmTest, CfgUnprotectNoFile)
+{
+    startup_provisioning_needed(); // Boot and transition to provisioning needed state
+
+    connect(); // Connect the config_if
+
+    sm_iterate();
+
+    EXPECT_EQ(SM_STATE_PROVISIONING, sm_get_state());
+
+    sm_iterate(); // Queue the first receive
+
+    // Generate cfg save request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_CFG_UNPROTECT_REQ);
+    send_message(req, CMD_SIZE_HDR);
+
+    sm_iterate(); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_ERROR_FILE_NOT_FOUND, resp.p.cmd_generic_resp.error_code);
 }
