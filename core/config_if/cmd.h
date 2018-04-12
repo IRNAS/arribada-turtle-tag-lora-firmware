@@ -37,6 +37,7 @@
 #define CMD_SIZE(i)  (sizeof(cmd_hdr_t) + sizeof(i))
 
 #define CFG_READ_REQ_READ_ALL (0xFFFF) // Read all configuration tags
+#define CFG_ERASE_REQ_ERASE_ALL (CFG_READ_REQ_READ_ALL) // Erase all configuration tags
 
 typedef struct __attribute__((__packed__))
 {

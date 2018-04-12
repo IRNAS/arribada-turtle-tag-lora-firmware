@@ -759,7 +759,7 @@ static void cfg_erase_req(cmd_t * req, uint16_t size)
         Throw(EXCEPTION_TX_BUFFER_FULL);
     CMD_SET_HDR(resp, CMD_GENERIC_RESP);
 
-    if (CFG_READ_REQ_READ_ALL == req->p.cmd_cfg_erase_req.configuration_tag) // Erase all configuration tags
+    if (CFG_ERASE_REQ_ERASE_ALL == req->p.cmd_cfg_erase_req.configuration_tag) // Erase all configuration tags
     {
         uint16_t last_index = 0;
         uint16_t tag;

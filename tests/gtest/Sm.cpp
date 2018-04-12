@@ -860,3 +860,90 @@ TEST_F(SmTest, CfgUnprotectNoFile)
     EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
     EXPECT_EQ(CMD_ERROR_FILE_NOT_FOUND, resp.p.cmd_generic_resp.error_code);
 }
+
+TEST_F(SmTest, CfgEraseAll)
+{
+    startup_provisioning_needed(); // Boot and transition to provisioning needed state
+
+    connect(); // Connect the config_if
+
+    sm_iterate();
+
+    EXPECT_EQ(SM_STATE_PROVISIONING, sm_get_state());
+
+    sm_iterate(); // Queue the first receive
+
+    set_all_configuration_tags_RAM(); // Set all the configuration tags
+
+    // Generate cfg erase request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_CFG_ERASE_REQ);
+    req.p.cmd_cfg_erase_req.configuration_tag = CFG_ERASE_REQ_ERASE_ALL;
+    send_message(req, CMD_SIZE(cmd_cfg_erase_req_t));
+
+    sm_iterate(); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+
+    // Check all the configuration tags have been unset
+    bool all_tags_unset = true;
+    uint16_t tag, last_index = 0;
+    while (!sys_config_iterate(&tag, &last_index))
+    {
+        void * src;
+        int ret = sys_config_get(tag, &src);
+
+        if (SYS_CONFIG_ERROR_TAG_NOT_SET != ret)
+        {
+            all_tags_unset = false;
+            break;
+        }
+    }
+
+    EXPECT_TRUE(all_tags_unset);
+}
+
+TEST_F(SmTest, CfgEraseOne)
+{
+    startup_provisioning_needed(); // Boot and transition to provisioning needed state
+
+    connect(); // Connect the config_if
+
+    sm_iterate();
+
+    EXPECT_EQ(SM_STATE_PROVISIONING, sm_get_state());
+
+    sm_iterate(); // Queue the first receive
+
+    set_all_configuration_tags_RAM(); // Set all the configuration tags
+
+    // Generate cfg erase request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_CFG_ERASE_REQ);
+    req.p.cmd_cfg_erase_req.configuration_tag = SYS_CONFIG_TAG_LOGGING_GROUP_SENSOR_READINGS_ENABLE;
+    send_message(req, CMD_SIZE(cmd_cfg_erase_req_t));
+
+    sm_iterate(); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+
+    // Check the configuration tag has been unset
+    void * src;
+    int ret = sys_config_get(SYS_CONFIG_TAG_LOGGING_GROUP_SENSOR_READINGS_ENABLE, &src);
+
+    bool tag_unset = false;
+    if (SYS_CONFIG_ERROR_TAG_NOT_SET == ret)
+        tag_unset = true;
+
+    EXPECT_TRUE(tag_unset);
+}
