@@ -84,7 +84,8 @@ nodist_Sm_SOURCES = $(gtest_srcdir)/Sm.cpp \
                     $(gtest_srcdir)/mocks/Mocksyshal_spi.c \
                     $(gtest_srcdir)/mocks/Mocksyshal_time.c \
                     $(gtest_srcdir)/mocks/Mocksyshal_uart.c \
-                    $(gtest_srcdir)/mocks/Mockfs.c \
+                    $(gtest_srcdir)/mocks/Mocksyshal_flash.c \
+                    $(core_srcdir)/fs/fs.c \
                     $(core_srcdir)/cexception/cexception.c \
                     $(core_srcdir)/buffer/buffer.c \
                     $(core_srcdir)/sys_config/sys_config.c \

@@ -45,6 +45,8 @@ static char flash_ram[FLASH_SIZE];
 class FsTest : public ::testing::Test {
 
     virtual void SetUp() {
+        Mocksyshal_flash_Init();
+
         trace_on = false;
         syshal_flash_read_StubWithCallback(syshal_flash_read_Callback);
         syshal_flash_write_StubWithCallback(syshal_flash_write_Callback);

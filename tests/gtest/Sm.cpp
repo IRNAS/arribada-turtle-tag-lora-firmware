@@ -25,8 +25,10 @@ extern "C" {
 #include "Mocksyshal_spi.h"
 #include "Mocksyshal_i2c.h"
 #include "Mocksyshal_time.h"
+#include "Mocksyshal_flash.h"
 #include "Mockconfig_if.h"
-#include "Mockfs.h"
+#include "fs_priv.h"
+#include "fs.h"
 #include "cmd.h"
 #include "sys_config.h"
 #include "sm.h"
@@ -39,13 +41,21 @@ extern "C" {
 #include <cstring>
 #include <iostream>
 
+#include <utility>
 #include <queue>
+#include <vector>
 
 #define FS_FILE_ID_CONF             (0) // The File ID of the configuration data
 #define FS_FILE_ID_STM32_IMAGE      (1) // STM32 application image
 #define FS_FILE_ID_BLE_APP_IMAGE    (2) // BLE application image
 #define FS_FILE_ID_BLE_SOFT_IMAGE   (3) // BLE soft-device image
 #define FS_FILE_ID_LOG              (4) // Sensor log file
+
+#define FLASH_SIZE          (FS_PRIV_SECTOR_SIZE * FS_PRIV_MAX_SECTORS)
+#define ASCII(x)            ((x) >= 32 && (x) <= 127) ? (x) : '.'
+
+static bool fs_trace;
+char flash_ram[FLASH_SIZE];
 
 // Dummy functions, used to ignore all calls to this function
 void syshal_batt_init_dummy(uint32_t instance, int cmock_num_calls) {}
@@ -54,61 +64,6 @@ int syshal_uart_init_dummy(uint32_t instance, int cmock_num_calls) {return SYSHA
 int syshal_spi_init_dummy(uint32_t instance, int cmock_num_calls) {return SYSHAL_SPI_NO_ERROR;}
 int syshal_i2c_init_dummy(uint32_t instance, int cmock_num_calls) {return SYSHAL_I2C_NO_ERROR;}
 int config_if_init_dummy(config_if_backend_t backend, int cmock_num_calls) {return CONFIG_IF_NO_ERROR;}
-int fs_init_dummy(uint32_t device, int cmock_num_calls) {return FS_NO_ERROR;}
-int fs_mount_dummy(uint32_t device, fs_t * fs, int cmock_num_calls) {return FS_NO_ERROR;}
-
-/////// File system handlers ///////
-bool file_currently_open = false;
-
-// fs_open callback function
-std::queue<uint8_t> fs_open_expected_file_id;
-std::queue<fs_mode_t> fs_open_expected_mode;
-std::queue<int> fs_open_return_value;
-int fs_open_callback(fs_t fs, fs_handle_t * handle, uint8_t file_id, fs_mode_t mode, uint8_t * user_flags, int cmock_num_calls)
-{
-    EXPECT_EQ(fs_open_expected_file_id.front(), file_id);
-    fs_open_expected_file_id.pop();
-    EXPECT_EQ(fs_open_expected_mode.front(), mode);
-    fs_open_expected_mode.pop();
-
-    int ret_val = fs_open_return_value.front();
-    fs_open_return_value.pop();
-
-    if (FS_NO_ERROR == ret_val)
-        file_currently_open = true;
-
-    return ret_val;
-}
-
-// fs_read callback function
-int fs_read_return_value;
-int fs_read_callback(fs_handle_t handle, void * dest, uint32_t size, uint32_t * read, int cmock_num_calls)
-{
-    *read = size;
-    return fs_read_return_value;
-}
-
-// fs_write callback function
-int fs_write_return_value;
-int fs_write_callback(fs_handle_t handle, const void * src, uint32_t size, uint32_t * written, int cmock_num_calls)
-{
-    *written = size;
-    return fs_write_return_value;
-}
-
-// fs_close callback function
-int fs_close_callback(fs_handle_t handle, int cmock_num_calls)
-{
-    file_currently_open = false;
-    return FS_NO_ERROR;
-}
-
-// fs_delete callback function
-int fs_delete_callback(fs_t fs, uint8_t file_id, int cmock_num_calls)
-{
-    file_currently_open = false;
-    return FS_NO_ERROR;
-}
 
 // syshal_time_get_ticks_ms callback function
 uint32_t syshal_time_get_ticks_ms_value;
@@ -135,6 +90,50 @@ int config_if_send_callback(uint8_t * data, uint32_t size, int cmock_num_calls)
     return CONFIG_IF_NO_ERROR;
 }
 
+// Syshal_flash callbacks
+int syshal_flash_read_Callback(uint32_t device, void * dest, uint32_t address, uint32_t size, int cmock_num_calls)
+{
+    //printf("syshal_flash_read(%08x,%u)\n", address, size);
+    for (unsigned int i = 0; i < size; i++)
+        ((char *)dest)[i] = flash_ram[address + i];
+
+    return 0;
+}
+
+int syshal_flash_write_Callback(uint32_t device, const void * src, uint32_t address, uint32_t size, int cmock_num_calls)
+{
+    if (fs_trace)
+        printf("syshal_flash_write(%08x, %u)\n", address, size);
+    for (unsigned int i = 0; i < size; i++)
+    {
+        /* Ensure no new bits are being set */
+        if ((((char *)src)[i] & flash_ram[address + i]) ^ ((char *)src)[i])
+        {
+            printf("syshal_flash_write: Can't set bits from 0 to 1 (%08x: %02x => %02x)\n", address + i,
+                   (uint8_t)flash_ram[address + i], (uint8_t)((char *)src)[i]);
+            assert(0);
+        }
+        flash_ram[address + i] = ((char *)src)[i];
+    }
+
+    return 0;
+}
+
+int syshal_flash_erase_Callback(uint32_t device, uint32_t address, uint32_t size, int cmock_num_calls)
+{
+    /* Make sure address is sector aligned */
+    if (address % FS_PRIV_SECTOR_SIZE || size % FS_PRIV_SECTOR_SIZE)
+    {
+        printf("syshal_flash_erase: Non-aligned address %08x", address);
+        assert(0);
+    }
+
+    for (unsigned int i = 0; i < size; i++)
+        flash_ram[address + i] = 0xFF;
+
+    return 0;
+}
+
 class SmTest : public ::testing::Test
 {
 
@@ -146,39 +145,34 @@ class SmTest : public ::testing::Test
         Mocksyshal_spi_Init();
         Mocksyshal_i2c_Init();
         Mockconfig_if_Init();
-        Mockfs_Init();
+        Mocksyshal_flash_Init();
 
         // Callbacks
-        fs_open_StubWithCallback(fs_open_callback);
-        fs_read_StubWithCallback(fs_read_callback);
-        fs_write_StubWithCallback(fs_write_callback);
-        fs_close_StubWithCallback(fs_close_callback);
-        fs_delete_StubWithCallback(fs_delete_callback);
+        syshal_flash_read_StubWithCallback(syshal_flash_read_Callback);
+        syshal_flash_write_StubWithCallback(syshal_flash_write_Callback);
+        syshal_flash_erase_StubWithCallback(syshal_flash_erase_Callback);
+
         syshal_time_get_ticks_ms_StubWithCallback(syshal_time_get_ticks_ms_callback);
         config_if_receive_StubWithCallback(config_if_receive_callback);
         config_if_send_StubWithCallback(config_if_send_callback);
+
+        // Clear FLASH contents
+        for (unsigned int i = 0; i < FLASH_SIZE; i++)
+            flash_ram[i] = 0xFF;
+
+        fs_trace = false; // turn FS trace off
+
+        // Clear all configuration tags
+        clear_all_configuration_tags_RAM();
+
+        // Set global variables to defaults
+        config_if_receive_buffer = NULL;
+        config_if_send_buffer = NULL;
+        config_if_send_size = 0;
     }
 
     virtual void TearDown()
     {
-        // Empty queues
-        while (!fs_open_expected_file_id.empty()) fs_open_expected_file_id.pop();
-        while (!fs_open_expected_mode.empty()) fs_open_expected_mode.pop();
-        while (!fs_open_return_value.empty()) fs_open_return_value.pop();
-
-        // Clear all configuration tags
-        uint16_t last_index = 0;
-        uint16_t tag;
-        while (!sys_config_iterate(&tag, &last_index))
-        {
-            sys_config_unset(tag);
-        }
-
-        // Reset global variables to defaults
-        config_if_receive_buffer = NULL;
-        config_if_send_buffer = NULL;
-        config_if_send_size = 0;
-
         // Cleanup Mocks
         Mocksyshal_batt_Verify();
         Mocksyshal_batt_Destroy();
@@ -192,8 +186,8 @@ class SmTest : public ::testing::Test
         Mocksyshal_i2c_Destroy();
         Mockconfig_if_Verify();
         Mockconfig_if_Destroy();
-        Mockfs_Verify();
-        Mockfs_Destroy();
+        Mocksyshal_flash_Verify();
+        Mocksyshal_flash_Destroy();
     }
 
 public:
@@ -208,56 +202,9 @@ public:
         syshal_spi_init_StubWithCallback(syshal_spi_init_dummy);
         syshal_i2c_init_StubWithCallback(syshal_i2c_init_dummy);
         config_if_init_StubWithCallback(config_if_init_dummy);
-        fs_init_StubWithCallback(fs_init_dummy);
-        fs_mount_StubWithCallback(fs_mount_dummy);
     }
 
-    // A call to fs_get_configuration_data where the configuration data file is non-existant
-    void fs_get_configuration_data_no_file()
-    {
-        // fs_open
-        fs_open_expected_file_id.push(FS_FILE_ID_CONF);
-        fs_open_expected_mode.push(FS_MODE_READONLY);
-        fs_open_return_value.push(FS_ERROR_FILE_NOT_FOUND);
-    }
-
-    // A call to fs_get_configuration_data where the configuration data is correctly read
-    void fs_get_configuration_data_success()
-    {
-        // fs_open
-        fs_open_expected_file_id.push(FS_FILE_ID_CONF);
-        fs_open_expected_mode.push(FS_MODE_READONLY);
-        fs_open_return_value.push(FS_NO_ERROR);
-
-        // fs_read
-        fs_read_return_value = FS_NO_ERROR;
-    }
-
-    // A call to fs_create_configuration_data where the configuration data is correctly made
-    void fs_create_configuration_data_success()
-    {
-        // fs_open
-        fs_open_expected_file_id.push(FS_FILE_ID_CONF);
-        fs_open_expected_mode.push(FS_MODE_CREATE);
-        fs_open_return_value.push(FS_NO_ERROR);
-
-        // fs_write
-        fs_write_return_value = FS_NO_ERROR;
-    }
-
-    // A call to fs_set_configuration_data where the configuration data is correctly stored
-    void fs_set_configuration_data_success()
-    {
-        // fs_open
-        fs_open_expected_file_id.push(FS_FILE_ID_CONF);
-        fs_open_expected_mode.push(FS_MODE_WRITEONLY);
-        fs_open_return_value.push(FS_NO_ERROR);
-
-        // fs_write
-        fs_write_return_value = FS_NO_ERROR;
-    }
-
-    void set_all_configuration_tags()
+    void set_all_configuration_tags_RAM()
     {
         uint8_t empty_buffer[SYS_CONFIG_MAX_DATA_SIZE];
 
@@ -296,6 +243,17 @@ public:
         sys_config_set(SYS_CONFIG_TAG_BLUETOOTH_BEACON_GEO_FENCE_TRIGGER_LOCATION, &empty_buffer, SYS_CONFIG_TAG_DATA_SIZE(sys_config_bluetooth_beacon_geo_fence_trigger_location_t));
         sys_config_set(SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_INTERVAL, &empty_buffer, SYS_CONFIG_TAG_DATA_SIZE(sys_config_bluetooth_beacon_advertising_interval_t));
         sys_config_set(SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_CONFIGURATION, &empty_buffer, SYS_CONFIG_TAG_DATA_SIZE(sys_config_bluetooth_beacon_advertising_configuration_t));
+    }
+
+    void clear_all_configuration_tags_RAM()
+    {
+        // Clear all configuration tags
+        uint16_t last_index = 0;
+        uint16_t tag;
+        while (!sys_config_iterate(&tag, &last_index))
+        {
+            sys_config_unset(tag);
+        }
     }
 
     // Send config_if message to the state machine
@@ -350,8 +308,6 @@ public:
         sm_set_state(SM_STATE_BOOT);
         HardwareInit();
 
-        fs_get_configuration_data_success(); // Successful read of a configuration file
-
         syshal_batt_charging_ExpectAndReturn(false);
         syshal_batt_state_ExpectAndReturn(POWER_SUPPLY_CAPACITY_LEVEL_FULL);
 
@@ -375,8 +331,6 @@ TEST_F(SmTest, BootConfigurationDataDoesNotExist)
     sm_set_state(SM_STATE_BOOT);
     HardwareInit();
 
-    fs_get_configuration_data_no_file(); // No configuration file present
-
     syshal_batt_charging_ExpectAndReturn(false);
     syshal_batt_state_ExpectAndReturn(POWER_SUPPLY_CAPACITY_LEVEL_FULL);
 
@@ -391,8 +345,6 @@ TEST_F(SmTest, BootConfigurationDataExistsButIncomplete)
 {
     sm_set_state(SM_STATE_BOOT);
     HardwareInit();
-
-    fs_get_configuration_data_success(); // Successful read of a configuration file
 
     syshal_batt_charging_ExpectAndReturn(false);
     syshal_batt_state_ExpectAndReturn(POWER_SUPPLY_CAPACITY_LEVEL_FULL);
@@ -409,8 +361,6 @@ TEST_F(SmTest, BootBatteryCharging)
     sm_set_state(SM_STATE_BOOT);
     HardwareInit();
 
-    fs_get_configuration_data_success(); // Successful read of a configuration file
-
     syshal_batt_charging_ExpectAndReturn(true);
 
     sm_iterate();
@@ -422,8 +372,6 @@ TEST_F(SmTest, BootBatteryLevelLow)
 {
     sm_set_state(SM_STATE_BOOT);
     HardwareInit();
-
-    fs_get_configuration_data_success(); // Successful read of a configuration file
 
     syshal_batt_charging_ExpectAndReturn(false);
     syshal_batt_state_ExpectAndReturn(POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL);
@@ -438,14 +386,28 @@ TEST_F(SmTest, BootConfigurationComplete)
     sm_set_state(SM_STATE_BOOT);
     HardwareInit();
 
-    set_all_configuration_tags(); // Set all configuration tags
-
-    fs_get_configuration_data_success(); // Successful read of a configuration file
-
     syshal_batt_charging_ExpectAndReturn(false);
     syshal_batt_state_ExpectAndReturn(POWER_SUPPLY_CAPACITY_LEVEL_FULL);
 
     syshal_gpio_set_output_high_Expect(GPIO_LED3); // Status LED
+
+    // Set all the configuration tags in RAM
+    set_all_configuration_tags_RAM();
+
+    // Store all the tags into FLASH
+    fs_t file_system;
+    fs_handle_t file_system_handle;
+    uint32_t bytes_written;
+
+    EXPECT_EQ(FS_NO_ERROR, fs_init(FS_DEVICE));
+    EXPECT_EQ(FS_NO_ERROR, fs_mount(FS_DEVICE, &file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_format(file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_open(file_system, &file_system_handle, FS_FILE_ID_CONF, FS_MODE_CREATE, NULL));
+    EXPECT_EQ(FS_NO_ERROR, fs_write(file_system_handle, &sys_config, sizeof(sys_config), &bytes_written));
+    EXPECT_EQ(FS_NO_ERROR, fs_close(file_system_handle));
+
+    // Clear all tags in RAM
+    clear_all_configuration_tags_RAM();
 
     sm_iterate();
 
@@ -668,8 +630,99 @@ TEST_F(SmTest, CfgSave)
     CMD_SET_HDR((&req), CMD_CFG_SAVE_REQ);
     send_message(req, CMD_SIZE_HDR);
 
-    fs_create_configuration_data_success(); // Create file
-    fs_set_configuration_data_success(); // Write to file
+    sm_iterate(); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+
+    // Check the configuration file in FLASH matches the configuration in RAM
+    fs_t file_system;
+    fs_handle_t file_system_handle;
+    uint32_t bytes_read;
+    uint8_t flash_config_data[sizeof(sys_config)];
+
+    EXPECT_EQ(FS_NO_ERROR, fs_init(FS_DEVICE));
+    EXPECT_EQ(FS_NO_ERROR, fs_mount(FS_DEVICE, &file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_open(file_system, &file_system_handle, FS_FILE_ID_CONF, FS_MODE_READONLY, NULL));
+    EXPECT_EQ(FS_NO_ERROR, fs_read(file_system_handle, &flash_config_data[0], sizeof(sys_config), &bytes_read));
+    EXPECT_EQ(FS_NO_ERROR, fs_close(file_system_handle));
+    EXPECT_EQ(sizeof(sys_config), bytes_read);
+
+    // Check RAM and FLASH contents match
+    bool RAM_FLASH_mismatch = false;
+    uint8_t * sys_config_itr = (uint8_t *) &sys_config;
+    for (unsigned int i = 0; i < bytes_read; ++i)
+    {
+        if (flash_config_data[i] != sys_config_itr[i])
+        {
+            RAM_FLASH_mismatch = true;
+            break;
+        }
+    }
+
+    EXPECT_FALSE(RAM_FLASH_mismatch);
+
+}
+
+TEST_F(SmTest, CfgRestoreNoFile)
+{
+    startup_provisioning_needed(); // Boot and transition to provisioning needed state
+
+    connect(); // Connect the config_if
+
+    sm_iterate();
+
+    EXPECT_EQ(SM_STATE_PROVISIONING, sm_get_state());
+
+    sm_iterate(); // Queue the first receive
+
+    // Generate cfg save request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_CFG_RESTORE_REQ);
+    send_message(req, CMD_SIZE_HDR);
+
+    sm_iterate(); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_ERROR_FILE_NOT_FOUND, resp.p.cmd_generic_resp.error_code);
+}
+
+TEST_F(SmTest, CfgRestoreSuccess)
+{
+    startup_provisioning_needed(); // Boot and transition to provisioning needed state
+
+    connect(); // Connect the config_if
+
+    sm_iterate();
+
+    EXPECT_EQ(SM_STATE_PROVISIONING, sm_get_state());
+
+    sm_iterate(); // Queue the first receive
+
+    // Generate the configuration file in FLASH
+    fs_t file_system;
+    fs_handle_t file_system_handle;
+    uint32_t bytes_written;
+
+    EXPECT_EQ(FS_NO_ERROR, fs_init(FS_DEVICE));
+    EXPECT_EQ(FS_NO_ERROR, fs_mount(FS_DEVICE, &file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_format(file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_open(file_system, &file_system_handle, FS_FILE_ID_CONF, FS_MODE_CREATE, NULL));
+    EXPECT_EQ(FS_NO_ERROR, fs_write(file_system_handle, &sys_config, sizeof(sys_config), &bytes_written));
+    EXPECT_EQ(FS_NO_ERROR, fs_close(file_system_handle));
+
+    // Generate cfg save request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_CFG_RESTORE_REQ);
+    send_message(req, CMD_SIZE_HDR);
 
     sm_iterate(); // Process the message
 
