@@ -683,7 +683,7 @@ static void cfg_save_req(cmd_t * req, uint16_t size)
     {
         case FS_ERROR_FILE_NOT_FOUND: // If there is no configuration file, then make one
         case FS_NO_ERROR:
- 
+
             ret = fs_create_configuration_data(); // Re/Create the file
             if (FS_NO_ERROR != ret)
                 Throw(EXCEPTION_FS_ERROR);
@@ -944,7 +944,6 @@ static void gps_write_next_state(void)
         // We have received all the data
         message_set_state(SM_MESSAGE_STATE_IDLE);
     }
-
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1046,7 +1045,7 @@ static void ble_config_req(cmd_t * req, uint16_t size)
     if (CMD_SIZE(cmd_ble_config_req_t) != size)
         Throw(EXCEPTION_REQ_WRONG_SIZE);
 
-    syshal_ble_bridging = req->p.cmd_gps_config_req.enable; // Disable or enable BLE bridging
+    syshal_ble_bridging = req->p.cmd_ble_config_req.enable; // Disable or enable BLE bridging
 
     // Generate and send response
     cmd_t * resp;
@@ -1161,11 +1160,11 @@ static void ble_read_req(cmd_t * req, uint16_t size)
     }
 
     // Send response
-    buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_gps_read_resp_t));
+    buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_ble_read_req_t));
     config_if_send_priv(&config_if_send_buffer);
 
     if (sm_context.ble_read.length > 0)
-        message_set_state(SM_MESSAGE_STATE_GPS_READ_NEXT);
+        message_set_state(SM_MESSAGE_STATE_BLE_READ_NEXT);
 }
 
 static void ble_read_next_state(void)
@@ -1861,6 +1860,10 @@ void boot_state(void)
 #ifndef DUMMY_BATTERY_MONITOR
     syshal_batt_init(I2C_1);
 #endif
+
+    // Re/Set global vars
+    syshal_gps_bridging = false;
+    syshal_ble_bridging = false;
 
     //syshal_gps_init();
     //syshal_usb_init();

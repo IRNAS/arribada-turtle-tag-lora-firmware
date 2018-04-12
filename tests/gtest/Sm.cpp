@@ -21,6 +21,7 @@ extern "C" {
 #include <stdint.h>
 #include "Mocksyshal_batt.h"
 #include "Mocksyshal_gpio.h"
+#include "Mocksyshal_gps.h"
 #include "Mocksyshal_uart.h"
 #include "Mocksyshal_spi.h"
 #include "Mocksyshal_i2c.h"
@@ -134,6 +135,18 @@ int syshal_flash_erase_Callback(uint32_t device, uint32_t address, uint32_t size
     return 0;
 }
 
+// int syshal_gps_send_raw callback function
+uint8_t gps_write_buffer[2048];
+int syshal_gps_send_raw_Callback(uint8_t * data, uint32_t size, int cmock_num_calls)
+{
+    if (size > sizeof(gps_write_buffer))
+        assert(0);
+
+    memcpy(&gps_write_buffer[0], data, size);
+
+    return SYSHAL_GPS_NO_ERROR;
+}
+
 class SmTest : public ::testing::Test
 {
 
@@ -152,15 +165,20 @@ class SmTest : public ::testing::Test
         syshal_flash_write_StubWithCallback(syshal_flash_write_Callback);
         syshal_flash_erase_StubWithCallback(syshal_flash_erase_Callback);
 
+        syshal_gps_send_raw_StubWithCallback(syshal_gps_send_raw_Callback);
         syshal_time_get_ticks_ms_StubWithCallback(syshal_time_get_ticks_ms_callback);
         config_if_receive_StubWithCallback(config_if_receive_callback);
         config_if_send_StubWithCallback(config_if_send_callback);
 
         // Clear FLASH contents
-        for (unsigned int i = 0; i < FLASH_SIZE; i++)
+        for (unsigned int i = 0; i < FLASH_SIZE; ++i)
             flash_ram[i] = 0xFF;
 
         fs_trace = false; // turn FS trace off
+
+        // Clear GPS write buffer
+        for (unsigned int i = 0; i < sizeof(gps_write_buffer); ++i)
+            gps_write_buffer[i] = 0x00;
 
         // Clear all configuration tags
         clear_all_configuration_tags_RAM();
@@ -257,10 +275,10 @@ public:
     }
 
     // Send config_if message to the state machine
-    void send_message(cmd_t message, uint32_t size)
+    void send_message(uint8_t * message, uint32_t size)
     {
         // Copy message into receive buffer
-        memcpy(config_if_receive_buffer, &message, size);
+        memcpy(config_if_receive_buffer, message, size);
 
         // Generate receive request event
         config_if_event_t event;
@@ -273,7 +291,7 @@ public:
     // Receive config_if message from the state machine
     cmd_t receive_message(void)
     {
-        // Copy message into receive buffer
+        // Copy message from send buffer
         cmd_t message;
         memcpy(&message, config_if_send_buffer, config_if_send_size);
 
@@ -459,7 +477,7 @@ TEST_F(SmTest, StatusRequest)
     // Generate reset request message
     cmd_t req;
     CMD_SET_HDR((&req), CMD_STATUS_REQ);
-    send_message(req, CMD_SIZE_HDR);
+    send_message((uint8_t *) &req, CMD_SIZE_HDR);
 
     sm_iterate(); // Process the message
 
@@ -489,7 +507,7 @@ TEST_F(SmTest, CfgWriteOne)
     cmd_t req;
     CMD_SET_HDR((&req), CMD_CFG_WRITE_REQ);
     req.p.cmd_cfg_write_req.length = SYS_CONFIG_TAG_ID_SIZE + SYS_CONFIG_TAG_DATA_SIZE(sys_config_logging_group_sensor_readings_enable_t);
-    send_message(req, CMD_SIZE(cmd_cfg_write_req_t));
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_cfg_write_req_t));
 
     sm_iterate(); // Process the message
 
@@ -506,8 +524,7 @@ TEST_F(SmTest, CfgWriteOne)
     tag_data_packet[1] = (uint16_t(SYS_CONFIG_TAG_LOGGING_GROUP_SENSOR_READINGS_ENABLE) & 0xFF00) >> 8;
     tag_data_packet[2] = true; // Enable
 
-    cmd_t * message = (cmd_t *) &tag_data_packet;
-    send_message(*message, sizeof(tag_data_packet));
+    send_message(tag_data_packet, sizeof(tag_data_packet));
 
     sm_iterate(); // Process the message
 
@@ -537,7 +554,7 @@ TEST_F(SmTest, CfgWriteOneInvalidTag)
     cmd_t req;
     CMD_SET_HDR((&req), CMD_CFG_WRITE_REQ);
     req.p.cmd_cfg_write_req.length = SYS_CONFIG_TAG_ID_SIZE + SYS_CONFIG_TAG_DATA_SIZE(sys_config_logging_group_sensor_readings_enable_t);
-    send_message(req, CMD_SIZE(cmd_cfg_write_req_t));
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_cfg_write_req_t));
 
     sm_iterate(); // Process the message
 
@@ -555,8 +572,7 @@ TEST_F(SmTest, CfgWriteOneInvalidTag)
     tag_data_packet[1] = (invalid_tag_ID & 0xFF00) >> 8;
     tag_data_packet[2] = true; // Enable
 
-    cmd_t * message = (cmd_t *) &tag_data_packet;
-    send_message(*message, sizeof(tag_data_packet));
+    send_message(tag_data_packet, sizeof(tag_data_packet));
 
     sm_iterate(); // Process the message
     sm_iterate(); // Generate the error response
@@ -588,7 +604,7 @@ TEST_F(SmTest, CfgReadOne)
     cmd_t req;
     CMD_SET_HDR((&req), CMD_CFG_READ_REQ);
     req.p.cmd_cfg_read_req.configuration_tag = SYS_CONFIG_TAG_LOGGING_GROUP_SENSOR_READINGS_ENABLE;
-    send_message(req, CMD_SIZE(cmd_cfg_read_req_t));
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_cfg_read_req_t));
 
     sm_iterate(); // Process the message
 
@@ -628,7 +644,7 @@ TEST_F(SmTest, CfgSaveSuccess)
     // Generate cfg save request message
     cmd_t req;
     CMD_SET_HDR((&req), CMD_CFG_SAVE_REQ);
-    send_message(req, CMD_SIZE_HDR);
+    send_message((uint8_t *) &req, CMD_SIZE_HDR);
 
     sm_iterate(); // Process the message
 
@@ -682,7 +698,7 @@ TEST_F(SmTest, CfgRestoreNoFile)
     // Generate cfg save request message
     cmd_t req;
     CMD_SET_HDR((&req), CMD_CFG_RESTORE_REQ);
-    send_message(req, CMD_SIZE_HDR);
+    send_message((uint8_t *) &req, CMD_SIZE_HDR);
 
     sm_iterate(); // Process the message
 
@@ -721,7 +737,7 @@ TEST_F(SmTest, CfgRestoreSuccess)
     // Generate cfg save request message
     cmd_t req;
     CMD_SET_HDR((&req), CMD_CFG_RESTORE_REQ);
-    send_message(req, CMD_SIZE_HDR);
+    send_message((uint8_t *) &req, CMD_SIZE_HDR);
 
     sm_iterate(); // Process the message
 
@@ -758,7 +774,7 @@ TEST_F(SmTest, CfgProtectSuccess)
     // Generate cfg save request message
     cmd_t req;
     CMD_SET_HDR((&req), CMD_CFG_PROTECT_REQ);
-    send_message(req, CMD_SIZE_HDR);
+    send_message((uint8_t *) &req, CMD_SIZE_HDR);
 
     sm_iterate(); // Process the message
 
@@ -785,7 +801,7 @@ TEST_F(SmTest, CfgProtectNoFile)
     // Generate cfg save request message
     cmd_t req;
     CMD_SET_HDR((&req), CMD_CFG_PROTECT_REQ);
-    send_message(req, CMD_SIZE_HDR);
+    send_message((uint8_t *) &req, CMD_SIZE_HDR);
 
     sm_iterate(); // Process the message
 
@@ -822,7 +838,7 @@ TEST_F(SmTest, CfgUnprotectSuccess)
     // Generate cfg save request message
     cmd_t req;
     CMD_SET_HDR((&req), CMD_CFG_UNPROTECT_REQ);
-    send_message(req, CMD_SIZE_HDR);
+    send_message((uint8_t *) &req, CMD_SIZE_HDR);
 
     sm_iterate(); // Process the message
 
@@ -849,7 +865,7 @@ TEST_F(SmTest, CfgUnprotectNoFile)
     // Generate cfg save request message
     cmd_t req;
     CMD_SET_HDR((&req), CMD_CFG_UNPROTECT_REQ);
-    send_message(req, CMD_SIZE_HDR);
+    send_message((uint8_t *) &req, CMD_SIZE_HDR);
 
     sm_iterate(); // Process the message
 
@@ -879,7 +895,7 @@ TEST_F(SmTest, CfgEraseAll)
     cmd_t req;
     CMD_SET_HDR((&req), CMD_CFG_ERASE_REQ);
     req.p.cmd_cfg_erase_req.configuration_tag = CFG_ERASE_REQ_ERASE_ALL;
-    send_message(req, CMD_SIZE(cmd_cfg_erase_req_t));
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_cfg_erase_req_t));
 
     sm_iterate(); // Process the message
 
@@ -926,7 +942,7 @@ TEST_F(SmTest, CfgEraseOne)
     cmd_t req;
     CMD_SET_HDR((&req), CMD_CFG_ERASE_REQ);
     req.p.cmd_cfg_erase_req.configuration_tag = SYS_CONFIG_TAG_LOGGING_GROUP_SENSOR_READINGS_ENABLE;
-    send_message(req, CMD_SIZE(cmd_cfg_erase_req_t));
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_cfg_erase_req_t));
 
     sm_iterate(); // Process the message
 
@@ -973,7 +989,7 @@ TEST_F(SmTest, LogEraseSuccess)
     // Generate log erase request message
     cmd_t req;
     CMD_SET_HDR((&req), CMD_LOG_ERASE_REQ);
-    send_message(req, CMD_SIZE_HDR);
+    send_message((uint8_t *) &req, CMD_SIZE_HDR);
 
     sm_iterate(); // Process the message
 
@@ -1000,7 +1016,7 @@ TEST_F(SmTest, LogEraseNoFile)
     // Generate log erase request message
     cmd_t req;
     CMD_SET_HDR((&req), CMD_LOG_ERASE_REQ);
-    send_message(req, CMD_SIZE_HDR);
+    send_message((uint8_t *) &req, CMD_SIZE_HDR);
 
     sm_iterate(); // Process the message
 
@@ -1030,7 +1046,7 @@ TEST_F(SmTest, LogCreateFill)
     req.p.cmd_log_create_req.mode = CMD_LOG_CREATE_REQ_MODE_FILL;
     req.p.cmd_log_create_req.sync_enable = false;
     req.p.cmd_log_create_req.max_file_size = 256;
-    send_message(req, CMD_SIZE(cmd_log_create_req_t));
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_log_create_req_t));
 
     sm_iterate(); // Process the message
 
@@ -1070,7 +1086,7 @@ TEST_F(SmTest, LogCreateCircular)
     req.p.cmd_log_create_req.mode = CMD_LOG_CREATE_REQ_MODE_CIRCULAR;
     req.p.cmd_log_create_req.sync_enable = false;
     req.p.cmd_log_create_req.max_file_size = 256;
-    send_message(req, CMD_SIZE(cmd_log_create_req_t));
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_log_create_req_t));
 
     sm_iterate(); // Process the message
 
@@ -1120,7 +1136,7 @@ TEST_F(SmTest, LogCreateAlreadyExists)
     req.p.cmd_log_create_req.mode = CMD_LOG_CREATE_REQ_MODE_CIRCULAR;
     req.p.cmd_log_create_req.sync_enable = false;
     req.p.cmd_log_create_req.max_file_size = 256;
-    send_message(req, CMD_SIZE(cmd_log_create_req_t));
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_log_create_req_t));
 
     sm_iterate(); // Process the message
 
@@ -1147,7 +1163,7 @@ TEST_F(SmTest, BatteryStatus)
     // Generate battery status request message
     cmd_t req;
     CMD_SET_HDR((&req), CMD_BATTERY_STATUS_REQ);
-    send_message(req, CMD_SIZE_HDR);
+    send_message((uint8_t *) &req, CMD_SIZE_HDR);
 
     uint8_t charge_level = 55;
     bool charging = false;
@@ -1166,3 +1182,200 @@ TEST_F(SmTest, BatteryStatus)
     EXPECT_EQ(charging, resp.p.cmd_battery_status_resp.charging_indicator);
     EXPECT_EQ(charge_level, resp.p.cmd_battery_status_resp.charge_level);
 }
+
+TEST_F(SmTest, GpsConfig)
+{
+    startup_provisioning_needed(); // Boot and transition to provisioning needed state
+
+    connect(); // Connect the config_if
+
+    sm_iterate();
+
+    EXPECT_EQ(SM_STATE_PROVISIONING, sm_get_state());
+
+    sm_iterate(); // Queue the first receive
+
+    // Generate gps config request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_GPS_CONFIG_REQ);
+    req.p.cmd_gps_config_req.enable = true;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_gps_config_req_t));
+
+    sm_iterate(); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_battery_status_resp.error_code);
+}
+
+TEST_F(SmTest, GpsWriteBridgingOff)
+{
+    startup_provisioning_needed(); // Boot and transition to provisioning needed state
+
+    connect(); // Connect the config_if
+
+    sm_iterate();
+
+    EXPECT_EQ(SM_STATE_PROVISIONING, sm_get_state());
+
+    sm_iterate(); // Queue the first receive
+
+    // Generate GPS write request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_GPS_WRITE_REQ);
+    req.p.cmd_gps_write_req.length = 100;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_gps_write_req_t));
+
+    sm_iterate(); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_ERROR_BRIDGING_DISABLED, resp.p.cmd_generic_resp.error_code);
+}
+
+TEST_F(SmTest, GpsWriteSuccess)
+{
+    uint32_t gps_write_length = 256;
+
+    startup_provisioning_needed(); // Boot and transition to provisioning needed state
+
+    connect(); // Connect the config_if
+
+    sm_iterate();
+
+    EXPECT_EQ(SM_STATE_PROVISIONING, sm_get_state());
+
+    sm_iterate(); // Queue the first receive
+
+    // Generate gps config message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_GPS_CONFIG_REQ);
+    req.p.cmd_gps_config_req.enable = true;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_gps_config_req_t));
+
+    sm_iterate(); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+
+    // Generate GPS write request message
+    CMD_SET_HDR((&req), CMD_GPS_WRITE_REQ);
+    req.p.cmd_gps_write_req.length = gps_write_length;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_gps_write_req_t));
+
+    sm_iterate(); // Process the message
+
+    // Check the response
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+
+    // Generate GPS write payload
+    uint8_t gps_data_packet[gps_write_length];
+    for (unsigned int i = 0; i < sizeof(gps_data_packet); ++i)
+        gps_data_packet[i] = i;
+
+    send_message(gps_data_packet, sizeof(gps_data_packet));
+
+    sm_iterate(); // Process the message
+
+    // Check message wrote is as expected
+    bool gps_write_mismatch = false;
+    uint8_t * sys_config_itr = (uint8_t *) &sys_config;
+    for (unsigned int i = 0; i < gps_write_length; ++i)
+    {
+        if (gps_write_buffer[i] != gps_data_packet[i])
+        {
+            gps_write_mismatch = true;
+            break;
+        }
+    }
+
+    EXPECT_FALSE(gps_write_mismatch);
+}
+
+TEST_F(SmTest, GpsReadBridgingOff)
+{
+    startup_provisioning_needed(); // Boot and transition to provisioning needed state
+
+    connect(); // Connect the config_if
+
+    sm_iterate();
+
+    EXPECT_EQ(SM_STATE_PROVISIONING, sm_get_state());
+
+    sm_iterate(); // Queue the first receive
+
+    // Generate GPS read request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_GPS_READ_REQ);
+    req.p.cmd_gps_read_req.length = 100;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_gps_read_req_t));
+
+    sm_iterate(); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GPS_READ_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_ERROR_BRIDGING_DISABLED, resp.p.cmd_gps_read_resp.error_code);
+}
+
+//TEST_F(SmTest, GpsReadSuccess)
+//{
+//    uint32_t gps_read_length = 256;
+//
+//    startup_provisioning_needed(); // Boot and transition to provisioning needed state
+//
+//    connect(); // Connect the config_if
+//
+//    sm_iterate();
+//
+//    EXPECT_EQ(SM_STATE_PROVISIONING, sm_get_state());
+//
+//    sm_iterate(); // Queue the first receive
+//
+//    // Generate gps config message
+//    cmd_t req;
+//    CMD_SET_HDR((&req), CMD_GPS_CONFIG_REQ);
+//    req.p.cmd_gps_config_req.enable = true;
+//    send_message((uint8_t *) &req, CMD_SIZE(cmd_gps_config_req_t));
+//
+//    sm_iterate(); // Process the message
+//
+//    // Check the response
+//    cmd_t resp;
+//    resp = receive_message();
+//    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+//    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+//    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+//
+//    // Generate GPS read request message
+//    CMD_SET_HDR((&req), CMD_GPS_READ_REQ);
+//    req.p.cmd_gps_read_req.length = gps_read_length;
+//    send_message((uint8_t *) &req, CMD_SIZE(cmd_gps_read_req_t));
+//
+//    syshal_gps_available_raw_ExpectAndReturn(gps_read_length);
+//
+//    sm_iterate(); // Process the message
+//
+//    // Check the response
+//    resp = receive_message();
+//    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+//    EXPECT_EQ(CMD_GPS_READ_RESP, resp.h.cmd);
+//    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+//
+//    sm_iterate();
+//}
