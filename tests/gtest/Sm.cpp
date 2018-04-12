@@ -922,7 +922,7 @@ TEST_F(SmTest, CfgEraseOne)
 
     set_all_configuration_tags_RAM(); // Set all the configuration tags
 
-    // Generate cfg erase request message
+    // Generate log erase request message
     cmd_t req;
     CMD_SET_HDR((&req), CMD_CFG_ERASE_REQ);
     req.p.cmd_cfg_erase_req.configuration_tag = SYS_CONFIG_TAG_LOGGING_GROUP_SENSOR_READINGS_ENABLE;
@@ -946,4 +946,223 @@ TEST_F(SmTest, CfgEraseOne)
         tag_unset = true;
 
     EXPECT_TRUE(tag_unset);
+}
+
+TEST_F(SmTest, LogEraseSuccess)
+{
+    startup_provisioning_needed(); // Boot and transition to provisioning needed state
+
+    connect(); // Connect the config_if
+
+    sm_iterate();
+
+    EXPECT_EQ(SM_STATE_PROVISIONING, sm_get_state());
+
+    sm_iterate(); // Queue the first receive
+
+    // Generate the log file in FLASH
+    fs_t file_system;
+    fs_handle_t file_system_handle;
+
+    EXPECT_EQ(FS_NO_ERROR, fs_init(FS_DEVICE));
+    EXPECT_EQ(FS_NO_ERROR, fs_mount(FS_DEVICE, &file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_format(file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_open(file_system, &file_system_handle, FS_FILE_ID_LOG, FS_MODE_CREATE, NULL));
+    EXPECT_EQ(FS_NO_ERROR, fs_close(file_system_handle));
+
+    // Generate log erase request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_LOG_ERASE_REQ);
+    send_message(req, CMD_SIZE_HDR);
+
+    sm_iterate(); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+}
+
+TEST_F(SmTest, LogEraseNoFile)
+{
+    startup_provisioning_needed(); // Boot and transition to provisioning needed state
+
+    connect(); // Connect the config_if
+
+    sm_iterate();
+
+    EXPECT_EQ(SM_STATE_PROVISIONING, sm_get_state());
+
+    sm_iterate(); // Queue the first receive
+
+    // Generate log erase request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_LOG_ERASE_REQ);
+    send_message(req, CMD_SIZE_HDR);
+
+    sm_iterate(); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_ERROR_FILE_NOT_FOUND, resp.p.cmd_generic_resp.error_code);
+}
+
+TEST_F(SmTest, LogCreateFill)
+{
+    startup_provisioning_needed(); // Boot and transition to provisioning needed state
+
+    connect(); // Connect the config_if
+
+    sm_iterate();
+
+    EXPECT_EQ(SM_STATE_PROVISIONING, sm_get_state());
+
+    sm_iterate(); // Queue the first receive
+
+    // Generate log create request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_LOG_CREATE_REQ);
+    req.p.cmd_log_create_req.mode = CMD_LOG_CREATE_REQ_MODE_FILL;
+    req.p.cmd_log_create_req.sync_enable = false;
+    req.p.cmd_log_create_req.max_file_size = 256;
+    send_message(req, CMD_SIZE(cmd_log_create_req_t));
+
+    sm_iterate(); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+
+    // Check the log file has been created as is of the right mode
+    fs_t file_system;
+    fs_handle_t file_system_handle;
+    fs_stat_t file_stats;
+
+    EXPECT_EQ(FS_NO_ERROR, fs_init(FS_DEVICE));
+    EXPECT_EQ(FS_NO_ERROR, fs_mount(FS_DEVICE, &file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_stat(file_system, FS_FILE_ID_LOG, &file_stats));
+    EXPECT_FALSE(file_stats.is_circular);
+}
+
+TEST_F(SmTest, LogCreateCircular)
+{
+    startup_provisioning_needed(); // Boot and transition to provisioning needed state
+
+    connect(); // Connect the config_if
+
+    sm_iterate();
+
+    EXPECT_EQ(SM_STATE_PROVISIONING, sm_get_state());
+
+    sm_iterate(); // Queue the first receive
+
+    // Generate log create request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_LOG_CREATE_REQ);
+    req.p.cmd_log_create_req.mode = CMD_LOG_CREATE_REQ_MODE_CIRCULAR;
+    req.p.cmd_log_create_req.sync_enable = false;
+    req.p.cmd_log_create_req.max_file_size = 256;
+    send_message(req, CMD_SIZE(cmd_log_create_req_t));
+
+    sm_iterate(); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+
+    // Check the log file has been created as is of the right mode
+    fs_t file_system;
+    fs_handle_t file_system_handle;
+    fs_stat_t file_stats;
+
+    EXPECT_EQ(FS_NO_ERROR, fs_init(FS_DEVICE));
+    EXPECT_EQ(FS_NO_ERROR, fs_mount(FS_DEVICE, &file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_stat(file_system, FS_FILE_ID_LOG, &file_stats));
+    EXPECT_TRUE(file_stats.is_circular);
+}
+
+TEST_F(SmTest, LogCreateAlreadyExists)
+{
+    startup_provisioning_needed(); // Boot and transition to provisioning needed state
+
+    connect(); // Connect the config_if
+
+    sm_iterate();
+
+    EXPECT_EQ(SM_STATE_PROVISIONING, sm_get_state());
+
+    sm_iterate(); // Queue the first receive
+
+    // Create the log file
+    fs_t file_system;
+    fs_handle_t file_system_handle;
+
+    EXPECT_EQ(FS_NO_ERROR, fs_init(FS_DEVICE));
+    EXPECT_EQ(FS_NO_ERROR, fs_mount(FS_DEVICE, &file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_format(file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_open(file_system, &file_system_handle, FS_FILE_ID_LOG, FS_MODE_CREATE, NULL));
+    EXPECT_EQ(FS_NO_ERROR, fs_close(file_system_handle));
+
+    // Generate log create request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_LOG_CREATE_REQ);
+    req.p.cmd_log_create_req.mode = CMD_LOG_CREATE_REQ_MODE_CIRCULAR;
+    req.p.cmd_log_create_req.sync_enable = false;
+    req.p.cmd_log_create_req.max_file_size = 256;
+    send_message(req, CMD_SIZE(cmd_log_create_req_t));
+
+    sm_iterate(); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_ERROR_FILE_ALREADY_EXISTS, resp.p.cmd_generic_resp.error_code);
+}
+
+TEST_F(SmTest, BatteryStatus)
+{
+    startup_provisioning_needed(); // Boot and transition to provisioning needed state
+
+    connect(); // Connect the config_if
+
+    sm_iterate();
+
+    EXPECT_EQ(SM_STATE_PROVISIONING, sm_get_state());
+
+    sm_iterate(); // Queue the first receive
+
+    // Generate battery status request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_BATTERY_STATUS_REQ);
+    send_message(req, CMD_SIZE_HDR);
+
+    uint8_t charge_level = 55;
+    bool charging = false;
+
+    syshal_batt_charging_ExpectAndReturn(charging);
+    syshal_batt_level_ExpectAndReturn(charge_level);
+
+    sm_iterate(); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_BATTERY_STATUS_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_battery_status_resp.error_code);
+    EXPECT_EQ(charging, resp.p.cmd_battery_status_resp.charging_indicator);
+    EXPECT_EQ(charge_level, resp.p.cmd_battery_status_resp.charge_level);
 }
