@@ -147,6 +147,21 @@ int syshal_gps_send_raw_Callback(uint8_t * data, uint32_t size, int cmock_num_ca
     return SYSHAL_GPS_NO_ERROR;
 }
 
+// int syshal_gps_receive_raw callback function
+std::queue<uint8_t> gps_receive_buffer;
+int syshal_gps_receive_raw_Callback(uint8_t * data, uint32_t size, int cmock_num_calls)
+{
+    if (size > gps_receive_buffer.size())
+        size = gps_receive_buffer.size();
+
+    for (unsigned int i = 0; i < size; ++i) {
+        data[i] = gps_receive_buffer.front();
+        gps_receive_buffer.pop();
+    }
+
+    return size;
+}
+
 class SmTest : public ::testing::Test
 {
 
@@ -166,6 +181,8 @@ class SmTest : public ::testing::Test
         syshal_flash_erase_StubWithCallback(syshal_flash_erase_Callback);
 
         syshal_gps_send_raw_StubWithCallback(syshal_gps_send_raw_Callback);
+        syshal_gps_receive_raw_StubWithCallback(syshal_gps_receive_raw_Callback);
+
         syshal_time_get_ticks_ms_StubWithCallback(syshal_time_get_ticks_ms_callback);
         config_if_receive_StubWithCallback(config_if_receive_callback);
         config_if_send_StubWithCallback(config_if_send_callback);
@@ -179,6 +196,10 @@ class SmTest : public ::testing::Test
         // Clear GPS write buffer
         for (unsigned int i = 0; i < sizeof(gps_write_buffer); ++i)
             gps_write_buffer[i] = 0x00;
+
+        // Clear GPS read buffer
+        for (unsigned int i = 0; i < gps_receive_buffer.size(); ++i)
+            gps_receive_buffer.pop();
 
         // Clear all configuration tags
         clear_all_configuration_tags_RAM();
@@ -303,6 +324,22 @@ public:
         config_if_event_handler(&event);
 
         return message;
+    }
+
+    // Receive config_if message from the state machine
+    uint32_t receive_message_raw(uint8_t * data)
+    {
+        // Copy message from send buffer
+        memcpy(data, config_if_send_buffer, config_if_send_size);
+
+        // Generate receive request event
+        config_if_event_t event;
+        event.id = CONFIG_IF_EVENT_SEND_COMPLETE;
+        event.receive.buffer = config_if_send_buffer;
+        event.receive.size = config_if_send_size;
+        config_if_event_handler(&event);
+
+        return config_if_send_size;
     }
 
     // Create a config_if connection event
@@ -1333,49 +1370,69 @@ TEST_F(SmTest, GpsReadBridgingOff)
     EXPECT_EQ(CMD_ERROR_BRIDGING_DISABLED, resp.p.cmd_gps_read_resp.error_code);
 }
 
-//TEST_F(SmTest, GpsReadSuccess)
-//{
-//    uint32_t gps_read_length = 256;
-//
-//    startup_provisioning_needed(); // Boot and transition to provisioning needed state
-//
-//    connect(); // Connect the config_if
-//
-//    sm_iterate();
-//
-//    EXPECT_EQ(SM_STATE_PROVISIONING, sm_get_state());
-//
-//    sm_iterate(); // Queue the first receive
-//
-//    // Generate gps config message
-//    cmd_t req;
-//    CMD_SET_HDR((&req), CMD_GPS_CONFIG_REQ);
-//    req.p.cmd_gps_config_req.enable = true;
-//    send_message((uint8_t *) &req, CMD_SIZE(cmd_gps_config_req_t));
-//
-//    sm_iterate(); // Process the message
-//
-//    // Check the response
-//    cmd_t resp;
-//    resp = receive_message();
-//    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
-//    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
-//    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
-//
-//    // Generate GPS read request message
-//    CMD_SET_HDR((&req), CMD_GPS_READ_REQ);
-//    req.p.cmd_gps_read_req.length = gps_read_length;
-//    send_message((uint8_t *) &req, CMD_SIZE(cmd_gps_read_req_t));
-//
-//    syshal_gps_available_raw_ExpectAndReturn(gps_read_length);
-//
-//    sm_iterate(); // Process the message
-//
-//    // Check the response
-//    resp = receive_message();
-//    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
-//    EXPECT_EQ(CMD_GPS_READ_RESP, resp.h.cmd);
-//    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
-//
-//    sm_iterate();
-//}
+TEST_F(SmTest, GpsReadSuccess)
+{
+    uint32_t gps_read_length = 256;
+
+    startup_provisioning_needed(); // Boot and transition to provisioning needed state
+
+    connect(); // Connect the config_if
+
+    sm_iterate();
+
+    EXPECT_EQ(SM_STATE_PROVISIONING, sm_get_state());
+
+    sm_iterate(); // Queue the first receive
+
+    // Generate gps config message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_GPS_CONFIG_REQ);
+    req.p.cmd_gps_config_req.enable = true;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_gps_config_req_t));
+
+    sm_iterate(); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+
+    // Generate GPS read request message
+    CMD_SET_HDR((&req), CMD_GPS_READ_REQ);
+    req.p.cmd_gps_read_req.length = gps_read_length;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_gps_read_req_t));
+
+    syshal_gps_available_raw_ExpectAndReturn(gps_read_length);
+
+    sm_iterate(); // Process the message
+
+    // Check the response
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GPS_READ_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+
+    // Load the GPS SPI buffer with test data
+    for (unsigned int i = 0; i < gps_read_length; ++i)
+        gps_receive_buffer.push(i);
+
+    sm_iterate();
+
+    uint8_t received_data[gps_read_length];
+    receive_message_raw(received_data);
+
+    // Look for mismatch between data received on SPI and data transmitted on config_if
+    bool SPI_and_config_if_mismatch = false;
+    for (unsigned int i = 0; i < gps_read_length; ++i)
+    {
+        if (received_data[i] != i)
+        {
+            SPI_and_config_if_mismatch = true;
+            break;
+        }
+    }
+
+    EXPECT_FALSE(SPI_and_config_if_mismatch);
+}

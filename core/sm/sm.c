@@ -1160,7 +1160,7 @@ static void ble_read_req(cmd_t * req, uint16_t size)
     }
 
     // Send response
-    buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_ble_read_resp_t));
+    buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_generic_resp_t));
     config_if_send_priv(&config_if_send_buffer);
 
     if (sm_context.ble_read.length > 0)
