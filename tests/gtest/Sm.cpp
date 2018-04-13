@@ -135,7 +135,7 @@ int syshal_flash_erase_Callback(uint32_t device, uint32_t address, uint32_t size
     return 0;
 }
 
-// int syshal_gps_send_raw callback function
+// syshal_gps_send_raw callback function
 uint8_t gps_write_buffer[2048];
 int syshal_gps_send_raw_Callback(uint8_t * data, uint32_t size, int cmock_num_calls)
 {
@@ -147,7 +147,7 @@ int syshal_gps_send_raw_Callback(uint8_t * data, uint32_t size, int cmock_num_ca
     return SYSHAL_GPS_NO_ERROR;
 }
 
-// int syshal_gps_receive_raw callback function
+// syshal_gps_receive_raw callback function
 std::queue<uint8_t> gps_receive_buffer;
 int syshal_gps_receive_raw_Callback(uint8_t * data, uint32_t size, int cmock_num_calls)
 {
@@ -160,6 +160,41 @@ int syshal_gps_receive_raw_Callback(uint8_t * data, uint32_t size, int cmock_num
     }
 
     return size;
+}
+
+// syshal_spi_transfer callback function
+std::queue<uint8_t> spi_sent_buffer[SPI_TOTAL_NUMBER];
+std::queue<uint8_t> spi_received_buffer[SPI_TOTAL_NUMBER];
+int syshal_spi_transfer_Callback(uint32_t instance, uint8_t *tx_data, uint8_t *rx_data, uint16_t size, int cmock_num_calls)
+{
+    if (instance > SPI_TOTAL_NUMBER)
+        return SYSHAL_SPI_ERROR_INVALID_INSTANCE;
+
+    printf("SPI Transfer: ");
+    for (unsigned int i = 0; i < size; ++i)
+    {
+        printf("%02X ", tx_data[i]);
+        spi_sent_buffer[instance].push(tx_data[i]);
+    }
+    printf("\n\r");
+
+    if (rx_data != NULL)
+    {
+        for (unsigned int i = 0; i < size; ++i)
+        {
+            if (spi_received_buffer[instance].size())
+            {
+                rx_data[i] = spi_received_buffer[instance].front();
+                spi_received_buffer[instance].pop();
+            }
+            else
+            {
+                rx_data[i] = 0x00; // If there's no data to receive just read 0s
+            }
+        }
+    }
+
+    return SYSHAL_SPI_NO_ERROR;
 }
 
 class SmTest : public ::testing::Test
@@ -183,6 +218,8 @@ class SmTest : public ::testing::Test
         syshal_gps_send_raw_StubWithCallback(syshal_gps_send_raw_Callback);
         syshal_gps_receive_raw_StubWithCallback(syshal_gps_receive_raw_Callback);
 
+        syshal_spi_transfer_StubWithCallback(syshal_spi_transfer_Callback);
+
         syshal_time_get_ticks_ms_StubWithCallback(syshal_time_get_ticks_ms_callback);
         config_if_receive_StubWithCallback(config_if_receive_callback);
         config_if_send_StubWithCallback(config_if_send_callback);
@@ -200,6 +237,16 @@ class SmTest : public ::testing::Test
         // Clear GPS read buffer
         for (unsigned int i = 0; i < gps_receive_buffer.size(); ++i)
             gps_receive_buffer.pop();
+
+        // Clear SPI buffers
+        for (unsigned int i = 0; i < SPI_TOTAL_NUMBER; ++i)
+        {
+            for (unsigned int j = 0; j < spi_sent_buffer[i].size(); ++j)
+                spi_sent_buffer[i].pop();
+
+            for (unsigned int j = 0; j < spi_received_buffer[i].size(); ++j)
+                spi_received_buffer[i].pop();
+        }
 
         // Clear all configuration tags
         clear_all_configuration_tags_RAM();
@@ -1435,4 +1482,156 @@ TEST_F(SmTest, GpsReadSuccess)
     }
 
     EXPECT_FALSE(SPI_and_config_if_mismatch);
+}
+
+TEST_F(SmTest, BleConfig)
+{
+    startup_provisioning_needed(); // Boot and transition to provisioning needed state
+
+    connect(); // Connect the config_if
+
+    sm_iterate();
+
+    EXPECT_EQ(SM_STATE_PROVISIONING, sm_get_state());
+
+    sm_iterate(); // Queue the first receive
+
+    // Generate ble config request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_BLE_CONFIG_REQ);
+    req.p.cmd_gps_config_req.enable = true;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_ble_config_req_t));
+
+    sm_iterate(); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_battery_status_resp.error_code);
+}
+
+TEST_F(SmTest, BleWriteBridgingOff)
+{
+    startup_provisioning_needed(); // Boot and transition to provisioning needed state
+
+    connect(); // Connect the config_if
+
+    sm_iterate();
+
+    EXPECT_EQ(SM_STATE_PROVISIONING, sm_get_state());
+
+    sm_iterate(); // Queue the first receive
+
+    // Generate BLE write request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_BLE_WRITE_REQ);
+    req.p.cmd_ble_write_req.length = 100;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_ble_write_req_t));
+
+    sm_iterate(); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_ERROR_BRIDGING_DISABLED, resp.p.cmd_generic_resp.error_code);
+}
+
+//TEST_F(SmTest, BleWriteSuccess)
+//{
+//    uint32_t ble_write_length = 256;
+//
+//    startup_provisioning_needed(); // Boot and transition to provisioning needed state
+//
+//    connect(); // Connect the config_if
+//
+//    sm_iterate();
+//
+//    EXPECT_EQ(SM_STATE_PROVISIONING, sm_get_state());
+//
+//    sm_iterate(); // Queue the first receive
+//
+//    // Generate ble config message
+//    cmd_t req;
+//    CMD_SET_HDR((&req), CMD_BLE_CONFIG_REQ);
+//    req.p.cmd_ble_config_req.enable = true;
+//    send_message((uint8_t *) &req, CMD_SIZE(cmd_ble_config_req_t));
+//
+//    sm_iterate(); // Process the message
+//
+//    // Check the response
+//    cmd_t resp;
+//    resp = receive_message();
+//    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+//    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+//    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+//
+//    // Generate BLE write request message
+//    CMD_SET_HDR((&req), CMD_BLE_WRITE_REQ);
+//    req.p.cmd_ble_write_req.length = ble_write_length;
+//    send_message((uint8_t *) &req, CMD_SIZE(cmd_ble_write_req_t));
+//
+//    sm_iterate(); // Process the message
+//
+//    // Check the response
+//    resp = receive_message();
+//    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+//    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+//    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+//
+//    // Generate BLE write payload
+//    uint8_t ble_data_packet[ble_write_length];
+//    for (unsigned int i = 0; i < sizeof(ble_data_packet); ++i)
+//        ble_data_packet[i] = i;
+//
+//    send_message(ble_data_packet, sizeof(ble_data_packet));
+//
+//    sm_iterate(); // Process the message
+//
+//    // Check message wrote is as expected
+//    bool ble_write_mismatch = false;
+//    for (unsigned int i = 0; i < sizeof(ble_data_packet); ++i)
+//    {
+//        printf("%u: %s()\n\r", __LINE__, __FUNCTION__);
+//        if (spi_sent_buffer[SPI_BLE].front() != ble_data_packet[i])
+//        {
+//            printf("%u: %s()\n\r", __LINE__, __FUNCTION__);
+//            ble_write_mismatch = true;
+//            break;
+//        }
+//        spi_sent_buffer[SPI_BLE].pop();
+//    }
+//
+//    EXPECT_FALSE(ble_write_mismatch);
+//}
+
+TEST_F(SmTest, BleReadBridgingOff)
+{
+    startup_provisioning_needed(); // Boot and transition to provisioning needed state
+
+    connect(); // Connect the config_if
+
+    sm_iterate();
+
+    EXPECT_EQ(SM_STATE_PROVISIONING, sm_get_state());
+
+    sm_iterate(); // Queue the first receive
+
+    // Generate BLE read request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_BLE_READ_REQ);
+    req.p.cmd_gps_read_req.length = 100;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_ble_read_req_t));
+
+    sm_iterate(); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_ERROR_BRIDGING_DISABLED, resp.p.cmd_generic_resp.error_code);
 }
