@@ -32,6 +32,7 @@
 
 // Logical device mappings to physical devices
 #define GPS_UART        UART_1
+#define I2C_AXL         I2C_1
 #define SPI_BLE         SPI_1
 #define SPI_FLASH       SPI_2
 

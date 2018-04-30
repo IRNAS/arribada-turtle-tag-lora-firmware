@@ -19,6 +19,20 @@
 #ifndef _SYSHAL_AXL_H_
 #define _SYSHAL_AXL_H_
 
+#include <stdint.h>
 
+#define SYSHAL_AXL_NO_ERROR             ( 0)
+#define SYSHAL_AXL_PROVISIONING_NEEDED  (-1)
+
+typedef struct
+{
+    int16_t x,
+    int16_t y,
+    int16_t z
+} syshal_axl_xyz_t;
+
+int syshal_axl_init(void);
+int syshal_axl_sleep(void);
+int syshal_axl_get(syshal_axl_xyz_t * axl, syshal_axl_xyz_t * mag, syshal_axl_xyz_t * gyro);
 
 #endif /* _SYSHAL_AXL_H_ */
