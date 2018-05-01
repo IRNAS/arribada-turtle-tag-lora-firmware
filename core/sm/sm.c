@@ -128,7 +128,7 @@ static sm_context_t sm_context;
 ////////////////////////////////// GLOBALS /////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-//#define DUMMY_BATTERY_MONITOR // Spoof any reads from the battery monitor
+#define DUMMY_BATTERY_MONITOR // Spoof any reads from the battery monitor
 
 #define FS_FILE_ID_CONF             (0) // The File ID of the configuration data
 #define FS_FILE_ID_STM32_IMAGE      (1) // STM32 application image
@@ -144,7 +144,7 @@ static volatile buffer_t config_if_send_buffer;
 static volatile buffer_t config_if_receive_buffer;
 static volatile uint8_t  config_if_send_buffer_pool[SYSHAL_USB_PACKET_SIZE * 2];
 static volatile uint8_t  config_if_receive_buffer_pool[SYSHAL_USB_PACKET_SIZE];
-static volatile uint8_t  spi_bridge_buffer[SYSHAL_USB_PACKET_SIZE + 1];
+static uint8_t           spi_bridge_buffer[SYSHAL_USB_PACKET_SIZE + 1];
 static uint32_t          config_if_message_timeout;
 static volatile bool     config_if_connected = false;
 static fs_t              file_system;
