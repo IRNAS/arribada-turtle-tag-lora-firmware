@@ -29,10 +29,12 @@ typedef struct
     int16_t x,
     int16_t y,
     int16_t z
-} syshal_axl_xyz_t;
+} syshal_axl_event_t;
 
 int syshal_axl_init(void);
 int syshal_axl_sleep(void);
-int syshal_axl_get(syshal_axl_xyz_t * axl, syshal_axl_xyz_t * mag, syshal_axl_xyz_t * gyro);
+int syshal_axl_wake(void);
+
+void syshal_axl_callback(syshal_axl_event_t event);
 
 #endif /* _SYSHAL_AXL_H_ */

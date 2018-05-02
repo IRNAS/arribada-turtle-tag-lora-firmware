@@ -16,6 +16,15 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "LSM9DS1.h"
+#include "syshal_gpio.h"
+#include "syshal_i2c.h"
+#include "bsp.h"
+
+// Internal variables used to sleep and wake the device
+static uint8_t LSM9D1_CTRL_REG6_XL_wake_state;
+static uint8_t LSM9D1_CTRL_REG6_XL_power_down_state;
+
 // Init the accelerometer
 int syshal_axl_init(void)
 {
@@ -32,119 +41,62 @@ int syshal_axl_init(void)
     if (ret < 0)
         return SYSHAL_AXL_PROVISIONING_NEEDED;
 
+    // Enable the Accelerometer axis
+    uint8_t reg_value = LSM9D1_CTRL_REG5_XL_ZEN_XL | LSM9D1_CTRL_REG5_XL_YEN_XL | LSM9D1_CTRL_REG5_XL_XEN_XL;
+    syshal_i2c_write_reg(I2C_AXL, LSM9D1_ADDR, LSM9D1_CTRL_REG5_XL, &reg_value, 1);
+
     // The supported options by the LSM9DS1 device
     uint16_t valid_sample_rate_options[6] = {10, 50, 119, 238, 476, 952}; // Number of readings per second
-    uint16_t valid_g_force_high_threshold_options[4] = {2, 4, 8, 16}; // Maximum g-force ±xg
 
     // Convert the configuration tag options to the closest supported option
     uint16_t sample_rate = find_closest_value_priv(axl_sample_rate_tag.contents.sample_rate, valid_sample_rate_options, sizeof(valid_sample_rate_options));
-    uint16_t g_force_high_threshold = find_closest_value_priv(axl_g_force_high_threshold_tag.contents.threshold, valid_g_force_high_threshold_options, sizeof(valid_g_force_high_threshold_options));
+    uint16_t g_force_high_threshold = axl_g_force_high_threshold_tag.contents.threshold;
 
     // Populate the accelerometer CTRL_REG6_XL register
-    uint8_t reg_value = 0;
+    reg_value = 0;
 
     switch (sample_rate)
     {
         case 10:
-            reg_value |= (0x1 << LSM9D1_CTRL_REG6_XL_ODR_XL_POS);
+            reg_value |= LSM9D1_CTRL_REG6_XL_ODR_XL_10HZ;
             break;
         case 50:
-            reg_value |= (0x2 << LSM9D1_CTRL_REG6_XL_ODR_XL_POS);
+            reg_value |= LSM9D1_CTRL_REG6_XL_ODR_XL_50HZ;
             break;
         case 119:
-            reg_value |= (0x3 << LSM9D1_CTRL_REG6_XL_ODR_XL_POS);
+            reg_value |= LSM9D1_CTRL_REG6_XL_ODR_XL_119HZ;
             break;
         case 238:
-            reg_value |= (0x4 << LSM9D1_CTRL_REG6_XL_ODR_XL_POS);
+            reg_value |= LSM9D1_CTRL_REG6_XL_ODR_XL_238HZ;
             break;
         case 476:
-            reg_value |= (0x5 << LSM9D1_CTRL_REG6_XL_ODR_XL_POS);
+            reg_value |= LSM9D1_CTRL_REG6_XL_ODR_XL_476HZ;
             break;
         case 952:
-            reg_value |= (0x6 << LSM9D1_CTRL_REG6_XL_ODR_XL_POS);
+            reg_value |= LSM9D1_CTRL_REG6_XL_ODR_XL_952HZ;
             break;
     }
 
-    switch (g_force_high_threshold)
-    {
-        case 4:
-            reg_value |= (0x2 << LSM9D1_CTRL_REG6_XL_FS_XL_POS);
-            break;
-        case 8:
-            reg_value |= (0x3 << LSM9D1_CTRL_REG6_XL_FS_XL_POS);
-            break;
-        case 16:
-            reg_value |= (0x1 << LSM9D1_CTRL_REG6_XL_FS_XL_POS);
-            break;
-            // Otherwise it'll be set to 2g (0x0 << LSM9D1_CTRL_REG6_XL_FS_XL_POS)
-    }
+    reg_value |= LSM9D1_CTRL_REG6_XL_FS_XL_4G;
 
-    syshal_i2c_write_reg(I2C_AXL, LSM9D1_ADDR, LSM9D1_CTRL_REG6_XL, &reg_value, 1);
+
+    LSM9D1_CTRL_REG6_XL_wake_state = reg_value;
+    LSM9D1_CTRL_REG6_XL_power_down_state = reg_value & (~LSM9D1_CTRL_REG6_XL_ODR_XL_MASK);
+    syshal_i2c_write_reg(I2C_AXL, LSM9D1_ADDR, LSM9D1_CTRL_REG6_XL, &LSM9D1_CTRL_REG6_XL_wake_state, 1);
 
     return SYSHAL_AXL_NO_ERROR;
 }
 
-// Init the gyroscope
-int syshal_gyro_init(void)
+int syshal_axl_sleep(void)
 {
-    // Fetch all required configuration tags
-    int ret;
+    syshal_i2c_write_reg(I2C_AXL, LSM9D1_ADDR, LSM9D1_CTRL_REG6_XL, &LSM9D1_CTRL_REG6_XL_power_down_state, 1);
 
-    sys_config_gyro_sample_rate_t gyro_sample_rate_tag;
-    ret = sys_config_get(SYS_CONFIG_TAG_GYRO_SAMPLE_RATE, (void *) &gyro_sample_rate_tag.contents);
-    if (ret < 0)
-        return SYSHAL_GYRO_PROVISIONING_NEEDED;
+    return SYSHAL_AXL_NO_ERROR;
+}
 
-    sys_config_gyro_degrees_per_second_t axl_gyro_degrees_per_second_tag;
-    ret = sys_config_get(SYS_CONFIG_TAG_GYRO_DEGREES_PER_SECOND, (void *) &axl_gyro_degrees_per_second_tag.contents);
-    if (ret < 0)
-        return SYSHAL_GYRO_PROVISIONING_NEEDED;
-
-    // The supported options by the LSM9DS1 device
-    uint16_t valid_sample_rate_options[6] = {15, 60, 119, 238, 476, 952}; // Number of readings per second
-    uint16_t valid_degrees_per_second_options[3] = {245, 500, 2000}; // Maximum degrees per second
-
-    // Convert the configuration tag options to the closest supported option
-    uint16_t sample_rate = find_closest_value_priv(gyro_sample_rate_tag.contents.sample_rate, valid_sample_rate_options, sizeof(valid_sample_rate_options));
-    uint16_t degrees_per_second = find_closest_value_priv(axl_gyro_degrees_per_second_tag.contents.degrees_per_second, valid_degrees_per_second_options, sizeof(valid_degrees_per_second_options));
-
-    // Populate the gyroscope CTRL_REG1_G register
-    uint8_t reg_value = 0;
-
-    switch (sample_rate)
-    {
-        case 15:
-            reg_value |= (0x1 << LSM9D1_CTRL_REG1_G_ODR_G_POS);
-            break;
-        case 60:
-            reg_value |= (0x2 << LSM9D1_CTRL_REG1_G_ODR_G_POS);
-            break;
-        case 119:
-            reg_value |= (0x3 << LSM9D1_CTRL_REG1_G_ODR_G_POS);
-            break;
-        case 238:
-            reg_value |= (0x4 << LSM9D1_CTRL_REG1_G_ODR_G_POS);
-            break;
-        case 476:
-            reg_value |= (0x5 << LSM9D1_CTRL_REG1_G_ODR_G_POS);
-            break;
-        case 952:
-            reg_value |= (0x6 << LSM9D1_CTRL_REG1_G_ODR_G_POS);
-            break;
-    }
-
-    switch (degrees_per_second)
-    {
-        case 500:
-            reg_value |= (0x1 << LSM9D1_CTRL_REG1_G_FS_G_POS);
-            break;
-        case 2000:
-            reg_value |= (0x3 << LSM9D1_CTRL_REG1_G_FS_G_POS);
-            break;
-            // Otherwise we'll set it to 245 dps (0x0 << LSM9D1_CTRL_REG1_G_FS_G_POS)
-    }
-
-    syshal_i2c_write_reg(I2C_AXL, LSM9D1_ADDR, LSM9D1_CTRL_REG1_G, &reg_value, 1);
+int syshal_axl_wake(void)
+{
+    syshal_i2c_write_reg(I2C_AXL, LSM9D1_ADDR, LSM9D1_CTRL_REG6_XL, &LSM9D1_CTRL_REG6_XL_wake_state, 1);
 
     return SYSHAL_AXL_NO_ERROR;
 }
