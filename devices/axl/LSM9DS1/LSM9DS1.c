@@ -26,6 +26,9 @@
 static uint8_t LSM9D1_CTRL_REG6_XL_wake_state;
 static uint8_t LSM9D1_CTRL_REG6_XL_power_down_state;
 
+/**
+ * @brief      Interrupt handler for when accelerometer data is ready
+ */
 static void syshal_axl_int1_ag_interrupt_priv(void)
 {
     // Read the avaliable data from the accelerometer
@@ -47,7 +50,16 @@ static void syshal_axl_int1_ag_interrupt_priv(void)
     syshal_axl_callback(accl_data);
 }
 
-static uint16_t find_closest_value_priv(uint16_t target, uint16_t * valid_options, uint32_t length)
+/**
+ * @brief      Find the closest value in out of the given values in an array
+ *
+ * @param[in]  target         The target value
+ * @param[in]  valid_options  The valid options array
+ * @param[in]  length         The number of values in the options array
+ *
+ * @return     The closest value in the array to the target value
+ */
+static uint16_t find_closest_value_priv(uint16_t target, const uint16_t * valid_options, uint32_t length)
 {
     if (!length)
         return 0;
@@ -77,7 +89,13 @@ static uint16_t find_closest_value_priv(uint16_t target, uint16_t * valid_option
 
 }
 
-// Init the accelerometer
+/**
+ * @brief      Initialises the accelerometer
+ *
+ * @return     SYSHAL_AXL_PROVISIONING_NEEDED if configuration tags still need
+ *             to be set
+ * @return     SYSHAL_AXL_NO_ERROR on success
+ */
 int syshal_axl_init(void)
 {
     // Fetch all required configuration tags
@@ -145,6 +163,12 @@ int syshal_axl_init(void)
     return SYSHAL_AXL_NO_ERROR;
 }
 
+/**
+ * @brief      Sleeps the accelerometer, halting reading and lowering power
+ *             consumption
+ *
+ * @return     SYSHAL_AXL_NO_ERROR on success
+ */
 int syshal_axl_sleep(void)
 {
     syshal_i2c_write_reg(I2C_AXL, LSM9D1_ADDR, LSM9D1_CTRL_REG6_XL, &LSM9D1_CTRL_REG6_XL_power_down_state, 1);
@@ -152,6 +176,11 @@ int syshal_axl_sleep(void)
     return SYSHAL_AXL_NO_ERROR;
 }
 
+/**
+ * @brief      Wakes the accelerometer from a sleep state
+ *
+ * @return     SYSHAL_AXL_NO_ERROR on success
+ */
 int syshal_axl_wake(void)
 {
     syshal_i2c_write_reg(I2C_AXL, LSM9D1_ADDR, LSM9D1_CTRL_REG6_XL, &LSM9D1_CTRL_REG6_XL_wake_state, 1);
