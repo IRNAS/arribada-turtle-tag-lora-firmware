@@ -128,7 +128,7 @@ static sm_context_t sm_context;
 ////////////////////////////////// GLOBALS /////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-//#define DUMMY_BATTERY_MONITOR // Spoof any reads from the battery monitor
+#define DUMMY_BATTERY_MONITOR // Spoof any reads from the battery monitor
 
 #define FS_FILE_ID_CONF             (0) // The File ID of the configuration data
 #define FS_FILE_ID_STM32_IMAGE      (1) // STM32 application image
@@ -144,7 +144,7 @@ static volatile buffer_t config_if_send_buffer;
 static volatile buffer_t config_if_receive_buffer;
 static volatile uint8_t  config_if_send_buffer_pool[SYSHAL_USB_PACKET_SIZE * 2];
 static volatile uint8_t  config_if_receive_buffer_pool[SYSHAL_USB_PACKET_SIZE];
-static volatile uint8_t  spi_bridge_buffer[SYSHAL_USB_PACKET_SIZE + 1];
+static uint8_t           spi_bridge_buffer[SYSHAL_USB_PACKET_SIZE + 1];
 static uint32_t          config_if_message_timeout;
 static volatile bool     config_if_connected = false;
 static fs_t              file_system;
@@ -1841,7 +1841,6 @@ static void handle_config_if_messages(void)
 
 void boot_state(void)
 {
-
     setup_buffers();
 
     // Initialize all configured peripherals
@@ -1925,17 +1924,63 @@ void boot_state(void)
 
 void standby_battery_charging_state()
 {
-
+#ifndef DUMMY_BATTERY_MONITOR
+    if (!syshal_batt_charging())
+    {
+        if (syshal_batt_state() != POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL)
+        {
+            if (config_if_connected)
+                sm_set_state(SM_STATE_PROVISIONING);
+        }
+        else
+        {
+            sm_set_state(SM_STATE_STANDBY_BATTERY_LEVEL_LOW);
+        }
+    }
+#endif
 }
 
 void standby_battery_level_low_state()
 {
 
+    // FIXME: If any file is open, close it
+
+
+#ifndef DUMMY_BATTERY_MONITOR
+    // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
+    if (syshal_batt_charging())
+    {
+        sm_set_state(SM_STATE_STANDBY_BATTERY_CHARGING);
+        return;
+    }
+#endif
 }
 
 void standby_log_file_full_state()
 {
+    // Check to see if any state changes are required
 
+    if (config_if_connected)
+    {
+        sm_set_state(SM_STATE_PROVISIONING); // Configuration interface connected
+        return;
+    }
+
+#ifndef DUMMY_BATTERY_MONITOR
+    // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
+    if (syshal_batt_charging())
+    {
+        sm_set_state(SM_STATE_STANDBY_BATTERY_CHARGING);
+        return;
+    }
+
+    // If the battery level is too low then the system shall transition to the BATTERY_LEVEL_LOW state
+    if (syshal_batt_state() == POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL)
+    {
+        sm_set_state(SM_STATE_STANDBY_BATTERY_LEVEL_LOW);
+        return;
+    }
+#endif
 }
 
 void standby_provisioning_needed_state()
@@ -2007,9 +2052,39 @@ void provisioning_state(void)
 
 void operational_state(void)
 {
+    // FIXME:
+    // If Log File is full then...
+    // sm_set_state(SM_SM_STATE_STANDBY_LOG_FILE_FULL);
+    
     // If GPS bridging is disabled
     if (!syshal_gps_bridging)
         syshal_gps_tick(); // Process GPS messages
+
+
+    // Check to see if any state changes are required
+
+    if (config_if_connected)
+    {
+        sm_set_state(SM_STATE_PROVISIONING); // Configuration interface connected
+        return;
+    }
+
+#ifndef DUMMY_BATTERY_MONITOR
+    // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
+    if (syshal_batt_charging())
+    {
+        sm_set_state(SM_STATE_STANDBY_BATTERY_CHARGING);
+        return;
+    }
+
+    // If the battery level is too low then the system shall transition to the BATTERY_LEVEL_LOW state
+    if (syshal_batt_state() == POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL)
+    {
+        sm_set_state(SM_STATE_STANDBY_BATTERY_LEVEL_LOW);
+        return;
+    }
+#endif
+
 }
 
 ////////////////////////////////////////////////////////////////////////////////
