@@ -17,6 +17,7 @@
  */
 
 #include "LSM9DS1.h"
+#include "sys_config.h"
 #include "syshal_gpio.h"
 #include "syshal_i2c.h"
 #include "bsp.h"
@@ -24,6 +25,57 @@
 // Internal variables used to sleep and wake the device
 static uint8_t LSM9D1_CTRL_REG6_XL_wake_state;
 static uint8_t LSM9D1_CTRL_REG6_XL_power_down_state;
+
+static void syshal_axl_int1_ag_interrupt_priv(void)
+{
+    // Read the avaliable data from the accelerometer
+    uint8_t temp[6];
+    syshal_axl_data_t accl_data;
+    uint32_t bytes_read = syshal_i2c_read_reg(I2C_AXL, LSM9D1_ADDR, LSM9D1_OUT_X_L_XL, &temp, 6); // Read 6 bytes, beginning at OUT_X_L_XL
+    if (6 == bytes_read)
+    {
+        accl_data.x = (temp[1] << 8) | temp[0];
+        accl_data.y = (temp[3] << 8) | temp[2];
+        accl_data.z = (temp[5] << 8) | temp[4];
+    }
+    else
+    {
+        return; // Read failed
+    }
+
+    // Generate a callback event
+    syshal_axl_callback(accl_data);
+}
+
+static uint16_t find_closest_value_priv(uint16_t target, uint16_t * valid_options, uint32_t length)
+{
+    if (!length)
+        return 0;
+
+    // Handle all special/edge cases
+    if (1 == length)
+        return valid_options[0];
+
+    if (target <= valid_options[0])
+        return valid_options[0];
+
+    if (target >= valid_options[length - 1])
+        return valid_options[length - 1];
+
+    for (uint32_t i = 0; i < length - 2; ++i)
+    {
+        // Check if the target is between two options
+        if ( (target >= valid_options[i]) && (target <= valid_options[i + 1]) )
+        {
+            // If it is then return the closest of the two
+            if ( (target - valid_options[i]) >= (valid_options[i + 1] - target) )
+                return valid_options[i + 1];
+            else
+                return valid_options[i];
+        }
+    }
+
+}
 
 // Init the accelerometer
 int syshal_axl_init(void)
@@ -50,7 +102,6 @@ int syshal_axl_init(void)
 
     // Convert the configuration tag options to the closest supported option
     uint16_t sample_rate = find_closest_value_priv(axl_sample_rate_tag.contents.sample_rate, valid_sample_rate_options, sizeof(valid_sample_rate_options));
-    uint16_t g_force_high_threshold = axl_g_force_high_threshold_tag.contents.threshold;
 
     // Populate the accelerometer CTRL_REG6_XL register
     reg_value = 0;
@@ -77,12 +128,19 @@ int syshal_axl_init(void)
             break;
     }
 
-    reg_value |= LSM9D1_CTRL_REG6_XL_FS_XL_4G;
-
+    reg_value |= LSM9D1_CTRL_REG6_XL_FS_XL_4G; // +/- 4G scale
 
     LSM9D1_CTRL_REG6_XL_wake_state = reg_value;
     LSM9D1_CTRL_REG6_XL_power_down_state = reg_value & (~LSM9D1_CTRL_REG6_XL_ODR_XL_MASK);
     syshal_i2c_write_reg(I2C_AXL, LSM9D1_ADDR, LSM9D1_CTRL_REG6_XL, &LSM9D1_CTRL_REG6_XL_wake_state, 1);
+
+    // Enable accelerometer data ready interrupt generation on INT1_A/G
+    const uint8_t LSM9D1_INT1_CTRL_register = LSM9D1_INT1_CTRL_INT_DRDY_XL;
+    syshal_i2c_write_reg(I2C_AXL, LSM9D1_ADDR, LSM9D1_INT1_CTRL, &LSM9D1_INT1_CTRL_register, 1);
+
+    // Setup the INT1_A/G interrupt GPIO pin to generate interrupts
+    syshal_gpio_init(GPIO_INT1_AG);
+    syshal_gpio_enable_interrupt(GPIO_INT1_AG, syshal_axl_int1_ag_interrupt_priv);
 
     return SYSHAL_AXL_NO_ERROR;
 }
@@ -99,4 +157,15 @@ int syshal_axl_wake(void)
     syshal_i2c_write_reg(I2C_AXL, LSM9D1_ADDR, LSM9D1_CTRL_REG6_XL, &LSM9D1_CTRL_REG6_XL_wake_state, 1);
 
     return SYSHAL_AXL_NO_ERROR;
+}
+
+/**
+ * @brief      AXL callback stub, should be overriden by the user application
+ *
+ * @param[in]  data  The data that was read
+ */
+__attribute__((weak)) void syshal_axl_callback(syshal_axl_data_t data)
+{
+    UNUSED(data);
+    DEBUG_PR_WARN("%s Not implemented", __FUNCTION__);
 }

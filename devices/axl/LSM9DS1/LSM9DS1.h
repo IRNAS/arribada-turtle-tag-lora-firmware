@@ -100,6 +100,10 @@
 #define LSM9D1_WHO_AM_I_AG_RSP     (0x68)
 #define LSM9D1_WHO_AM_I_M_RSP      (0x3D)
 
+// INT1_CTRL
+#define LSM9D1_INT1_CTRL_INT_DRDY_XL (1 << 0) // Accelerometer data ready on INT 1_A/G pin
+
+// CTRL_REG5_XL
 #define LSM9D1_CTRL_REG5_XL_ZEN_XL (1 << 5)
 #define LSM9D1_CTRL_REG5_XL_YEN_XL (1 << 4)
 #define LSM9D1_CTRL_REG5_XL_XEN_XL (1 << 3)

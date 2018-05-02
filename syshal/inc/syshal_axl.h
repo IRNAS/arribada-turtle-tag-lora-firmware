@@ -26,15 +26,15 @@
 
 typedef struct
 {
-    int16_t x,
-    int16_t y,
-    int16_t z
-} syshal_axl_event_t;
+    int16_t x;
+    int16_t y;
+    int16_t z;
+} syshal_axl_data_t;
 
 int syshal_axl_init(void);
 int syshal_axl_sleep(void);
 int syshal_axl_wake(void);
 
-void syshal_axl_callback(syshal_axl_event_t event);
+void syshal_axl_callback(syshal_axl_data_t data);
 
 #endif /* _SYSHAL_AXL_H_ */

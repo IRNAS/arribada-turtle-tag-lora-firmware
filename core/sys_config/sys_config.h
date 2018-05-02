@@ -33,6 +33,9 @@
 
 #define SYS_CONFIG_TAG_TOTAL_NUMBER (35) // Number of configuration tags - WARN: This has to be manually updated
 
+#define SYS_CONFIG_AXL_MODE_PERIODIC      (0)
+#define SYS_CONFIG_AXL_MODE_TRIGGER_ABOVE (3)
+
 enum
 {
     // GPS

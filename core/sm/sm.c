@@ -27,6 +27,7 @@
 #include "fs.h"
 #include "sm.h"
 #include "sys_config.h"
+#include "syshal_axl.h"
 #include "syshal_batt.h"
 #include "syshal_gpio.h"
 #include "syshal_gps.h"
@@ -270,6 +271,40 @@ static bool check_configuration_tags_set(void)
     }
 
     return !tag_not_set;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////// CALLBACK FUNCTIONS //////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+
+void syshal_axl_callback(syshal_axl_data_t data)
+{
+    DEBUG_PR_TRACE("%s() called", __FUNCTION__);
+
+    // If accelerometer data logging is disabled
+    if (!sys_config.sys_config_axl_log_enable.contents.enable)
+    {
+        syshal_axl_sleep(); // Sleep the accelerometer device
+        return;
+    }
+
+    // FIXME: Check if we're in the correct state
+
+    switch (sys_config.sys_config_axl_mode.contents.mode)
+    {
+        case SYS_CONFIG_AXL_MODE_PERIODIC:
+            // FIXME: Log data!
+            break;
+
+        case SYS_CONFIG_AXL_MODE_TRIGGER_ABOVE:
+            // Calculate vector magnitude
+            __NOP(); // NOP required to give the switch case an instruction to jump to
+            uint16_t magnitude_squared = (data.x * data.x) + (data.y * data.y) + (data.z * data.z); // WARN uint16_t maybe too small to contain true value
+            // Determine if the read data is above the trigger point
+            if (magnitude_squared >= sys_config.sys_config_axl_g_force_high_threshold.contents.threshold)
+                __NOP(); // FIXME: Log data!
+            break;
+    }
 }
 
 /**
@@ -2055,7 +2090,7 @@ void operational_state(void)
     // FIXME:
     // If Log File is full then...
     // sm_set_state(SM_SM_STATE_STANDBY_LOG_FILE_FULL);
-    
+
     // If GPS bridging is disabled
     if (!syshal_gps_bridging)
         syshal_gps_tick(); // Process GPS messages
