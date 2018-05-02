@@ -18,6 +18,7 @@
  */
 
 #include "config_if.h"
+#include "syshal_ble.h"
 #include "syshal_usb.h"
 #include "debug.h"
 
@@ -45,11 +46,10 @@ int config_if_init(config_if_backend_t backend)
     }
     else if (backend == CONFIG_IF_BACKEND_BLE)
     {
-        DEBUG_PR_ERROR("BLE NOT IMPLEMENTED %s()", __FUNCTION__);
-        /*
-        config_if_transfer_priv = &syshal_ble_transfer;
-        config_if_receive_priv = &syshal_ble_receive;
-        */
+        config_if_func_send_priv = &syshal_ble_send;
+        config_if_func_receive_priv = &syshal_ble_receive;
+
+        syshal_ble_init(SPI_BLE);
 
         backend_priv = backend;
 
@@ -70,10 +70,7 @@ int config_if_term(void)
         syshal_usb_term();
 
     if (backend_priv == CONFIG_IF_BACKEND_BLE)
-    {
-        DEBUG_PR_ERROR("BLE NOT IMPLEMENTED %s()", __FUNCTION__);
-        //syshal_ble_term();
-    }
+        syshal_ble_term();
 
     backend_priv = CONFIG_IF_BACKEND_NOT_SET;
 
@@ -114,8 +111,7 @@ __attribute__((weak)) int config_if_event_handler(config_if_event_t * event)
 }
 
 /**
- * @brief      This function is called whenever a event occurs on the USB bus.
- *             This should be overriden by config_if.c
+ * @brief      This function is called whenever an event occurs on the USB bus
  *
  * @param[out] event  The event
  *
@@ -123,24 +119,28 @@ __attribute__((weak)) int config_if_event_handler(config_if_event_t * event)
  */
 int syshal_usb_event_handler(syshal_usb_event_t * event)
 {
-    // Do a manual member copy of the events. This is to avoid bugs arising from overlaying structures that later change
     config_if_event_t parsedEvent;
-    parsedEvent.id = event->id;
 
     switch (event->id)
     {
-        case CONFIG_IF_EVENT_SEND_COMPLETE:
-            parsedEvent.send.buffer = event->send.buffer;
+        case SYSHAL_USB_EVENT_CONNECTED:
+            parsedEvent.id = CONFIG_IF_EVENT_CONNECTED;
+            break;
+
+        case SYSHAL_USB_EVENT_DISCONNECTED:
+            parsedEvent.id = CONFIG_IF_EVENT_DISCONNECTED;
+            break;
+
+        case SYSHAL_USB_EVENT_SEND_COMPLETE:
+            parsedEvent.id = CONFIG_IF_EVENT_SEND_COMPLETE;
             parsedEvent.send.size = event->send.size;
             break;
 
-        case CONFIG_IF_EVENT_RECEIVE_COMPLETE:
-            parsedEvent.receive.buffer = event->receive.buffer;
+        case SYSHAL_USB_EVENT_RECEIVE_COMPLETE:
+            parsedEvent.id = CONFIG_IF_EVENT_RECEIVE_COMPLETE;
             parsedEvent.receive.size = event->receive.size;
             break;
 
-        case CONFIG_IF_EVENT_CONNECTED:
-        case CONFIG_IF_EVENT_DISCONNECTED:
         default:
             break;
     }
@@ -148,4 +148,50 @@ int syshal_usb_event_handler(syshal_usb_event_t * event)
     config_if_event_handler(&parsedEvent);
 
     return SYSHAL_USB_NO_ERROR;
+}
+
+/**
+ * @brief      This function is called whenever an event occurs on the BLE bus
+ *
+ * @param      event  The event
+ */
+void syshal_ble_event_handler(syshal_ble_event_t * event)
+{
+    config_if_event_t parsedEvent;
+
+    switch (event->event_id)
+    {
+        case SYSHAL_BLE_EVENT_CONNECTED:
+            parsedEvent.id = CONFIG_IF_EVENT_CONNECTED;
+            break;
+
+        case SYSHAL_BLE_EVENT_DISCONNECTED:
+            parsedEvent.id = CONFIG_IF_EVENT_DISCONNECTED;
+            break;
+
+        case SYSHAL_BLE_EVENT_SEND_COMPLETE:
+            parsedEvent.id = CONFIG_IF_EVENT_SEND_COMPLETE;
+            parsedEvent.receive.size = event->send_complete.length;
+            break;
+
+        case SYSHAL_BLE_EVENT_RECEIVE_COMPLETE:
+            parsedEvent.id = CONFIG_IF_EVENT_RECEIVE_COMPLETE;
+            parsedEvent.receive.size = event->receive_complete.length;
+            break;
+
+        case SYSHAL_BLE_EVENT_FW_UPGRADE_COMPLETE:
+            // FIXME: Implement
+            DEBUG_PR_WARN("%s() SYSHAL_BLE_EVENT_FW_UPGRADE_COMPLETE Not implemented", __FUNCTION__);
+            break;
+
+        case SYSHAL_BLE_EVENT_ERROR_INDICATION:
+            // FIXME: Implement
+            DEBUG_PR_WARN("%s() SYSHAL_BLE_EVENT_ERROR_INDICATION Not implemented", __FUNCTION__);
+            break;
+
+        default:
+            break;
+    }
+
+    config_if_event_handler(&parsedEvent);
 }

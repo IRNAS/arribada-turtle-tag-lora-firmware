@@ -47,12 +47,10 @@ typedef struct
     {
         struct
         {
-            uint8_t * buffer;
             uint32_t size;
         } send;
         struct
         {
-            uint8_t * buffer;
             uint32_t size;
         } receive;
     };

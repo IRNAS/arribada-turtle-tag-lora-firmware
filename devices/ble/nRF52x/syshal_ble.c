@@ -171,7 +171,7 @@ int syshal_ble_reset(void)
     return write_register(NRF52_REG_ADDR_MODE, &mode, sizeof(mode));
 }
 
-int syshal_ble_send(uint8_t *buffer, uint16_t size)
+int syshal_ble_send(uint8_t *buffer, uint32_t size)
 {
     int ret;
 
@@ -192,7 +192,7 @@ int syshal_ble_send(uint8_t *buffer, uint16_t size)
     return ret;
 }
 
-int syshal_ble_receive(uint8_t *buffer, uint16_t size)
+int syshal_ble_receive(uint8_t *buffer, uint32_t size)
 {
     /* Don't allow a receive if there is already one pending */
     if (rx_buffer_pending)

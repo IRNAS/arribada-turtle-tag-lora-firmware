@@ -100,8 +100,8 @@ int syshal_ble_config_fw_upgrade(syshal_ble_fw_upgrade_type_t type, uint32_t siz
 int syshal_ble_config_beacon(uint16_t interval_ms, uint8_t beacon_payload[SYSHAL_BLE_ADVERTISING_SIZE]);
 int syshal_ble_config_scan_response(uint8_t scan_payload[SYSHAL_BLE_ADVERTISING_SIZE]);
 int syshal_ble_reset(void);
-int syshal_ble_send(uint8_t *buffer, uint16_t size);
-int syshal_ble_receive(uint8_t *buffer, uint16_t size);
+int syshal_ble_send(uint8_t *buffer, uint32_t size);
+int syshal_ble_receive(uint8_t *buffer, uint32_t size);
 int syshal_ble_tick(void);
 __attribute__((weak)) void syshal_ble_event_handler(syshal_ble_event_t *event);
 

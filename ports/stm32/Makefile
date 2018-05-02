@@ -39,6 +39,7 @@ $(CORE_DIR)/fs/fs.c \
 $(CORE_DIR)/sm/sm.c \
 $(CORE_DIR)/sys_config/sys_config.c \
 $(DEVICE_DIR)/battery/BQ27621/BQ27621.c \
+$(DEVICE_DIR)/ble/nRF52x/syshal_ble.c \
 $(DEVICE_DIR)/gps/M8N/M8N.c \
 $(DEVICE_DIR)/flash/S25FL128/S25FL128.c \
 $(STMHAL_DIR)/Src/stm32f0xx_hal.c \
@@ -138,6 +139,7 @@ C_INCLUDES =  \
 -I$(CORE_DIR)/sm \
 -I$(CORE_DIR)/sys_config \
 -I$(DEVICE_DIR)/battery/BQ27621/ \
+-I$(DEVICE_DIR)/ble/nRF52x/ \
 -I$(DEVICE_DIR)/gps/M8N/ \
 -I$(DEVICE_DIR)/flash/S25FL128/ \
 -I$(STMHAL_DIR)/Inc \
