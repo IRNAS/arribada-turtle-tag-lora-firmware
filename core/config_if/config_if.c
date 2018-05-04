@@ -53,7 +53,7 @@ int config_if_init(config_if_backend_t backend)
 
         backend_priv = backend;
 
-        return CONFIG_IF_ERROR_INVALID_INSTANCE;
+        return CONFIG_IF_NO_ERROR;
     }
     else
     {
