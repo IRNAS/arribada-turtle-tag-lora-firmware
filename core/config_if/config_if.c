@@ -111,6 +111,15 @@ __attribute__((weak)) int config_if_event_handler(config_if_event_t * event)
 }
 
 /**
+ * @brief      Processes & updates the internal config_if states
+ */
+void config_if_tick(void)
+{
+    if (backend_priv == CONFIG_IF_BACKEND_BLE)
+        syshal_ble_tick();
+}
+
+/**
  * @brief      This function is called whenever an event occurs on the USB bus
  *
  * @param[out] event  The event
