@@ -140,7 +140,7 @@ static sm_context_t sm_context;
 ////////////////////////////////// GLOBALS /////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-#define DUMMY_BATTERY_MONITOR // Spoof any reads from the battery monitor
+//#define DUMMY_BATTERY_MONITOR // Spoof any reads from the battery monitor
 
 #define FS_FILE_ID_CONF             (0) // The File ID of the configuration data
 #define FS_FILE_ID_STM32_IMAGE      (1) // STM32 application image
@@ -260,8 +260,8 @@ static bool check_configuration_tags_set(void)
         if (!ble_beacon_enabled) // If ble beacon is disabled
         {
             if (SYS_CONFIG_TAG_BLUETOOTH_BEACON_GEO_FENCE_TRIGGER_LOCATION == tag ||
-                    SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_INTERVAL == tag ||
-                    SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_CONFIGURATION == tag)
+                SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_INTERVAL == tag ||
+                SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_CONFIGURATION == tag)
             {
                 continue; // Then don't check the beacon tags
             }
@@ -1302,10 +1302,9 @@ static void fw_send_image_req(cmd_t * req, uint16_t size)
     sm_context.fw_send_image.image_type = req->p.cmd_fw_send_image_req.image_type;
 
     if ( (sm_context.fw_send_image.image_type == FS_FILE_ID_STM32_IMAGE)
-            || (sm_context.fw_send_image.image_type == FS_FILE_ID_BLE_SOFT_IMAGE)
-            || (sm_context.fw_send_image.image_type == FS_FILE_ID_BLE_APP_IMAGE))
+         || (sm_context.fw_send_image.image_type == FS_FILE_ID_BLE_SOFT_IMAGE)
+         || (sm_context.fw_send_image.image_type == FS_FILE_ID_BLE_APP_IMAGE))
     {
-
         int ret = fs_delete(file_system, sm_context.fw_send_image.image_type); // Must first delete any current image
 
         switch (ret)
@@ -1427,8 +1426,8 @@ static void fw_apply_image_req(cmd_t * req, uint16_t size)
     uint8_t image_type = req->p.cmd_fw_apply_image_req.image_type;
 
     if ( (image_type == FS_FILE_ID_STM32_IMAGE)
-            || (image_type == FS_FILE_ID_BLE_SOFT_IMAGE)
-            || (image_type == FS_FILE_ID_BLE_APP_IMAGE))
+         || (image_type == FS_FILE_ID_BLE_SOFT_IMAGE)
+         || (image_type == FS_FILE_ID_BLE_APP_IMAGE))
     {
         // Check image exists
         int ret = fs_open(file_system, &file_system_handle, image_type, FS_MODE_READONLY, NULL);
@@ -1459,8 +1458,10 @@ static void fw_apply_image_req(cmd_t * req, uint16_t size)
     if (CMD_NO_ERROR == resp->p.cmd_generic_resp.error_code)
     {
         // There was no error, so wait for the confirmation to be sent
+#ifndef GTEST // Prevent infinite loop in gtest
         while (config_if_tx_pending)
         {}
+#endif
 
         // And then apply the firmware image
 

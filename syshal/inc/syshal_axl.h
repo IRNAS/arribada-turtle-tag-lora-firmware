@@ -35,6 +35,6 @@ int syshal_axl_init(void);
 int syshal_axl_sleep(void);
 int syshal_axl_wake(void);
 
-void syshal_axl_callback(syshal_axl_data_t data);
+__attribute__((weak)) void syshal_axl_callback(syshal_axl_data_t data);
 
 #endif /* _SYSHAL_AXL_H_ */
