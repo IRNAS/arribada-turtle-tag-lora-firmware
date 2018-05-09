@@ -17,6 +17,8 @@
  */
 
 #include "syshal_firmware.h"
+#include "stm32f0xx_hal_flash.h"
+#include "stm32f0xx_hal_flash_ex.h"
 
 // HAL to SYSHAL error code mapping table
 static int hal_error_map[] =
