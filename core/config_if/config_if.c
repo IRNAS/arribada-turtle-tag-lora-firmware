@@ -17,6 +17,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "bsp.h"
 #include "config_if.h"
 #include "syshal_ble.h"
 #include "syshal_usb.h"
@@ -142,6 +143,8 @@ int syshal_usb_event_handler(syshal_usb_event_t * event)
             break;
 
         default:
+            DEBUG_PR_ERROR("%s() Unknown event", __FUNCTION__);
+            return SYSHAL_USB_ERROR_FAIL;
             break;
     }
 
@@ -190,6 +193,8 @@ void syshal_ble_event_handler(syshal_ble_event_t * event)
             break;
 
         default:
+            DEBUG_PR_ERROR("%s() Unknown event", __FUNCTION__);
+            return;
             break;
     }
 

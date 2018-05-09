@@ -58,7 +58,7 @@ int syshal_rtc_set_date_and_time(syshal_rtc_data_and_time_t date_time)
 
     status = HAL_RTC_SetDate(&rtc_handle, &date, RTC_FORMAT_BIN);
     if (HAL_OK != status)
-        return status;
+        return hal_error_map[status];
 
     RTC_TimeTypeDef time;
     time.Hours = data_time.hours;

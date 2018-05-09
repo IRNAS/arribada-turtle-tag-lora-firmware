@@ -24,7 +24,7 @@
 #include "stm32f0xx_hal_i2c.h"
 
 // Logical device mappings to physical devices
-#define UART_GPS        UART_1
+#define GPS_UART        UART_1
 #define I2C_AXL         I2C_2
 #define SPI_BLE         SPI_1
 #define SPI_FLASH       SPI_2

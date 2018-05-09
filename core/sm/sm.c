@@ -44,6 +44,7 @@
 
 static sm_state_t state = SM_STATE_BOOT; // Default starting state
 
+#ifndef DEBUG_DISABLED
 static const char * sm_state_str[] =
 {
     [SM_STATE_BOOT]                         = "SM_STATE_BOOT",
@@ -55,6 +56,7 @@ static const char * sm_state_str[] =
     [SM_STATE_PROVISIONING]                 = "SM_STATE_PROVISIONING",
     [SM_STATE_OPERATIONAL]                  = "SM_STATE_OPERATIONAL",
 };
+#endif
 
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////// MESSAGE STATES //////////////////////////////////
@@ -128,8 +130,6 @@ static sm_context_t sm_context;
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////// GLOBALS /////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
-
-#define DUMMY_BATTERY_MONITOR // Spoof any reads from the battery monitor
 
 #define FS_FILE_ID_CONF             (0) // The File ID of the configuration data
 #define FS_FILE_ID_STM32_IMAGE      (1) // STM32 application image
@@ -1879,13 +1879,11 @@ void boot_state(void)
     setup_buffers();
 
     // Initialize all configured peripherals
-    syshal_gpio_init(GPIO_LED3);
-    syshal_gpio_init(GPIO_LED4);
-    syshal_gpio_init(GPIO_LED5);
-    syshal_gpio_init(GPIO_LED6);
+    syshal_gpio_init(GPIO_LED1_GREEN);
+    syshal_gpio_init(GPIO_LED2_RED);
     syshal_uart_init(UART_1);
-    //syshal_uart_init(UART_3);
-    //syshal_uart_init(UART_4);
+    syshal_uart_init(UART_2);
+//    syshal_uart_init(UART_3);
     syshal_spi_init(SPI_1);
     syshal_spi_init(SPI_2);
     syshal_i2c_init(I2C_1);
@@ -1917,6 +1915,7 @@ void boot_state(void)
 
     if (!(FS_NO_ERROR == ret || FS_ERROR_FILE_NOT_FOUND == ret))
         Throw(EXCEPTION_FS_ERROR);
+
 
 #ifndef DUMMY_BATTERY_MONITOR
     // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
@@ -1953,8 +1952,6 @@ void boot_state(void)
     else
         sm_set_state(SM_STATE_OPERATIONAL); // All systems go for standard operation
 
-    syshal_gpio_set_output_high(GPIO_LED3); // Indicate boot passed
-
 }
 
 void standby_battery_charging_state()
@@ -1977,8 +1974,7 @@ void standby_battery_charging_state()
 
 void standby_battery_level_low_state()
 {
-
-    // FIXME: If any file is open, close it
+    // FIXME: If any file is open, close it to prevent data loss
 
 
 #ifndef DUMMY_BATTERY_MONITOR
@@ -2031,9 +2027,9 @@ void standby_provisioning_needed_state()
 
     if (syshal_time_get_ticks_ms() >= (blinkTimeMs + blinkTimer))
     {
-        syshal_gpio_set_output_high(GPIO_LED4);
+        syshal_gpio_set_output_high(GPIO_LED2_RED);
         syshal_time_delay_ms(50);
-        syshal_gpio_set_output_low(GPIO_LED4);
+        syshal_gpio_set_output_low(GPIO_LED2_RED);
         blinkTimer = syshal_time_get_ticks_ms();
     }
 #endif
@@ -2069,7 +2065,7 @@ void standby_trigger_pending_state()
 void provisioning_state(void)
 {
 #ifndef GTEST
-    syshal_gpio_set_output_high(GPIO_LED4); // Indicate what state we're in
+    syshal_gpio_set_output_high(GPIO_LED2_RED); // Indicate what state we're in
 #endif
 
     handle_config_if_messages(); // Process any config_if messages

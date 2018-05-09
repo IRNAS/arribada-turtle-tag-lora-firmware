@@ -61,6 +61,7 @@ int syshal_uart_init(uint32_t instance)
     // Setup rx buffer
     rb_init(&rx_buffer[instance], UART_RX_BUF_SIZE, &rx_data[instance][0]);
 
+#ifndef DEBUG_DISABLED
 #ifdef PRINTF_UART
     // Turn off buffers. This ensure printf prints immediately
     if (instance == PRINTF_UART)
@@ -69,6 +70,7 @@ int syshal_uart_init(uint32_t instance)
         setvbuf(stdout, NULL, _IONBF, 0);
         setvbuf(stderr, NULL, _IONBF, 0);
     }
+#endif
 #endif
 
     status = HAL_UART_Init(&huart[instance]);
@@ -188,7 +190,6 @@ bool syshal_uart_peek_at(uint32_t instance, uint8_t * byte, uint32_t location)
 
 int syshal_uart_send(uint32_t instance, uint8_t * data, uint32_t size)
 {
-
     if (!size)
         return SYSHAL_UART_ERROR_INVALID_SIZE;
 
@@ -223,21 +224,24 @@ void HAL_UART_MspInit(UART_HandleTypeDef * huart)
         HAL_NVIC_EnableIRQ(USART1_IRQn);
     }
 
-//    if (huart->Instance == USART2)
-//    {
-//        // Peripheral clock enable
-//        __HAL_RCC_USART2_CLK_ENABLE();
-//
-//        // USART2 GPIO Configuration
-//        syshal_gpio_init(GPIO_UART2_TX);
-//        syshal_gpio_init(GPIO_UART2_RX);
-//
-//        // USART2 interrupt Init
-//        __HAL_UART_ENABLE_IT(&huart[UART_2], UART_IT_RXNE);
-//
-//        HAL_NVIC_SetPriority(USART2_IRQn, 0, 0);
-//        HAL_NVIC_EnableIRQ(USART2_IRQn);
-//    }
+    if (huart->Instance == USART2)
+    {
+        // Peripheral clock enable
+        __HAL_RCC_USART2_CLK_ENABLE();
+
+        // USART2 GPIO Configuration
+        syshal_gpio_init(GPIO_UART2_TX);
+
+        // No receive pin so ignore don't initiate one
+
+        //syshal_gpio_init(GPIO_UART2_RX);
+
+        // USART2 interrupt Init
+        //__HAL_UART_ENABLE_IT(&huart[UART_2], UART_IT_RXNE);
+
+        //HAL_NVIC_SetPriority(USART2_IRQn, 0, 0);
+        //HAL_NVIC_EnableIRQ(USART2_IRQn);
+    }
 
     if (huart->Instance == USART3)
     {
@@ -247,6 +251,8 @@ void HAL_UART_MspInit(UART_HandleTypeDef * huart)
         // USART3 GPIO Configuration
         syshal_gpio_init(GPIO_UART3_TX);
         syshal_gpio_init(GPIO_UART3_RX);
+        syshal_gpio_init(GPIO_UART3_RTS);
+        syshal_gpio_init(GPIO_UART3_CTS);
 
         // USART3 interrupt Init
         __HAL_UART_ENABLE_IT(&huart[UART_3], UART_IT_RXNE);
@@ -255,21 +261,21 @@ void HAL_UART_MspInit(UART_HandleTypeDef * huart)
         HAL_NVIC_EnableIRQ(USART3_4_IRQn);
     }
 
-    if (huart->Instance == USART4)
-    {
-        // Peripheral clock disable
-        __HAL_RCC_USART4_CLK_ENABLE();
-
-        // USART4 GPIO Configuration
-        syshal_gpio_init(GPIO_UART4_TX);
-        syshal_gpio_init(GPIO_UART4_RX);
-
-        // USART4 interrupt Init
-        __HAL_UART_ENABLE_IT(&huart[UART_4], UART_IT_RXNE);
-
-        HAL_NVIC_SetPriority(USART3_4_IRQn, 0, 0);
-        HAL_NVIC_EnableIRQ(USART3_4_IRQn);
-    }
+//    if (huart->Instance == USART4)
+//    {
+//        // Peripheral clock disable
+//        __HAL_RCC_USART4_CLK_ENABLE();
+//
+//        // USART4 GPIO Configuration
+//        syshal_gpio_init(GPIO_UART4_TX);
+//        syshal_gpio_init(GPIO_UART4_RX);
+//
+//        // USART4 interrupt Init
+//        __HAL_UART_ENABLE_IT(&huart[UART_4], UART_IT_RXNE);
+//
+//        HAL_NVIC_SetPriority(USART3_4_IRQn, 0, 0);
+//        HAL_NVIC_EnableIRQ(USART3_4_IRQn);
+//    }
 
 }
 
@@ -289,18 +295,18 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef * huart)
         HAL_NVIC_DisableIRQ(USART1_IRQn);
     }
 
-//    if (huart->Instance == USART2)
-//    {
-//        // Peripheral clock disable
-//        __HAL_RCC_USART2_CLK_DISABLE();
-//
-//        // USART2 GPIO Configuration
-//        syshal_gpio_term(GPIO_UART2_TX);
-//        syshal_gpio_term(GPIO_UART2_RX);
-//
-//        // USART2 interrupt DeInit
-//        HAL_NVIC_DisableIRQ(USART2_IRQn);
-//    }
+    if (huart->Instance == USART2)
+    {
+        // Peripheral clock disable
+        __HAL_RCC_USART2_CLK_DISABLE();
+
+        // USART2 GPIO Configuration
+        syshal_gpio_term(GPIO_UART2_TX);
+        //syshal_gpio_term(GPIO_UART2_RX);
+
+        // USART2 interrupt DeInit
+        //HAL_NVIC_DisableIRQ(USART2_IRQn);
+    }
 
     if (huart->Instance == USART3)
     {
@@ -310,17 +316,19 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef * huart)
         // USART3 GPIO Configuration
         syshal_gpio_term(GPIO_UART3_TX);
         syshal_gpio_term(GPIO_UART3_RX);
+        syshal_gpio_term(GPIO_UART3_RTS);
+        syshal_gpio_term(GPIO_UART3_CTS);
     }
 
-    if (huart->Instance == USART4)
-    {
-        // Peripheral clock disable
-        __HAL_RCC_USART4_CLK_DISABLE();
-
-        // USART4 GPIO Configuration
-        syshal_gpio_term(GPIO_UART4_TX);
-        syshal_gpio_term(GPIO_UART4_RX);
-    }
+//    if (huart->Instance == USART4)
+//    {
+//        // Peripheral clock disable
+//        __HAL_RCC_USART4_CLK_DISABLE();
+//
+//        // USART4 GPIO Configuration
+//        syshal_gpio_term(GPIO_UART4_TX);
+//        syshal_gpio_term(GPIO_UART4_RX);
+//    }
 
 }
 
@@ -360,10 +368,10 @@ void USART1_IRQHandler(void)
 /**
 * @brief This function handles USART2 global interrupt.
 */
-//void USART2_IRQHandler(void)
-//{
-//    uart_irq(UART_2);
-//}
+void USART2_IRQHandler(void)
+{
+    uart_irq(UART_2);
+}
 
 /**
 * @brief This function handles USART3 and USART4 global interrupts
@@ -371,10 +379,11 @@ void USART1_IRQHandler(void)
 void USART3_4_IRQHandler(void)
 {
     uart_irq(UART_3);
-    uart_irq(UART_4);
+    //uart_irq(UART_4);
 }
 
 // Override _write function to enable printf use, but only if we have printf assigned to a uart
+#ifndef DEBUG_DISABLED
 #ifdef PRINTF_UART
 int _write(int file, char * data, int len)
 {
@@ -393,4 +402,5 @@ int _write(int file, char * data, int len)
     // return # of bytes written - as best we can tell
     return (status == HAL_OK ? len : 0);
 }
+#endif
 #endif

@@ -93,6 +93,12 @@ void syshal_gpio_init(uint32_t pin)
     if (GPIOC == GPIO_Inits[pin].Port)
         __HAL_RCC_GPIOC_CLK_ENABLE();
 
+    if (GPIOD == GPIO_Inits[pin].Port)
+        __HAL_RCC_GPIOD_CLK_ENABLE();
+
+    if (GPIOE == GPIO_Inits[pin].Port)
+        __HAL_RCC_GPIOE_CLK_ENABLE();
+
     if (GPIOF == GPIO_Inits[pin].Port)
         __HAL_RCC_GPIOF_CLK_ENABLE();
 

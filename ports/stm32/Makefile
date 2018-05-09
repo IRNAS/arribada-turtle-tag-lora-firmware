@@ -11,7 +11,7 @@ DEBUG = 1
 # optimization
 OPT = -O2
 
-BOARD = arribada_v1
+BOARD = arribada_v2
 
 #######################################
 # paths
@@ -91,6 +91,7 @@ startup_stm32f072xb.s
 OPENOCD = "../../../Toolchain/OpenOCD-20170821/bin/openocd"
 OPENOCDSCRIPTS = "/../../../Toolchain/OpenOCD-20170821/share/openocd/scripts"
 BINPATH = "../../../Toolchain/gcc-arm-none-eabi-7-2017-q4-major/bin
+JLINK = "JLink"
 PREFIX = arm-none-eabi-
 CC = $(BINPATH)/$(PREFIX)gcc"
 AS = $(BINPATH)/$(PREFIX)gcc" -x assembler-with-cpp
@@ -120,7 +121,8 @@ C_DEFS =  \
 -DUSE_HAL_DRIVER \
 -DSTM32F072xB \
 -DDEBUG_COLOR \
--DGIT_VERSION=\"$(G_VERSION)\"
+-DGIT_VERSION=\"$(G_VERSION)\" \
+-DDUMMY_BATTERY_MONITOR
 
 # AS includes
 AS_INCLUDES = 
@@ -212,7 +214,7 @@ $(BUILD_DIR):
 
 flash:
 	$(MAKE) all
-	$(OPENOCD) -s $(OPENOCDSCRIPTS) -f board/stm32f0discovery.cfg -c "init" -c "reset halt" -c "sleep 100" -c "wait_halt 2" -c "flash write_image erase $(BUILD_DIR)/$(TARGET).elf" -c "sleep 100" -c "verify_image $(BUILD_DIR)/$(TARGET).elf" -c "reset run" -c "shutdown"
+	$(JLINK) -device STM32F072VB -if SWD -speed 4000 -autoconnect 1 -CommanderScript JLinkCommandFile.jlink
 
 #######################################
 # clean up
