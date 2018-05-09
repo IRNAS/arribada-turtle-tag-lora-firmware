@@ -54,7 +54,7 @@ int config_if_init(config_if_backend_t backend)
 
         backend_priv = backend;
 
-        return CONFIG_IF_ERROR_INVALID_INSTANCE;
+        return CONFIG_IF_NO_ERROR;
     }
     else
     {
@@ -109,6 +109,15 @@ __attribute__((weak)) int config_if_event_handler(config_if_event_t * event)
     DEBUG_PR_WARN("%s Not implemented", __FUNCTION__);
 
     return CONFIG_IF_NO_ERROR;
+}
+
+/**
+ * @brief      Processes & updates the internal config_if states
+ */
+void config_if_tick(void)
+{
+    if (backend_priv == CONFIG_IF_BACKEND_BLE)
+        syshal_ble_tick();
 }
 
 /**

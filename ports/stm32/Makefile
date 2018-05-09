@@ -34,6 +34,7 @@ C_SOURCES =  \
 $(CORE_DIR)/buffer/buffer.c \
 $(CORE_DIR)/cexception/cexception.c \
 $(CORE_DIR)/config_if/config_if.c \
+$(CORE_DIR)/crc32/crc32.c \
 $(CORE_DIR)/debug/debug.c \
 $(CORE_DIR)/fs/fs.c \
 $(CORE_DIR)/sm/sm.c \
@@ -135,6 +136,7 @@ C_INCLUDES =  \
 -I$(CORE_DIR)/cexception \
 -I$(CORE_DIR)/config \
 -I$(CORE_DIR)/config_if \
+-I$(CORE_DIR)/crc32 \
 -I$(CORE_DIR)/debug \
 -I$(CORE_DIR)/fs \
 -I$(CORE_DIR)/ring_buffer \

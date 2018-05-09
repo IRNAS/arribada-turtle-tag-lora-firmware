@@ -22,6 +22,7 @@
 #include "cexception.h"
 #include "cmd.h"
 #include "config_if.h"
+#include "crc32.h"
 #include "debug.h"
 #include "exceptions.h"
 #include "fs.h"
@@ -73,10 +74,11 @@ typedef enum
     SM_MESSAGE_STATE_BLE_WRITE_NEXT,
     SM_MESSAGE_STATE_BLE_READ_NEXT,
     SM_MESSAGE_STATE_LOG_READ_NEXT,
+    SM_MESSAGE_STATE_FW_SEND_IMAGE_NEXT,
 } sm_message_state_t;
 static sm_message_state_t message_state = SM_MESSAGE_STATE_IDLE;
 
-// State specific context
+// State specific context, used for maintaining information between config_if message sub-states
 typedef struct
 {
     union
@@ -123,6 +125,15 @@ typedef struct
             uint32_t start_offset;
             fs_handle_t file_handle;
         } log_read;
+
+        struct
+        {
+            uint8_t image_type;
+            uint32_t length;
+            uint32_t crc32_supplied;
+            uint32_t crc32_calculated;
+            fs_handle_t file_handle;
+        } fw_send_image;
     };
 } sm_context_t;
 static sm_context_t sm_context;
@@ -130,6 +141,7 @@ static sm_context_t sm_context;
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////// GLOBALS /////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
+
 
 #define FS_FILE_ID_CONF             (0) // The File ID of the configuration data
 #define FS_FILE_ID_STM32_IMAGE      (1) // STM32 application image
@@ -1272,12 +1284,192 @@ static void status_req(cmd_t * req, uint16_t size)
 
 static void fw_send_image_req(cmd_t * req, uint16_t size)
 {
-    DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
+    // Check request size is correct
+    if (CMD_SIZE(cmd_fw_send_image_req_t) != size)
+        Throw(EXCEPTION_REQ_WRONG_SIZE);
+
+    // Generate and send response
+    cmd_t * resp;
+    if (!buffer_write(&config_if_send_buffer, (uintptr_t *)&resp))
+        Throw(EXCEPTION_TX_BUFFER_FULL);
+    CMD_SET_HDR(resp, CMD_GENERIC_RESP);
+
+    // Store variables for use in future
+    sm_context.fw_send_image.length = req->p.cmd_fw_send_image_req.length;
+    sm_context.fw_send_image.crc32_supplied = req->p.cmd_fw_send_image_req.CRC32;
+    sm_context.fw_send_image.crc32_calculated = 0;
+
+    // Check the image type is correct
+    sm_context.fw_send_image.image_type = req->p.cmd_fw_send_image_req.image_type;
+
+    if ( (sm_context.fw_send_image.image_type == FS_FILE_ID_STM32_IMAGE)
+         || (sm_context.fw_send_image.image_type == FS_FILE_ID_BLE_SOFT_IMAGE)
+         || (sm_context.fw_send_image.image_type == FS_FILE_ID_BLE_APP_IMAGE))
+    {
+        int ret = fs_delete(file_system, sm_context.fw_send_image.image_type); // Must first delete any current image
+
+        switch (ret)
+        {
+            case FS_ERROR_FILE_NOT_FOUND: // If there is no image file, then make one
+            case FS_NO_ERROR:
+                __NOP(); // Instruct for switch case to jump to
+                int ret = fs_open(file_system, &sm_context.fw_send_image.file_handle, sm_context.fw_send_image.image_type, FS_MODE_CREATE, NULL);
+
+                if (FS_NO_ERROR != ret)
+                    Throw(EXCEPTION_FS_ERROR); // An unrecoverable error has occured
+
+                // FIXME: Check to see if there is sufficient room for the firmware image
+                resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
+                message_set_state(SM_MESSAGE_STATE_FW_SEND_IMAGE_NEXT);
+                break;
+
+            case FS_ERROR_FILE_PROTECTED: // We never lock the fw images so this shouldn't occur
+                resp->p.cmd_generic_resp.error_code = CMD_ERROR_CONFIG_PROTECTED;
+                break;
+
+            default:
+                Throw(EXCEPTION_FS_ERROR);
+                break;
+        }
+    }
+    else
+    {
+        resp->p.cmd_generic_resp.error_code = CMD_ERROR_INVALID_FW_IMAGE_TYPE;
+    }
+
+    buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_generic_resp_t));
+    config_if_send_priv(&config_if_send_buffer);
+}
+
+static void fw_send_image_next_state(void)
+{
+    uint8_t * read_buffer;
+    uint32_t length = buffer_read(&config_if_receive_buffer, (uintptr_t *)&read_buffer);
+
+    if (!length)
+        return;
+
+    buffer_read_advance(&config_if_receive_buffer, length); // Remove this packet from the receive buffer
+
+    // Is this packet larger than we were expecting?
+    if (length > sm_context.fw_send_image.length)
+    {
+        // If it is we should exit out
+        message_set_state(SM_MESSAGE_STATE_IDLE);
+        fs_close(sm_context.fw_send_image.file_handle);
+        Throw(EXCEPTION_PACKET_WRONG_SIZE);
+    }
+
+    sm_context.fw_send_image.crc32_calculated = crc32(sm_context.fw_send_image.crc32_calculated, read_buffer, length);
+    uint32_t bytes_written = 0;
+    int ret = fs_write(sm_context.fw_send_image.file_handle, read_buffer, length, &bytes_written);
+    if (FS_NO_ERROR != ret)
+    {
+        fs_close(sm_context.fw_send_image.file_handle);
+        fs_delete(file_system, sm_context.fw_send_image.image_type);
+        message_set_state(SM_MESSAGE_STATE_IDLE);
+        Throw(EXCEPTION_FS_ERROR);
+    }
+
+    sm_context.fw_send_image.length -= length;
+
+    if (sm_context.fw_send_image.length) // Is there still data to receive?
+    {
+        config_if_receive_priv(); // Queue a receive
+        config_if_timeout_reset(); // Reset the message timeout counter
+    }
+    else
+    {
+        // We have received all the data
+        fs_close(sm_context.fw_send_image.file_handle); // Close the file
+
+        // Then send a confirmation
+        cmd_t * resp;
+        if (!buffer_write(&config_if_send_buffer, (uintptr_t *)&resp))
+            Throw(EXCEPTION_TX_BUFFER_FULL);
+        CMD_SET_HDR(resp, CMD_FW_SEND_IMAGE_COMPLETE_CNF);
+
+        // Check the CRC32 is correct
+        if (sm_context.fw_send_image.crc32_calculated == sm_context.fw_send_image.crc32_supplied)
+        {
+            resp->p.cmd_fw_send_image_complete_cnf.error_code = CMD_NO_ERROR;
+        }
+        else
+        {
+            resp->p.cmd_fw_send_image_complete_cnf.error_code = CMD_ERROR_IMAGE_CRC_MISMATCH;
+            fs_delete(file_system, sm_context.fw_send_image.image_type); // Image is invalid, so delete it
+        }
+
+        buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_fw_send_image_complete_cnf_t));
+        config_if_send_priv(&config_if_send_buffer); // Send response
+
+        message_set_state(SM_MESSAGE_STATE_IDLE);
+    }
 }
 
 static void fw_apply_image_req(cmd_t * req, uint16_t size)
 {
-    DEBUG_PR_WARN("%s NOT IMPLEMENTED", __FUNCTION__);
+    DEBUG_PR_WARN("%s NOT FULLY IMPLEMENTED", __FUNCTION__);
+
+    fs_handle_t file_system_handle;
+
+    // Check request size is correct
+    if (CMD_SIZE(cmd_fw_apply_image_req_t) != size)
+        Throw(EXCEPTION_REQ_WRONG_SIZE);
+
+    // Generate response
+    cmd_t * resp;
+    if (!buffer_write(&config_if_send_buffer, (uintptr_t *)&resp))
+        Throw(EXCEPTION_TX_BUFFER_FULL);
+    CMD_SET_HDR(resp, CMD_GENERIC_RESP);
+
+    // Check the image type is correct
+    uint8_t image_type = req->p.cmd_fw_apply_image_req.image_type;
+
+    if ( (image_type == FS_FILE_ID_STM32_IMAGE)
+         || (image_type == FS_FILE_ID_BLE_SOFT_IMAGE)
+         || (image_type == FS_FILE_ID_BLE_APP_IMAGE))
+    {
+        // Check image exists
+        int ret = fs_open(file_system, &file_system_handle, image_type, FS_MODE_READONLY, NULL);
+
+        switch (ret)
+        {
+            case FS_NO_ERROR:
+                resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
+                break;
+
+            case FS_ERROR_FILE_NOT_FOUND:
+                resp->p.cmd_generic_resp.error_code = CMD_ERROR_FILE_NOT_FOUND;
+                break;
+
+            default:
+                Throw(EXCEPTION_FS_ERROR);
+                break;
+        }
+    }
+    else
+    {
+        resp->p.cmd_generic_resp.error_code = CMD_ERROR_INVALID_FW_IMAGE_TYPE;
+    }
+
+    buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_generic_resp_t));
+    config_if_send_priv(&config_if_send_buffer);
+
+    if (CMD_NO_ERROR == resp->p.cmd_generic_resp.error_code)
+    {
+        // There was no error, so wait for the confirmation to be sent
+#ifndef GTEST // Prevent infinite loop in gtest
+        while (config_if_tx_pending)
+        {}
+#endif
+
+        // And then apply the firmware image
+
+        // FIXME: needs implementing
+
+        fs_close(file_system_handle); // Close the file
+    }
 }
 
 static void reset_req(cmd_t * req, uint16_t size)
@@ -1856,6 +2048,10 @@ static void handle_config_if_messages(void)
 
             case SM_MESSAGE_STATE_LOG_READ_NEXT:
                 log_read_next_state();
+                break;
+
+            case SM_MESSAGE_STATE_FW_SEND_IMAGE_NEXT:
+                fw_send_image_next_state();
                 break;
 
             default:

@@ -100,17 +100,19 @@ typedef enum
 // Error codes
 typedef enum
 {
-    CMD_NO_ERROR,                   // Successful completion of the command.
-    CMD_ERROR_FILE_NOT_FOUND,       // File associated with the operation could not be found.
-    CMD_ERROR_FILE_ALREADY_EXISTS,  // Unable to create a file that already exists.
-    CMD_ERROR_INVALID_CONFIG_TAG,   // Invalid configuration tag found in the tag stream.
-    CMD_ERROR_GPS_COMMS,            // GPS module communications error e.g., attempt to do a GPS read/write when not bridging.
-    CMD_ERROR_TIMEOUT,              // A timeout happened waiting on the byte stream to be received.
-    CMD_ERROR_CONFIG_PROTECTED,     // Configuration operation not permitted as it is protected.
-    CMD_ERROR_CONFIG_TAG_NOT_SET,   // Configuration tag has not been set.
-    CMD_ERROR_BRIDGING_DISABLED,    // Bridging is currently disabled for this module/device
-    CMD_ERROR_DATA_OVERSIZE,        // We've received more data then we were expecting
-    CMD_ERROR_INVALID_PARAMETER,    // An invalid parameter has been provided
+    CMD_NO_ERROR,                    // Successful completion of the command.
+    CMD_ERROR_FILE_NOT_FOUND,        // File associated with the operation could not be found.
+    CMD_ERROR_FILE_ALREADY_EXISTS,   // Unable to create a file that already exists.
+    CMD_ERROR_INVALID_CONFIG_TAG,    // Invalid configuration tag found in the tag stream.
+    CMD_ERROR_GPS_COMMS,             // GPS module communications error e.g., attempt to do a GPS read/write when not bridging.
+    CMD_ERROR_TIMEOUT,               // A timeout happened waiting on the byte stream to be received.
+    CMD_ERROR_CONFIG_PROTECTED,      // Configuration operation not permitted as it is protected.
+    CMD_ERROR_CONFIG_TAG_NOT_SET,    // Configuration tag has not been set.
+    CMD_ERROR_BRIDGING_DISABLED,     // Bridging is currently disabled for this module/device
+    CMD_ERROR_DATA_OVERSIZE,         // We've received more data then we were expecting
+    CMD_ERROR_INVALID_PARAMETER,     // An invalid parameter has been provided
+    CMD_ERROR_INVALID_FW_IMAGE_TYPE, // An invalid image type was received in a CMD_FW_SEND_IMAGE_REQ
+    CMD_ERROR_IMAGE_CRC_MISMATCH,    // The firmware images CRC does not match one in flash
 } cmd_error_t;
 
 // Exposed functions

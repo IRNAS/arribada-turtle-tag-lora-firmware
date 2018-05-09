@@ -76,6 +76,7 @@ check_PROGRAMS += Sm
 nodist_Sm_SOURCES = $(gtest_srcdir)/Sm.cpp \
                     $(gtest_srcdir)/mocks/cmock.c \
                     $(gtest_srcdir)/mocks/Mockconfig_if.c \
+                    $(gtest_srcdir)/mocks/Mocksyshal_axl.c \
                     $(gtest_srcdir)/mocks/Mocksyshal_batt.c \
                     $(gtest_srcdir)/mocks/Mocksyshal_gpio.c \
                     $(gtest_srcdir)/mocks/Mocksyshal_gps.c \
@@ -87,6 +88,7 @@ nodist_Sm_SOURCES = $(gtest_srcdir)/Sm.cpp \
                     $(gtest_srcdir)/mocks/Mocksyshal_flash.c \
                     $(core_srcdir)/fs/fs.c \
                     $(core_srcdir)/cexception/cexception.c \
+                    $(core_srcdir)/crc32/crc32.c \
                     $(core_srcdir)/buffer/buffer.c \
                     $(core_srcdir)/sys_config/sys_config.c \
                     $(core_srcdir)/sm/sm.c
@@ -97,6 +99,7 @@ Sm_CPPFLAGS = $(AM_CPPFLAGS) \
 						  -I$(core_srcdir)/buffer \
 						  -I$(core_srcdir)/cexception \
 						  -I$(core_srcdir)/config_if \
+              -I$(core_srcdir)/crc32 \
               -I$(core_srcdir)/sys_config \
 						  -I$(core_srcdir)/debug \
 						  -I$(core_srcdir)/fs \

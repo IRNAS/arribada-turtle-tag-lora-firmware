@@ -19,6 +19,7 @@ extern "C" {
 #include "unity.h"
 #include <assert.h>
 #include <stdint.h>
+#include "Mocksyshal_axl.h"
 #include "Mocksyshal_batt.h"
 #include "Mocksyshal_gpio.h"
 #include "Mocksyshal_gps.h"
@@ -30,6 +31,7 @@ extern "C" {
 #include "Mockconfig_if.h"
 #include "fs_priv.h"
 #include "fs.h"
+#include "crc32.h"
 #include "cmd.h"
 #include "sys_config.h"
 #include "sm.h"
@@ -154,7 +156,8 @@ int syshal_gps_receive_raw_Callback(uint8_t * data, uint32_t size, int cmock_num
     if (size > gps_receive_buffer.size())
         size = gps_receive_buffer.size();
 
-    for (unsigned int i = 0; i < size; ++i) {
+    for (unsigned int i = 0; i < size; ++i)
+    {
         data[i] = gps_receive_buffer.front();
         gps_receive_buffer.pop();
     }
@@ -165,7 +168,7 @@ int syshal_gps_receive_raw_Callback(uint8_t * data, uint32_t size, int cmock_num
 // syshal_spi_transfer callback function
 std::queue<uint8_t> spi_sent_buffer[SPI_TOTAL_NUMBER];
 std::queue<uint8_t> spi_received_buffer[SPI_TOTAL_NUMBER];
-int syshal_spi_transfer_Callback(uint32_t instance, uint8_t *tx_data, uint8_t *rx_data, uint16_t size, int cmock_num_calls)
+int syshal_spi_transfer_Callback(uint32_t instance, uint8_t * tx_data, uint8_t * rx_data, uint16_t size, int cmock_num_calls)
 {
     if (instance > SPI_TOTAL_NUMBER)
         return SYSHAL_SPI_ERROR_INVALID_INSTANCE;
@@ -202,6 +205,7 @@ class SmTest : public ::testing::Test
 
     virtual void SetUp()
     {
+        Mocksyshal_axl_Init();
         Mocksyshal_batt_Init();
         Mocksyshal_gpio_Init();
         Mocksyshal_uart_Init();
@@ -260,6 +264,8 @@ class SmTest : public ::testing::Test
     virtual void TearDown()
     {
         // Cleanup Mocks
+        Mocksyshal_axl_Verify();
+        Mocksyshal_axl_Destroy();
         Mocksyshal_batt_Verify();
         Mocksyshal_batt_Destroy();
         Mocksyshal_gpio_Verify();
@@ -351,7 +357,6 @@ public:
         // Generate receive request event
         config_if_event_t event;
         event.id = CONFIG_IF_EVENT_RECEIVE_COMPLETE;
-        event.receive.buffer = config_if_receive_buffer;
         event.receive.size = size;
         config_if_event_handler(&event);
     }
@@ -366,7 +371,6 @@ public:
         // Generate receive request event
         config_if_event_t event;
         event.id = CONFIG_IF_EVENT_SEND_COMPLETE;
-        event.receive.buffer = config_if_send_buffer;
         event.receive.size = config_if_send_size;
         config_if_event_handler(&event);
 
@@ -382,7 +386,6 @@ public:
         // Generate receive request event
         config_if_event_t event;
         event.id = CONFIG_IF_EVENT_SEND_COMPLETE;
-        event.receive.buffer = config_if_send_buffer;
         event.receive.size = config_if_send_size;
         config_if_event_handler(&event);
 
@@ -1634,4 +1637,401 @@ TEST_F(SmTest, BleReadBridgingOff)
     EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
     EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
     EXPECT_EQ(CMD_ERROR_BRIDGING_DISABLED, resp.p.cmd_generic_resp.error_code);
+}
+
+TEST_F(SmTest, FwWriteWrongImageType)
+{
+    startup_provisioning_needed(); // Boot and transition to provisioning needed state
+
+    connect(); // Connect the config_if
+
+    sm_iterate();
+
+    EXPECT_EQ(SM_STATE_PROVISIONING, sm_get_state());
+
+    sm_iterate(); // Queue the first receive
+
+    /*
+    FS_FILE_ID_STM32_IMAGE    (1)  // STM32 application image
+    FS_FILE_ID_BLE_APP_IMAGE  (2)  // BLE application image
+    FS_FILE_ID_BLE_SOFT_IMAGE (3)  // BLE soft-device image
+    */
+
+    // Generate FW write request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_FW_SEND_IMAGE_REQ);
+    req.p.cmd_fw_send_image_req.image_type = 0xAA; // Invalid image type
+    req.p.cmd_fw_send_image_req.length = 100;
+    req.p.cmd_fw_send_image_req.CRC32;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_fw_send_image_req_t));
+
+    sm_iterate(); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_ERROR_INVALID_FW_IMAGE_TYPE, resp.p.cmd_generic_resp.error_code);
+}
+
+TEST_F(SmTest, FwWriteInvalidCRC32)
+{
+    const uint32_t fw_size = 100;
+    uint8_t fw_image[fw_size];
+
+    startup_provisioning_needed(); // Boot and transition to provisioning needed state
+
+    connect(); // Connect the config_if
+
+    sm_iterate();
+
+    EXPECT_EQ(SM_STATE_PROVISIONING, sm_get_state());
+
+    sm_iterate(); // Queue the first receive
+
+    // Generate the FW image to be sent
+    for (uint32_t i = 0; i < fw_size; ++i)
+        fw_image[i] = rand();
+
+    /*
+    FS_FILE_ID_STM32_IMAGE    (1)  // STM32 application image
+    FS_FILE_ID_BLE_APP_IMAGE  (2)  // BLE application image
+    FS_FILE_ID_BLE_SOFT_IMAGE (3)  // BLE soft-device image
+    */
+
+    // Generate FW write request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_FW_SEND_IMAGE_REQ);
+    req.p.cmd_fw_send_image_req.image_type = 1; // STM32 application image
+    req.p.cmd_fw_send_image_req.length = fw_size;
+    req.p.cmd_fw_send_image_req.CRC32;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_fw_send_image_req_t));
+
+    sm_iterate(); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+
+    // Send the firmware image
+    send_message(fw_image, sizeof(fw_image));
+
+    sm_iterate(); // Process the image
+
+    // Check the response
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_FW_SEND_IMAGE_COMPLETE_CNF, resp.h.cmd);
+    EXPECT_EQ(CMD_ERROR_IMAGE_CRC_MISMATCH, resp.p.cmd_fw_send_image_complete_cnf.error_code);
+}
+
+TEST_F(SmTest, FwWriteSingle)
+{
+    const uint32_t fw_size = 100;
+    uint8_t fw_image[fw_size];
+    uint32_t fw_crc32 = 0;
+
+    /*
+    FS_FILE_ID_STM32_IMAGE    (1)  // STM32 application image
+    FS_FILE_ID_BLE_APP_IMAGE  (2)  // BLE application image
+    FS_FILE_ID_BLE_SOFT_IMAGE (3)  // BLE soft-device image
+    */
+    uint8_t fw_type = 1;
+
+    startup_provisioning_needed(); // Boot and transition to provisioning needed state
+
+    connect(); // Connect the config_if
+
+    sm_iterate();
+
+    EXPECT_EQ(SM_STATE_PROVISIONING, sm_get_state());
+
+    sm_iterate(); // Queue the first receive
+
+    // Generate the FW image to be sent
+    for (uint32_t i = 0; i < fw_size; ++i)
+        fw_image[i] = rand();
+
+    // Calculate the crc
+    fw_crc32 = crc32(fw_crc32, fw_image, fw_size);
+
+    // Generate FW write request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_FW_SEND_IMAGE_REQ);
+    req.p.cmd_fw_send_image_req.image_type = fw_type; // STM32 application image
+    req.p.cmd_fw_send_image_req.length = fw_size;
+    req.p.cmd_fw_send_image_req.CRC32 = fw_crc32;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_fw_send_image_req_t));
+
+    sm_iterate(); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+
+    // Send the firmware image
+    send_message(fw_image, fw_size);
+
+    sm_iterate(); // Process the image
+
+    // Check the response
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_FW_SEND_IMAGE_COMPLETE_CNF, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_fw_send_image_complete_cnf.error_code);
+
+    // Check the image that has been written to the FLASH
+    fs_t file_system;
+    fs_handle_t file_system_handle;
+    uint8_t flash_fw_data[fw_size];
+    uint32_t bytes_read;
+
+    EXPECT_EQ(FS_NO_ERROR, fs_init(FS_DEVICE));
+    EXPECT_EQ(FS_NO_ERROR, fs_mount(FS_DEVICE, &file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_open(file_system, &file_system_handle, fw_type, FS_MODE_READONLY, NULL));
+    EXPECT_EQ(FS_NO_ERROR, fs_read(file_system_handle, &flash_fw_data[0], fw_size, &bytes_read));
+    EXPECT_EQ(FS_NO_ERROR, fs_close(file_system_handle));
+
+    // Look for differences between the two
+    bool flash_and_image_match = true;
+    for (uint32_t i = 0; i < fw_size; ++i)
+    {
+        if (flash_fw_data[i] != fw_image[i])
+        {
+            flash_and_image_match = false;
+            break;
+        }
+    }
+
+    EXPECT_TRUE(flash_and_image_match);
+}
+
+TEST_F(SmTest, FwWriteMultiple)
+{
+    const uint32_t packet_number = 20;
+    const uint32_t packet_size = 512;
+    const uint32_t fw_size = packet_number * packet_size;
+    uint8_t fw_image[fw_size];
+    uint32_t fw_crc32 = 0;
+
+    /*
+    FS_FILE_ID_STM32_IMAGE    (1)  // STM32 application image
+    FS_FILE_ID_BLE_APP_IMAGE  (2)  // BLE application image
+    FS_FILE_ID_BLE_SOFT_IMAGE (3)  // BLE soft-device image
+    */
+    uint8_t fw_type = 1;
+
+    startup_provisioning_needed(); // Boot and transition to provisioning needed state
+
+    connect(); // Connect the config_if
+
+    sm_iterate();
+
+    EXPECT_EQ(SM_STATE_PROVISIONING, sm_get_state());
+
+    sm_iterate(); // Queue the first receive
+
+    // Generate the FW image to be sent
+    for (uint32_t i = 0; i < fw_size; ++i)
+        fw_image[i] = rand();
+
+    // Calculate the crc
+    fw_crc32 = crc32(fw_crc32, fw_image, fw_size);
+
+    // Generate FW write request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_FW_SEND_IMAGE_REQ);
+    req.p.cmd_fw_send_image_req.image_type = fw_type; // STM32 application image
+    req.p.cmd_fw_send_image_req.length = fw_size;
+    req.p.cmd_fw_send_image_req.CRC32 = fw_crc32;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_fw_send_image_req_t));
+
+    sm_iterate(); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+
+    // Send the full firmware image in discrete packets
+    for (uint32_t i = 0; i < packet_number; ++i)
+    {
+        send_message(fw_image + (i * packet_size), packet_size);
+        sm_iterate(); // Process the image
+    }
+
+    // Check the response
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_FW_SEND_IMAGE_COMPLETE_CNF, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_fw_send_image_complete_cnf.error_code);
+
+    // Check the image that has been written to the FLASH
+    fs_t file_system;
+    fs_handle_t file_system_handle;
+    uint8_t flash_fw_data[fw_size];
+    uint32_t bytes_read;
+
+    EXPECT_EQ(FS_NO_ERROR, fs_init(FS_DEVICE));
+    EXPECT_EQ(FS_NO_ERROR, fs_mount(FS_DEVICE, &file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_open(file_system, &file_system_handle, fw_type, FS_MODE_READONLY, NULL));
+    EXPECT_EQ(FS_NO_ERROR, fs_read(file_system_handle, &flash_fw_data[0], fw_size, &bytes_read));
+    EXPECT_EQ(FS_NO_ERROR, fs_close(file_system_handle));
+
+    // Look for differences between the two
+    bool flash_and_image_match = true;
+    for (uint32_t i = 0; i < fw_size; ++i)
+    {
+        if (flash_fw_data[i] != fw_image[i])
+        {
+            flash_and_image_match = false;
+            break;
+        }
+    }
+
+    EXPECT_TRUE(flash_and_image_match);
+}
+
+TEST_F(SmTest, FwApplyImageCorrect)
+{
+    const uint32_t packet_number = 20;
+    const uint32_t packet_size = 512;
+    const uint32_t fw_size = packet_number * packet_size;
+    uint8_t fw_image[fw_size];
+    uint32_t fw_crc32 = 0;
+
+    /*
+    FS_FILE_ID_STM32_IMAGE    (1)  // STM32 application image
+    FS_FILE_ID_BLE_APP_IMAGE  (2)  // BLE application image
+    FS_FILE_ID_BLE_SOFT_IMAGE (3)  // BLE soft-device image
+    */
+    uint8_t fw_type = 1; // STM32 application image
+
+    startup_provisioning_needed(); // Boot and transition to provisioning needed state
+
+    connect(); // Connect the config_if
+
+    sm_iterate();
+
+    EXPECT_EQ(SM_STATE_PROVISIONING, sm_get_state());
+
+    sm_iterate(); // Queue the first receive
+
+    // Generate the FW image to be sent
+    for (uint32_t i = 0; i < fw_size; ++i)
+        fw_image[i] = rand();
+
+    // Calculate the crc
+    fw_crc32 = crc32(fw_crc32, fw_image, fw_size);
+
+    // Generate FW write request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_FW_SEND_IMAGE_REQ);
+    req.p.cmd_fw_send_image_req.image_type = fw_type;
+    req.p.cmd_fw_send_image_req.length = fw_size;
+    req.p.cmd_fw_send_image_req.CRC32 = fw_crc32;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_fw_send_image_req_t));
+
+    sm_iterate(); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+
+    // Send the full firmware image in discrete packets
+    for (uint32_t i = 0; i < packet_number; ++i)
+    {
+        send_message(fw_image + (i * packet_size), packet_size);
+        sm_iterate(); // Process the image
+    }
+
+    // Check the response
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_FW_SEND_IMAGE_COMPLETE_CNF, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_fw_send_image_complete_cnf.error_code);
+
+    // Check the image that has been written to the FLASH
+    fs_t file_system;
+    fs_handle_t file_system_handle;
+    uint8_t flash_fw_data[fw_size];
+    uint32_t bytes_read;
+
+    EXPECT_EQ(FS_NO_ERROR, fs_init(FS_DEVICE));
+    EXPECT_EQ(FS_NO_ERROR, fs_mount(FS_DEVICE, &file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_open(file_system, &file_system_handle, fw_type, FS_MODE_READONLY, NULL));
+    EXPECT_EQ(FS_NO_ERROR, fs_read(file_system_handle, &flash_fw_data[0], fw_size, &bytes_read));
+    EXPECT_EQ(FS_NO_ERROR, fs_close(file_system_handle));
+
+    // Look for differences between the two
+    bool flash_and_image_match = true;
+    for (uint32_t i = 0; i < fw_size; ++i)
+    {
+        if (flash_fw_data[i] != fw_image[i])
+        {
+            flash_and_image_match = false;
+            break;
+        }
+    }
+
+    EXPECT_TRUE(flash_and_image_match);
+
+    // Generate an apple image request
+    CMD_SET_HDR((&req), CMD_FW_APPLY_IMAGE_REQ);
+    req.p.cmd_fw_apply_image_req.image_type = fw_type;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_fw_apply_image_req_t));
+
+    sm_iterate(); // Process the request
+
+    // Check the response
+    resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+}
+
+TEST_F(SmTest, FwApplyImageNotFound)
+{
+    /*
+    FS_FILE_ID_STM32_IMAGE    (1)  // STM32 application image
+    FS_FILE_ID_BLE_APP_IMAGE  (2)  // BLE application image
+    FS_FILE_ID_BLE_SOFT_IMAGE (3)  // BLE soft-device image
+    */
+    uint8_t fw_type = 1; // STM32 application image
+
+    startup_provisioning_needed(); // Boot and transition to provisioning needed state
+
+    connect(); // Connect the config_if
+
+    sm_iterate();
+
+    EXPECT_EQ(SM_STATE_PROVISIONING, sm_get_state());
+
+    sm_iterate(); // Queue the first receive
+
+    // Generate an apply image request
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_FW_APPLY_IMAGE_REQ);
+    req.p.cmd_fw_apply_image_req.image_type = fw_type;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_fw_apply_image_req_t));
+
+    sm_iterate(); // Process the request
+
+    // Check the response
+    cmd_t resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_ERROR_FILE_NOT_FOUND, resp.p.cmd_generic_resp.error_code);
 }
