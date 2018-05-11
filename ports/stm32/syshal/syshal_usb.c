@@ -95,7 +95,7 @@ int syshal_usb_init(void)
 
     syshal_gpio_enable_interrupt(GPIO_USB_ID, &syshal_usb_connected_callback_priv);
 
-    if (syshal_gpio_get_input(GPIO_USB_ID)) // Are we currently connected?
+    if (!syshal_gpio_get_input(GPIO_USB_ID)) // Are we currently connected?
     {
         syshal_usb_event_t event;
         event.id = SYSHAL_USB_EVENT_CONNECTED;

@@ -69,6 +69,6 @@ int config_if_send(uint8_t * data, uint32_t size);
 int config_if_receive(uint8_t * data, uint32_t size);
 void config_if_tick(void);
 
-__attribute__((weak)) int config_if_event_handler(config_if_event_t * event);
+int config_if_event_handler(config_if_event_t * event);
 
 #endif /* _CONFIG_IF_H_ */

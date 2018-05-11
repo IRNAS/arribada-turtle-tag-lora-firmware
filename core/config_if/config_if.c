@@ -39,9 +39,9 @@ int config_if_init(config_if_backend_t backend)
         config_if_func_send_priv = &syshal_usb_send;
         config_if_func_receive_priv = &syshal_usb_receive;
 
-        syshal_usb_init();
-
         backend_priv = backend;
+
+        syshal_usb_init();
 
         return CONFIG_IF_NO_ERROR;
     }
@@ -50,9 +50,9 @@ int config_if_init(config_if_backend_t backend)
         config_if_func_send_priv = &syshal_ble_send;
         config_if_func_receive_priv = &syshal_ble_receive;
 
-        syshal_ble_init(SPI_BLE);
-
         backend_priv = backend;
+
+        syshal_ble_init(SPI_BLE);
 
         return CONFIG_IF_NO_ERROR;
     }

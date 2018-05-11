@@ -32,6 +32,7 @@
 #include "syshal_batt.h"
 #include "syshal_gpio.h"
 #include "syshal_gps.h"
+#include "syshal_flash.h"
 #include "syshal_i2c.h"
 #include "syshal_pmu.h"
 #include "syshal_spi.h"
@@ -355,7 +356,7 @@ static int fs_create_configuration_data(void)
  */
 static int fs_delete_configuration_data(void)
 {
-    return (fs_delete(file_system, FS_FILE_ID_LOG));
+    return (fs_delete(file_system, FS_FILE_ID_CONF));
 }
 
 /**
@@ -1357,6 +1358,7 @@ static void fw_send_image_next_state(void)
         // If it is we should exit out
         message_set_state(SM_MESSAGE_STATE_IDLE);
         fs_close(sm_context.fw_send_image.file_handle);
+        fs_delete(file_system, sm_context.fw_send_image.image_type);
         Throw(EXCEPTION_PACKET_WRONG_SIZE);
     }
 
@@ -1465,8 +1467,20 @@ static void fw_apply_image_req(cmd_t * req, uint16_t size)
 #endif
 
         // And then apply the firmware image
+        switch (image_type)
+        {
+            case FS_FILE_ID_STM32_IMAGE:
+                // FIXME: needs implementing
+                break;
 
-        // FIXME: needs implementing
+            case FS_FILE_ID_BLE_SOFT_IMAGE:
+                // FIXME: needs implementing
+                break;
+
+            case FS_FILE_ID_BLE_APP_IMAGE:
+                // FIXME: needs implementing
+                break;
+        }
 
         fs_close(file_system_handle); // Close the file
     }
@@ -1975,6 +1989,10 @@ void state_message_exception_handler(CEXCEPTION_T e)
             DEBUG_PR_ERROR("EXCEPTION_GPS_SEND_ERROR");
             break;
 
+        case EXCEPTION_FS_ERROR:
+            DEBUG_PR_ERROR("EXCEPTION_FS_ERROR");
+            break;
+
         default:
             DEBUG_PR_ERROR("Unknown message exception");
             break;
@@ -2077,13 +2095,15 @@ void boot_state(void)
     // Initialize all configured peripherals
     syshal_gpio_init(GPIO_LED1_GREEN);
     syshal_gpio_init(GPIO_LED2_RED);
-    syshal_uart_init(UART_1);
+//    syshal_uart_init(UART_1);
     syshal_uart_init(UART_2);
 //    syshal_uart_init(UART_3);
     syshal_spi_init(SPI_1);
     syshal_spi_init(SPI_2);
     syshal_i2c_init(I2C_1);
     syshal_i2c_init(I2C_2);
+
+    syshal_flash_init(0, SPI_FLASH);
 
 #ifndef DUMMY_BATTERY_MONITOR
     syshal_batt_init(I2C_1);
@@ -2132,16 +2152,6 @@ void boot_state(void)
     if (config_if_connected)
         sm_set_state(SM_STATE_PROVISIONING);
 #endif
-
-    // Generate spoof time/date data
-    sys_config_rtc_current_date_and_time_t date_time;
-    date_time.contents.day = 1;
-    date_time.contents.month = 2;
-    date_time.contents.year = 3;
-    date_time.contents.hours = 4;
-    date_time.contents.minutes = 5;
-    date_time.contents.seconds = 6;
-    sys_config_set(SYS_CONFIG_TAG_RTC_CURRENT_DATE_AND_TIME, &date_time.contents, SYS_CONFIG_TAG_DATA_SIZE(sys_config_rtc_current_date_and_time_t));
 
     if (!check_configuration_tags_set()) // Check that all configuration tags are set
         sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED); // Not all required configuration data is set
@@ -2261,7 +2271,17 @@ void standby_trigger_pending_state()
 void provisioning_state(void)
 {
 #ifndef GTEST
-    syshal_gpio_set_output_high(GPIO_LED2_RED); // Indicate what state we're in
+    // Blink an LED to indicate this state
+    static uint32_t blinkTimer = 0;
+    const uint32_t blinkTimeMs = 200;
+
+    if (syshal_time_get_ticks_ms() >= (blinkTimeMs + blinkTimer))
+    {
+        syshal_gpio_set_output_high(GPIO_LED2_RED);
+        syshal_time_delay_ms(50);
+        syshal_gpio_set_output_low(GPIO_LED2_RED);
+        blinkTimer = syshal_time_get_ticks_ms();
+    }
 #endif
 
     handle_config_if_messages(); // Process any config_if messages
