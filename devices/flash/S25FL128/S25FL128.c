@@ -20,8 +20,11 @@
 #include <string.h>
 #include <stdint.h>
 
+#include "bsp.h"
+#include "debug.h"
 #include "S25FL128.h"
 #include "syshal_flash.h"
+#include "syshal_gpio.h"
 #include "syshal_spi.h"
 
 /* Constants */
@@ -70,7 +73,10 @@ static int S25FL128_status(uint32_t spi_device, uint8_t *status)
     spi_tx_buf[0] = RDSR;
     spi_tx_buf[1] = 0;
 
+    syshal_gpio_set_output_low(GPIO_SPI2_CS_FLASH);
     ret = syshal_spi_transfer(spi_device, spi_tx_buf, spi_rx_buf, 2);
+    syshal_gpio_set_output_high(GPIO_SPI2_CS_FLASH);
+
     *status = spi_rx_buf[1];
 
     return ret;
@@ -84,9 +90,15 @@ static int S25FL128_status(uint32_t spi_device, uint8_t *status)
  */
 static int S25FL128_wren(uint32_t spi_device)
 {
+    int ret;
+
     spi_tx_buf[0] = WREN;
 
-    return syshal_spi_transfer(spi_device, spi_tx_buf, spi_rx_buf, 1);
+    syshal_gpio_set_output_low(GPIO_SPI2_CS_FLASH);
+    ret = syshal_spi_transfer(spi_device, spi_tx_buf, spi_rx_buf, 1);
+    syshal_gpio_set_output_high(GPIO_SPI2_CS_FLASH);
+
+    return ret;
 }
 
 /*! \brief Execute erase sector command with flash device.
@@ -111,7 +123,10 @@ static int S25FL128_erase_sector(uint32_t spi_device, uint32_t addr)
     spi_tx_buf[2] = addr >> 8;
     spi_tx_buf[3] = addr;
 
+    syshal_gpio_set_output_low(GPIO_SPI2_CS_FLASH);
     ret = syshal_spi_transfer(spi_device, spi_tx_buf, spi_rx_buf, 4);
+    syshal_gpio_set_output_high(GPIO_SPI2_CS_FLASH);
+
     if (ret) return ret;
 
     /* Busy wait until the sector has erased */
@@ -165,6 +180,9 @@ int syshal_flash_init(uint32_t drive, uint32_t device)
 
     if (syshal_spi_init(device))
         return SYSHAL_FLASH_ERROR_DEVICE;
+
+    syshal_gpio_init(GPIO_SPI2_CS_FLASH);
+    syshal_gpio_set_output_high(GPIO_SPI2_CS_FLASH);
 
     return SYSHAL_FLASH_NO_ERROR;
 }
@@ -241,12 +259,13 @@ int syshal_flash_erase(uint32_t drive, uint32_t address, uint32_t size)
  */
 int syshal_flash_write(uint32_t drive, const void *src, uint32_t address, uint32_t size)
 {
+    int ret;
     uint8_t status;
 
     if (drive >= S25FL128_MAX_DEVICES)
         return SYSHAL_FLASH_ERROR_INVALID_DRIVE;
 
-    /* Enable writes */
+        /* Enable writes */
     if (S25FL128_wren(spi_devices[drive]))
         return SYSHAL_FLASH_ERROR_DEVICE;
 
@@ -259,7 +278,12 @@ int syshal_flash_write(uint32_t drive, const void *src, uint32_t address, uint32
 
         uint16_t wr_size = MIN(size, S25FL128_PAGE_SIZE);
         memcpy(&spi_tx_buf[4], src, wr_size);
-        if (syshal_spi_transfer(spi_devices[drive], spi_tx_buf, spi_rx_buf, wr_size + 4))
+
+        syshal_gpio_set_output_low(GPIO_SPI2_CS_FLASH);
+        ret = syshal_spi_transfer(spi_devices[drive], spi_tx_buf, spi_rx_buf, wr_size + 4);
+        syshal_gpio_set_output_high(GPIO_SPI2_CS_FLASH);
+
+        if (ret)
             return SYSHAL_FLASH_ERROR_DEVICE;
         size -= wr_size;
         address += wr_size;
@@ -291,6 +315,8 @@ int syshal_flash_write(uint32_t drive, const void *src, uint32_t address, uint32
  */
 int syshal_flash_read(uint32_t drive, void *dest, uint32_t address, uint32_t size)
 {
+    int ret;
+
     if (drive >= S25FL128_MAX_DEVICES)
         return SYSHAL_FLASH_ERROR_INVALID_DRIVE;
 
@@ -306,7 +332,11 @@ int syshal_flash_read(uint32_t drive, void *dest, uint32_t address, uint32_t siz
 
         uint16_t rd_size = MIN(size, S25FL128_PAGE_SIZE);
 
-        if (syshal_spi_transfer(spi_devices[drive], spi_tx_buf, spi_rx_buf, rd_size + 4))
+        syshal_gpio_set_output_low(GPIO_SPI2_CS_FLASH);
+        ret = syshal_spi_transfer(spi_devices[drive], spi_tx_buf, spi_rx_buf, rd_size + 4);
+        syshal_gpio_set_output_high(GPIO_SPI2_CS_FLASH);
+
+        if (ret)
             return SYSHAL_FLASH_ERROR_DEVICE;
 
         size -= rd_size;
