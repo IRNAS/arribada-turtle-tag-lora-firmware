@@ -161,6 +161,15 @@ void syshal_i2c_write_reg(uint32_t instance, uint8_t slaveAddress, uint8_t regAd
     }
 }
 
+int syshal_i2c_is_device_ready(uint32_t instance, uint8_t slaveAddress)
+{
+    HAL_StatusTypeDef status;
+
+    status = HAL_I2C_IsDeviceReady(&hi2c[instance], (uint16_t)(slaveAddress), 20, 20);
+
+    return hal_error_map[status];
+}
+
 // Implement MSP hooks that are called by stm32f0xx_hal_i2c
 void HAL_I2C_MspInit(I2C_HandleTypeDef * hi2c)
 {
