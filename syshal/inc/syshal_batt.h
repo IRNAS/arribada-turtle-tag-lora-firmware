@@ -32,7 +32,7 @@ typedef enum
     POWER_SUPPLY_CAPACITY_LEVEL_FULL,
 } syshal_batt_state_t;
 
-void syshal_batt_init(uint32_t instance);
+void syshal_batt_init(void);
 uint16_t syshal_batt_temp(void);
 uint16_t syshal_batt_voltage(void);
 uint8_t syshal_batt_level(void);

@@ -24,8 +24,7 @@
 #include "syshal_batt.h"
 #include "syshal_time.h"
 #include "debug.h"
-
-static uint32_t I2C_handle;
+#include "bsp.h"
 
 //////////////////////////////////////// Internal functions ////////////////////////////////////////
 
@@ -37,13 +36,13 @@ static inline void BQ27621_write(uint8_t regAddress, uint16_t value)
     uint8_t data[2];
     data[0] = value >> 8;
     data[1] = value & 0xFF;
-    syshal_i2c_write_reg(I2C_handle, BQ27621_ADDR, regAddress, data, 2);
+    syshal_i2c_write_reg(I2C_BATTERY, BQ27621_ADDR, regAddress, data, 2);
 }
 
 static inline uint16_t BQ27621_read(uint8_t regAddress)
 {
     uint8_t data[2];
-    uint32_t length = syshal_i2c_read_reg(I2C_handle, BQ27621_ADDR, regAddress, data, 2);
+    uint32_t length = syshal_i2c_read_reg(I2C_BATTERY, BQ27621_ADDR, regAddress, data, 2);
 
     if (2 == length)
         return (data[0] << 8) | (data[1] & 0xff);
@@ -104,10 +103,8 @@ static inline int BQ27621_soft_reset(void)
 
 //////////////////////////////////////// Exposed functions ////////////////////////////////////////
 
-void syshal_batt_init(uint32_t instance)
+void syshal_batt_init(void)
 {
-    I2C_handle = instance;
-
     BQ27621_set_cfgupdate();
 }
 

@@ -2106,7 +2106,7 @@ void boot_state(void)
     syshal_flash_init(0, SPI_FLASH);
 
 #ifndef DUMMY_BATTERY_MONITOR
-    syshal_batt_init(I2C_1);
+    syshal_batt_init();
 #endif
 
     // Re/Set global vars

@@ -21,7 +21,7 @@
 #ifndef _BQ27621_H_
 #define _BQ27621_H_
 
-#define BQ27621_ADDR (0xAA)
+#define BQ27621_ADDR (0x55)
 
 // Register addresses
 #define BQ27621_REG_CTRL                             (0x00)

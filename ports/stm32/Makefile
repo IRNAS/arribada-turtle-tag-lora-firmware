@@ -39,6 +39,7 @@ $(CORE_DIR)/debug/debug.c \
 $(CORE_DIR)/fs/fs.c \
 $(CORE_DIR)/sm/sm.c \
 $(CORE_DIR)/sys_config/sys_config.c \
+$(DEVICE_DIR)/axl/LSM9DS1/LSM9DS1.c \
 $(DEVICE_DIR)/battery/BQ27621/BQ27621.c \
 $(DEVICE_DIR)/ble/nRF52x/syshal_ble.c \
 $(DEVICE_DIR)/gps/M8N/M8N.c \
@@ -142,6 +143,7 @@ C_INCLUDES =  \
 -I$(CORE_DIR)/ring_buffer \
 -I$(CORE_DIR)/sm \
 -I$(CORE_DIR)/sys_config \
+-I$(DEVICE_DIR)/axl/LSM9DS1/ \
 -I$(DEVICE_DIR)/battery/BQ27621/ \
 -I$(DEVICE_DIR)/ble/nRF52x/ \
 -I$(DEVICE_DIR)/gps/M8N/ \

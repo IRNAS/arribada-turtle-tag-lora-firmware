@@ -16,8 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "debug.h"
 #include "LSM9DS1.h"
 #include "sys_config.h"
+#include "syshal_axl.h"
 #include "syshal_gpio.h"
 #include "syshal_i2c.h"
 #include "bsp.h"
@@ -34,7 +36,7 @@ static void syshal_axl_int1_ag_interrupt_priv(void)
     // Read the avaliable data from the accelerometer
     uint8_t temp[6];
     syshal_axl_data_t accl_data;
-    uint32_t bytes_read = syshal_i2c_read_reg(I2C_AXL, LSM9D1_ADDR, LSM9D1_OUT_X_L_XL, &temp, 6); // Read 6 bytes, beginning at OUT_X_L_XL
+    uint32_t bytes_read = syshal_i2c_read_reg(I2C_AXL, LSM9D1_AG_ADDR, LSM9D1_OUT_X_L_XL, &temp[0], 6); // Read 6 bytes, beginning at OUT_X_L_XL
     if (6 == bytes_read)
     {
         accl_data.x = (temp[1] << 8) | temp[0];
@@ -87,6 +89,7 @@ static uint16_t find_closest_value_priv(uint16_t target, const uint16_t * valid_
         }
     }
 
+    return 0;
 }
 
 /**
@@ -113,7 +116,7 @@ int syshal_axl_init(void)
 
     // Enable the Accelerometer axis
     uint8_t reg_value = LSM9D1_CTRL_REG5_XL_ZEN_XL | LSM9D1_CTRL_REG5_XL_YEN_XL | LSM9D1_CTRL_REG5_XL_XEN_XL;
-    syshal_i2c_write_reg(I2C_AXL, LSM9D1_ADDR, LSM9D1_CTRL_REG5_XL, &reg_value, 1);
+    syshal_i2c_write_reg(I2C_AXL, LSM9D1_AG_ADDR, LSM9D1_CTRL_REG5_XL, &reg_value, 1);
 
     // The supported options by the LSM9DS1 device
     uint16_t valid_sample_rate_options[6] = {10, 50, 119, 238, 476, 952}; // Number of readings per second
@@ -150,11 +153,11 @@ int syshal_axl_init(void)
 
     LSM9D1_CTRL_REG6_XL_wake_state = reg_value;
     LSM9D1_CTRL_REG6_XL_power_down_state = reg_value & (~LSM9D1_CTRL_REG6_XL_ODR_XL_MASK);
-    syshal_i2c_write_reg(I2C_AXL, LSM9D1_ADDR, LSM9D1_CTRL_REG6_XL, &LSM9D1_CTRL_REG6_XL_wake_state, 1);
+    syshal_i2c_write_reg(I2C_AXL, LSM9D1_AG_ADDR, LSM9D1_CTRL_REG6_XL, &LSM9D1_CTRL_REG6_XL_wake_state, 1);
 
     // Enable accelerometer data ready interrupt generation on INT1_A/G
-    const uint8_t LSM9D1_INT1_CTRL_register = LSM9D1_INT1_CTRL_INT_DRDY_XL;
-    syshal_i2c_write_reg(I2C_AXL, LSM9D1_ADDR, LSM9D1_INT1_CTRL, &LSM9D1_INT1_CTRL_register, 1);
+    uint8_t LSM9D1_INT1_CTRL_register = LSM9D1_INT1_CTRL_INT_DRDY_XL;
+    syshal_i2c_write_reg(I2C_AXL, LSM9D1_AG_ADDR, LSM9D1_INT1_CTRL, &LSM9D1_INT1_CTRL_register, 1);
 
     // Setup the INT1_A/G interrupt GPIO pin to generate interrupts
     syshal_gpio_init(GPIO_INT1_AG);
@@ -171,7 +174,7 @@ int syshal_axl_init(void)
  */
 int syshal_axl_sleep(void)
 {
-    syshal_i2c_write_reg(I2C_AXL, LSM9D1_ADDR, LSM9D1_CTRL_REG6_XL, &LSM9D1_CTRL_REG6_XL_power_down_state, 1);
+    syshal_i2c_write_reg(I2C_AXL, LSM9D1_AG_ADDR, LSM9D1_CTRL_REG6_XL, &LSM9D1_CTRL_REG6_XL_power_down_state, 1);
 
     return SYSHAL_AXL_NO_ERROR;
 }
@@ -183,7 +186,7 @@ int syshal_axl_sleep(void)
  */
 int syshal_axl_wake(void)
 {
-    syshal_i2c_write_reg(I2C_AXL, LSM9D1_ADDR, LSM9D1_CTRL_REG6_XL, &LSM9D1_CTRL_REG6_XL_wake_state, 1);
+    syshal_i2c_write_reg(I2C_AXL, LSM9D1_AG_ADDR, LSM9D1_CTRL_REG6_XL, &LSM9D1_CTRL_REG6_XL_wake_state, 1);
 
     return SYSHAL_AXL_NO_ERROR;
 }
