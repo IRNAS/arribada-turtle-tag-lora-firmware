@@ -59,8 +59,8 @@ int syshal_i2c_init(uint32_t instance)
         return SYSHAL_I2C_ERROR_INVALID_INSTANCE;
 
     // Populate internal handlers from bsp
-    hi2c[instance].Instance = I2C_Inits[I2C_1].Instance;
-    hi2c[instance].Init = I2C_Inits[I2C_1].Init;
+    hi2c[instance].Instance = I2C_Inits[instance].Instance;
+    hi2c[instance].Init = I2C_Inits[instance].Init;
 
     status = HAL_I2C_Init(&hi2c[instance]);
 
@@ -176,22 +176,21 @@ void HAL_I2C_MspInit(I2C_HandleTypeDef * hi2c)
 
     if (hi2c->Instance == I2C1)
     {
-        // I2C1 GPIO Configuration
-        syshal_gpio_init(GPIO_I2C1_SDA);
-        syshal_gpio_init(GPIO_I2C1_SCL);
-
         // Peripheral clock enable
         __HAL_RCC_I2C1_CLK_ENABLE();
 
+        // I2C1 GPIO Configuration
+        syshal_gpio_init(GPIO_I2C1_SDA);
+        syshal_gpio_init(GPIO_I2C1_SCL);
     }
     if (hi2c->Instance == I2C2)
     {
+        // Peripheral clock enable
+        __HAL_RCC_I2C2_CLK_ENABLE();
+
         // I2C2 GPIO Configuration
         syshal_gpio_init(GPIO_I2C2_SDA);
         syshal_gpio_init(GPIO_I2C2_SCL);
-
-        // Peripheral clock enable
-        __HAL_RCC_I2C2_CLK_ENABLE();
     }
 
 }
