@@ -79,7 +79,7 @@ void syshal_i2c_transfer(uint32_t instance, uint8_t slaveAddress, uint8_t * data
 {
     HAL_StatusTypeDef status = HAL_ERROR;
 
-    status = HAL_I2C_Master_Transmit(&hi2c[instance], slaveAddress, data, size, I2C_TIMEOUT);
+    status = HAL_I2C_Master_Transmit(&hi2c[instance], (uint16_t)(slaveAddress << 1), data, size, I2C_TIMEOUT);
 
     if (HAL_OK != status)
     {
@@ -101,7 +101,7 @@ uint32_t syshal_i2c_receive(uint32_t instance, uint8_t slaveAddress, uint8_t * d
 {
     HAL_StatusTypeDef status = HAL_ERROR;
 
-    status = HAL_I2C_Master_Receive(&hi2c[instance], slaveAddress, data, size, I2C_TIMEOUT);
+    status = HAL_I2C_Master_Receive(&hi2c[instance], (uint16_t)(slaveAddress << 1), data, size, I2C_TIMEOUT);
 
     // return number of bytes read as best we can tell
     if (HAL_OK != status)
@@ -124,17 +124,17 @@ uint32_t syshal_i2c_receive(uint32_t instance, uint8_t slaveAddress, uint8_t * d
  *
  * @return     The number of bytes read
  */
-uint32_t syshal_i2c_read_reg(uint32_t instance, uint8_t slaveAddress, uint8_t regAddress, uint8_t * data, uint32_t size)
+int syshal_i2c_read_reg(uint32_t instance, uint8_t slaveAddress, uint8_t regAddress, uint8_t * data, uint32_t size)
 {
     HAL_StatusTypeDef status = HAL_ERROR;
 
-    status = HAL_I2C_Mem_Read(&hi2c[instance], slaveAddress, regAddress, size, data, 1, I2C_TIMEOUT);
+    status = HAL_I2C_Mem_Read(&hi2c[instance], (uint16_t)(slaveAddress << 1), regAddress, size, data, 1, I2C_TIMEOUT);
 
     // return number of bytes read as best we can tell
     if (HAL_OK != status)
     {
-        DEBUG_PR_ERROR("%s failed with %d", __FUNCTION__, status);
-        return 0;
+        DEBUG_PR_ERROR("%s() failed with %d", __FUNCTION__, hal_error_map[status]);
+        return hal_error_map[status];
     }
 
     return size;
@@ -153,7 +153,7 @@ void syshal_i2c_write_reg(uint32_t instance, uint8_t slaveAddress, uint8_t regAd
 {
     HAL_StatusTypeDef status = HAL_ERROR;
 
-    status = HAL_I2C_Mem_Write(&hi2c[instance], slaveAddress, regAddress, size, data, size, I2C_TIMEOUT);
+    status = HAL_I2C_Mem_Write(&hi2c[instance], (uint16_t)(slaveAddress << 1), regAddress, size, data, size, I2C_TIMEOUT);
 
     if (HAL_OK != status)
     {
@@ -165,7 +165,7 @@ int syshal_i2c_is_device_ready(uint32_t instance, uint8_t slaveAddress)
 {
     HAL_StatusTypeDef status;
 
-    status = HAL_I2C_IsDeviceReady(&hi2c[instance], (uint16_t)(slaveAddress), 20, 20);
+    status = HAL_I2C_IsDeviceReady(&hi2c[instance], (uint16_t)(slaveAddress << 1), 2, 2);
 
     return hal_error_map[status];
 }
