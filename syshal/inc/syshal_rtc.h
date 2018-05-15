@@ -19,6 +19,8 @@
 #ifndef _SYSHAL_RTC_H_
 #define _SYSHAL_RTC_H_
 
+#include <stdint.h>
+
 #define SYSHAL_RTC_NO_ERROR       ( 0)
 #define SYSHAL_RTC_ERROR_DEVICE   (-1)
 #define SYSHAL_RTC_ERROR_BUSY     (-2)

@@ -58,6 +58,8 @@ $(STMHAL_DIR)/Src/stm32f0xx_hal_pwr.c \
 $(STMHAL_DIR)/Src/stm32f0xx_hal_pwr_ex.c \
 $(STMHAL_DIR)/Src/stm32f0xx_hal_rcc.c \
 $(STMHAL_DIR)/Src/stm32f0xx_hal_rcc_ex.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_rtc.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_rtc_ex.c \
 $(STMHAL_DIR)/Src/stm32f0xx_hal_spi.c \
 $(STMHAL_DIR)/Src/stm32f0xx_hal_spi_ex.c \
 $(STMHAL_DIR)/Src/stm32f0xx_hal_tim.c \
@@ -73,6 +75,7 @@ usb/usbd_vendor.c \
 syshal/syshal_gpio.c \
 syshal/syshal_i2c.c \
 syshal/syshal_pmu.c \
+syshal/syshal_rtc.c \
 syshal/syshal_spi.c \
 syshal/syshal_time.c \
 syshal/syshal_uart.c \

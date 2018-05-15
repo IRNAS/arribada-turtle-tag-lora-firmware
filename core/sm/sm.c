@@ -35,6 +35,7 @@
 #include "syshal_flash.h"
 #include "syshal_i2c.h"
 #include "syshal_pmu.h"
+#include "syshal_rtc.h"
 #include "syshal_spi.h"
 #include "syshal_uart.h"
 #include "syshal_usb.h"
@@ -2093,13 +2094,18 @@ void boot_state(void)
     setup_buffers();
 
     // Initialize all configured peripherals
+    syshal_rtc_init();
+
     syshal_gpio_init(GPIO_LED1_GREEN);
     syshal_gpio_init(GPIO_LED2_RED);
+
 //    syshal_uart_init(UART_1);
     syshal_uart_init(UART_2);
 //    syshal_uart_init(UART_3);
+
     syshal_spi_init(SPI_1);
     syshal_spi_init(SPI_2);
+
     syshal_i2c_init(I2C_1);
     syshal_i2c_init(I2C_2);
 

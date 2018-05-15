@@ -17,6 +17,7 @@
  */
 
 #include "sys_config.h"
+#include "syshal_rtc.h"
 #include <string.h>
 #include "debug.h"
 
@@ -309,6 +310,21 @@ int sys_config_set(uint16_t tag, void * value, uint32_t length)
     // This is done so we can always tell if a configuration tag has been setup or has been erased or never initialised
     ((sys_config_hdr_t *)data)->set = true;
 
+    // Populate the rtc values with the provided date and time
+    if (tag == SYS_CONFIG_TAG_RTC_CURRENT_DATE_AND_TIME)
+    {
+        syshal_rtc_data_and_time_t date_time;
+
+        date_time.day = sys_config.sys_config_rtc_current_date_and_time.contents.day;
+        date_time.month = sys_config.sys_config_rtc_current_date_and_time.contents.month;
+        date_time.year = sys_config.sys_config_rtc_current_date_and_time.contents.year;
+        date_time.hours = sys_config.sys_config_rtc_current_date_and_time.contents.hours;
+        date_time.minutes = sys_config.sys_config_rtc_current_date_and_time.contents.minutes;
+        date_time.seconds = sys_config.sys_config_rtc_current_date_and_time.contents.seconds;
+
+        syshal_rtc_set_date_and_time(date_time);
+    }
+
     return SYS_CONFIG_NO_ERROR;
 }
 
@@ -356,6 +372,20 @@ int sys_config_get(uint16_t tag, void ** value)
     // If this configuration tag hasn't been previously set then return an error
     if (false == ((sys_config_hdr_t *)data)->set)
         return SYS_CONFIG_ERROR_TAG_NOT_SET;
+
+    // Populate the sys_config values with the current date/time
+    if (tag == SYS_CONFIG_TAG_RTC_CURRENT_DATE_AND_TIME)
+    {
+        syshal_rtc_data_and_time_t date_time;
+        syshal_rtc_get_date_and_time(&date_time);
+
+        sys_config.sys_config_rtc_current_date_and_time.contents.day = date_time.day;
+        sys_config.sys_config_rtc_current_date_and_time.contents.month = date_time.month;
+        sys_config.sys_config_rtc_current_date_and_time.contents.year = date_time.year;
+        sys_config.sys_config_rtc_current_date_and_time.contents.hours = date_time.hours;
+        sys_config.sys_config_rtc_current_date_and_time.contents.minutes = date_time.minutes;
+        sys_config.sys_config_rtc_current_date_and_time.contents.seconds = date_time.seconds;
+    }
 
     (*value) = data;
     return return_code;
