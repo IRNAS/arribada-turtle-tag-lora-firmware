@@ -29,6 +29,7 @@
 #include "syshal_uart.h" // FIXME: temp
 
 // Internal variables
+static uint8_t old_state_priv;
 
 // HAL to SYSHAL error code mapping table
 static int hal_error_map[] =
@@ -42,24 +43,6 @@ static USBD_HandleTypeDef hUsbDeviceFS; // USB Device Core handle declaration
 
 static ring_buffer_t rx_buffer;
 static uint8_t rx_data[USB_RX_BUF_SIZE];
-
-static void syshal_usb_connected_callback_priv(void)
-{
-    syshal_usb_event_t event;
-
-    if (syshal_gpio_get_input(GPIO_USB_ID))
-    {
-        // We've detected a rising edge on the USB_ID pin
-        event.id = SYSHAL_USB_EVENT_CONNECTED;
-        syshal_usb_event_handler(&event);
-    }
-    else
-    {
-        // We've detected a falling edge on the USB_ID pin
-        event.id = SYSHAL_USB_EVENT_DISCONNECTED;
-        syshal_usb_event_handler(&event);
-    }
-}
 
 /**
  * @brief      Initialise the USB instance
@@ -90,17 +73,7 @@ int syshal_usb_init(void)
     if (retVal != USBD_OK)
         return hal_error_map[retVal];
 
-    // Set up the GPIO USB_ID pin to generate interrupts for USB connection state detection
-    syshal_gpio_init(GPIO_USB_ID);
-
-    syshal_gpio_enable_interrupt(GPIO_USB_ID, &syshal_usb_connected_callback_priv);
-
-    if (!syshal_gpio_get_input(GPIO_USB_ID)) // Are we currently connected?
-    {
-        syshal_usb_event_t event;
-        event.id = SYSHAL_USB_EVENT_CONNECTED;
-        syshal_usb_event_handler(&event);
-    }
+    old_state_priv = hUsbDeviceFS.dev_state;
 
     return hal_error_map[retVal];
 }
@@ -131,25 +104,15 @@ int syshal_usb_send(uint8_t * data, uint32_t size)
 {
     USBD_Vendor_HandleTypeDef_t * hVendor = (USBD_Vendor_HandleTypeDef_t *)hUsbDeviceFS.pClassData;
 
-    //DEBUG_PR_TRACE("%u: %s()", __LINE__, __FUNCTION__);
-
     if (USBD_STATE_CONFIGURED != hUsbDeviceFS.dev_state)
         return SYSHAL_USB_ERROR_DISCONNECTED;
-
-    //DEBUG_PR_TRACE("%u: %s()", __LINE__, __FUNCTION__);
 
     if (hVendor->TxPending)
         return SYSHAL_USB_ERROR_BUSY;
 
-    //DEBUG_PR_TRACE("%u: %s()", __LINE__, __FUNCTION__);
-
     USBD_Vendor_SetTxBuffer(&hUsbDeviceFS, data, size);
 
-    //DEBUG_PR_TRACE("%u: %s()", __LINE__, __FUNCTION__);
-
     uint8_t result = USBD_Vendor_TransmitPacket(&hUsbDeviceFS);
-
-    //DEBUG_PR_TRACE("%u: %s()", __LINE__, __FUNCTION__);
 
     return hal_error_map[result];
 }
@@ -175,6 +138,35 @@ int syshal_usb_receive(uint8_t * buffer, uint32_t size)
 
     USBD_Vendor_SetRxBuffer(&hUsbDeviceFS, buffer, size);
     USBD_Vendor_ReceivePacket(&hUsbDeviceFS);
+
+    return SYSHAL_USB_NO_ERROR;
+}
+
+int syshal_usb_tick(void)
+{
+    // Check to see if the USB has enumerated and been connected
+    if (old_state_priv != hUsbDeviceFS.dev_state)
+    {
+        // Generate the appropriate event
+        syshal_usb_event_t event;
+
+        if (USBD_STATE_CONFIGURED == hUsbDeviceFS.dev_state)
+        {
+            event.id = SYSHAL_USB_EVENT_CONNECTED;
+            syshal_usb_event_handler(&event);
+        }
+
+        if (USBD_STATE_SUSPENDED == hUsbDeviceFS.dev_state)
+        {
+            event.id = SYSHAL_USB_EVENT_DISCONNECTED;
+            syshal_usb_event_handler(&event);
+        }
+
+        DEBUG_PR_TRACE("Event status: %u", hUsbDeviceFS.dev_state);
+
+    }
+
+    old_state_priv = hUsbDeviceFS.dev_state;
 
     return SYSHAL_USB_NO_ERROR;
 }

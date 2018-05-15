@@ -61,6 +61,7 @@ int syshal_usb_init(void);
 int syshal_usb_term(void);
 int syshal_usb_send(uint8_t * data, uint32_t size);
 int syshal_usb_receive(uint8_t * buffer, uint32_t size);
+int syshal_usb_tick(void);
 
 int syshal_usb_event_handler(syshal_usb_event_t * event);
 

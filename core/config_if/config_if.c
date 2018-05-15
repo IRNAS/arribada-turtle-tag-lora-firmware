@@ -25,6 +25,7 @@
 
 static int (*config_if_func_send_priv)(uint8_t *, uint32_t);
 static int (*config_if_func_receive_priv)(uint8_t *, uint32_t);
+static int (*config_if_func_tick_priv)(void);
 
 static config_if_backend_t backend_priv = CONFIG_IF_BACKEND_NOT_SET;
 
@@ -38,6 +39,7 @@ int config_if_init(config_if_backend_t backend)
     {
         config_if_func_send_priv = &syshal_usb_send;
         config_if_func_receive_priv = &syshal_usb_receive;
+        config_if_func_tick_priv = &syshal_usb_tick;
 
         backend_priv = backend;
 
@@ -49,6 +51,7 @@ int config_if_init(config_if_backend_t backend)
     {
         config_if_func_send_priv = &syshal_ble_send;
         config_if_func_receive_priv = &syshal_ble_receive;
+        config_if_func_tick_priv = &syshal_ble_tick;
 
         backend_priv = backend;
 
@@ -66,6 +69,7 @@ int config_if_term(void)
 {
     config_if_func_send_priv = NULL;
     config_if_func_receive_priv = NULL;
+    config_if_func_tick_priv = NULL;
 
     if (backend_priv == CONFIG_IF_BACKEND_USB)
         syshal_usb_term();
@@ -116,8 +120,8 @@ __attribute__((weak)) int config_if_event_handler(config_if_event_t * event)
  */
 void config_if_tick(void)
 {
-    if (backend_priv == CONFIG_IF_BACKEND_BLE)
-        syshal_ble_tick();
+    if (config_if_func_tick_priv != NULL)
+        config_if_func_tick_priv();
 }
 
 /**
