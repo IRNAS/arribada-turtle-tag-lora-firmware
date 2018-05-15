@@ -2267,6 +2267,8 @@ void standby_provisioning_needed_state()
         return;
     }
 #endif
+
+    config_if_tick();
 }
 
 void standby_trigger_pending_state()
@@ -2289,6 +2291,8 @@ void provisioning_state(void)
         blinkTimer = syshal_time_get_ticks_ms();
     }
 #endif
+
+    config_if_tick();
 
     handle_config_if_messages(); // Process any config_if messages
 
