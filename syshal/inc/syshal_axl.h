@@ -21,8 +21,9 @@
 
 #include <stdint.h>
 
-#define SYSHAL_AXL_NO_ERROR             ( 0)
-#define SYSHAL_AXL_PROVISIONING_NEEDED  (-1)
+#define SYSHAL_AXL_NO_ERROR                   ( 0)
+#define SYSHAL_AXL_ERROR_PROVISIONING_NEEDED  (-1)
+#define SYSHAL_AXL_ERROR_DEVICE_UNRESPONSIVE  (-2)
 
 typedef struct
 {

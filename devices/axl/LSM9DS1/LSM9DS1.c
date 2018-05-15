@@ -101,18 +101,24 @@ static uint16_t find_closest_value_priv(uint16_t target, const uint16_t * valid_
  */
 int syshal_axl_init(void)
 {
+    if (syshal_i2c_is_device_ready(I2C_AXL, LSM9D1_AG_ADDR) != SYSHAL_I2C_NO_ERROR)
+    {
+        DEBUG_PR_ERROR("LSM9DS1 unresponsive");
+        return SYSHAL_AXL_ERROR_DEVICE_UNRESPONSIVE;
+    }
+
     // Fetch all required configuration tags
     int ret;
 
     sys_config_axl_sample_rate_t axl_sample_rate_tag;
     ret = sys_config_get(SYS_CONFIG_TAG_AXL_SAMPLE_RATE, (void *) &axl_sample_rate_tag.contents);
     if (ret < 0)
-        return SYSHAL_AXL_PROVISIONING_NEEDED;
+        return SYSHAL_AXL_ERROR_PROVISIONING_NEEDED;
 
     sys_config_axl_g_force_high_threshold_t axl_g_force_high_threshold_tag;
     ret = sys_config_get(SYS_CONFIG_TAG_AXL_G_FORCE_HIGH_THRESHOLD, (void *) &axl_g_force_high_threshold_tag.contents);
     if (ret < 0)
-        return SYSHAL_AXL_PROVISIONING_NEEDED;
+        return SYSHAL_AXL_ERROR_PROVISIONING_NEEDED;
 
     // Enable the Accelerometer axis
     uint8_t reg_value = LSM9D1_CTRL_REG5_XL_ZEN_XL | LSM9D1_CTRL_REG5_XL_YEN_XL | LSM9D1_CTRL_REG5_XL_XEN_XL;

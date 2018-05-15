@@ -2109,6 +2109,8 @@ void boot_state(void)
     syshal_i2c_init(I2C_1);
     syshal_i2c_init(I2C_2);
 
+    syshal_axl_init();
+
     syshal_flash_init(0, SPI_FLASH);
 
 #ifndef DUMMY_BATTERY_MONITOR
