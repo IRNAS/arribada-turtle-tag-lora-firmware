@@ -1,4 +1,4 @@
 r
 loadfile .\build\ArribadaSTM32.hex
 r
-g
+q
