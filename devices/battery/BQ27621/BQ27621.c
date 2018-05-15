@@ -103,9 +103,18 @@ static inline int BQ27621_soft_reset(void)
 
 //////////////////////////////////////// Exposed functions ////////////////////////////////////////
 
-void syshal_batt_init(void)
+int syshal_batt_init(void)
 {
-    BQ27621_set_cfgupdate();
+    //BQ27621_set_cfgupdate();
+    if (syshal_i2c_is_device_ready(I2C_BATTERY, BQ27621_ADDR) != SYSHAL_I2C_NO_ERROR)
+    {
+        DEBUG_PR_ERROR("BQ27621 unresponsive");
+        return SYSHAL_BATT_ERROR_DEVICE_UNRESPONSIVE;
+    }
+
+    // FIXME: Wait for initialised flag to be set
+
+    return SYSHAL_BATT_NO_ERROR;
 }
 
 // Return the battery temperature in tenths of degree Kelvin
@@ -120,25 +129,35 @@ uint16_t syshal_batt_voltage(void)
     return BQ27621_read(BQ27621_REG_VOLT);
 }
 
-syshal_batt_state_t syshal_batt_state(void)
+/**
+ * @brief      Returns the percentage charge left in the battery
+ *
+ * @return     0 -> 100%
+ */
+int syshal_batt_level(void)
 {
-    // WARN this would return POWER_SUPPLY_CAPACITY_LEVEL_NORMAL if the BQ27621 was unresponsive
+    uint8_t level;
 
-    syshal_batt_state_t level;
+    int status = syshal_i2c_read_reg(I2C_BATTERY, BQ27621_ADDR, BQ27621_REG_STATE_OF_CHARGE, &level, 1);
 
-    uint16_t flags = BQ27621_read_flags();
-
-    if (flags & BQ27621_FLAG_FC)
-        level = POWER_SUPPLY_CAPACITY_LEVEL_FULL;
-    else if (flags & BQ27621_FLAG_SOC1)
-        level = POWER_SUPPLY_CAPACITY_LEVEL_LOW;
-    else if (flags & BQ27621_FLAG_SOCF)
-        level = POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL;
+    if (SYSHAL_I2C_ERROR_TIMEOUT == status)
+        return SYSHAL_BATT_ERROR_TIMEOUT;
+    else if (status < 0)
+        return SYSHAL_BATT_ERROR_DEVICE_UNRESPONSIVE;
     else
-        level = POWER_SUPPLY_CAPACITY_LEVEL_NORMAL;
-
-    return level;
+        return level;
 }
+
+/*
+    uint8_t level;
+
+    int status = syshal_i2c_read_reg(I2C_BATTERY, BQ27621_ADDR, BQ27621_REG_STATE_OF_CHARGE, &level, 1);
+
+    if (SYSHAL_BATT_NO_ERROR == i2c_error_map[status])
+        return level;
+    else
+        return i2c_error_map[status];
+*/
 
 /**
  * @brief      Is the battery currently in a charging state?
@@ -147,6 +166,19 @@ syshal_batt_state_t syshal_batt_state(void)
  */
 bool syshal_batt_charging(void)
 {
-    DEBUG_PR_WARN("%s not implemented", __FUNCTION__);
+    // Read the BQ27621_REG_FLAGS register
+//    uint8_t data[2];
+//
+//    syshal_i2c_read_reg(I2C_BATTERY, BQ27621_ADDR, BQ27621_REG_FLAGS, data, 2);
+//    uint16_t flags = (uint16_t) (data[0] << 8) | (data[1] & 0xff);
+//
+//    // Check for errors
+//    if (SYSHAL_I2C_ERROR_TIMEOUT == status)
+//        return SYSHAL_BATT_ERROR_TIMEOUT;
+//    else if (status < 0)
+//        return SYSHAL_BATT_ERROR_DEVICE_UNRESPONSIVE;
+//    // Read the discharging flag to determine if we're currently charging
+//    return !(flags && BQ27621_FLAG_DSG);
+
     return false;
 }

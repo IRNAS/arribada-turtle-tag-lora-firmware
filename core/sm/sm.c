@@ -2148,7 +2148,8 @@ void boot_state(void)
     }
 
     // If the battery level is too low then the system shall transition to the BATTERY_LEVEL_LOW state
-    if (syshal_batt_state() == POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL)
+    int level = syshal_batt_level();
+    if ( (level <= SYSHAL_BATT_LEVEL_LOW) && (level >= 0) )
     {
         sm_set_state(SM_STATE_STANDBY_BATTERY_LEVEL_LOW);
         return;
@@ -2171,10 +2172,13 @@ void standby_battery_charging_state()
 #ifndef DUMMY_BATTERY_MONITOR
     if (!syshal_batt_charging())
     {
-        if (syshal_batt_state() != POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL)
+        int level = syshal_batt_level();
+        if ( (level <= SYSHAL_BATT_LEVEL_LOW) && (level >= 0) )
         {
             if (config_if_connected)
                 sm_set_state(SM_STATE_PROVISIONING);
+            else
+                sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED);
         }
         else
         {
@@ -2218,7 +2222,8 @@ void standby_log_file_full_state()
     }
 
     // If the battery level is too low then the system shall transition to the BATTERY_LEVEL_LOW state
-    if (syshal_batt_state() == POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL)
+    int level = syshal_batt_level();
+    if ( (level <= SYSHAL_BATT_LEVEL_LOW) && (level >= 0) )
     {
         sm_set_state(SM_STATE_STANDBY_BATTERY_LEVEL_LOW);
         return;
@@ -2261,7 +2266,8 @@ void standby_provisioning_needed_state()
     }
 
     // If the battery level is too low then the system shall transition to the BATTERY_LEVEL_LOW state
-    if (syshal_batt_state() == POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL)
+    int level = syshal_batt_level();
+    if ( (level <= SYSHAL_BATT_LEVEL_LOW) && (level >= 0) )
     {
         sm_set_state(SM_STATE_STANDBY_BATTERY_LEVEL_LOW);
         return;
@@ -2335,7 +2341,8 @@ void operational_state(void)
     }
 
     // If the battery level is too low then the system shall transition to the BATTERY_LEVEL_LOW state
-    if (syshal_batt_state() == POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL)
+    int level = syshal_batt_level();
+    if ( (level <= SYSHAL_BATT_LEVEL_LOW) && (level >= 0) )
     {
         sm_set_state(SM_STATE_STANDBY_BATTERY_LEVEL_LOW);
         return;

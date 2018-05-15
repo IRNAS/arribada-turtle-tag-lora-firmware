@@ -86,6 +86,20 @@
 #define BQ27621_EXIT_CFGUPDATE   (0x0043) // Exits CONFIG UPDATE mode without an OCV measurement and without resimulating to update StateOfCharge( )
 #define BQ27621_EXIT_RESIM       (0x0044) // Exits CONFIG UPDATE mode without an OCV measurement and resimulates with the updated configuration data to update StateOfCharge( )
 
+// Status bit definitions */
+#define BQ27621_STATUS_SHUTDOWNEN (0x8000)
+#define BQ27621_STATUS_WDRESET    (0x4000)
+#define BQ27621_STATUS_SS         (0x2000)
+#define BQ27621_STATUS_CALMODE    (0x1000)
+#define BQ27621_STATUS_OCVCMDCOMP (0x0200)
+#define BQ27621_STATUS_OCVFAIL    (0x0100)
+#define BQ27621_STATUS_INITCOMP   (0x0080)
+#define BQ27621_STATUS_HIBERNATE  (0x0040)
+#define BQ27621_STATUS_POWERMIN   (0x0020)
+#define BQ27621_STATUS_SLEEP      (0x0010)
+#define BQ27621_STATUS_LDMD       (0x0008)
+#define BQ27621_STATUS_CHEMCHNG   (0x0001)
+
 // Flags register bit definitions
 #define BQ27621_FLAG_DSG      (1 << 0) // Discharging detected
 #define BQ27621_FLAG_SOCF     (1 << 1) // State-of-Charge threshold final

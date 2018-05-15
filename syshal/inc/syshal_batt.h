@@ -22,21 +22,19 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-typedef enum
-{
-    POWER_SUPPLY_CAPACITY_LEVEL_UNKNOWN,
-    POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL,
-    POWER_SUPPLY_CAPACITY_LEVEL_LOW,
-    POWER_SUPPLY_CAPACITY_LEVEL_NORMAL,
-    POWER_SUPPLY_CAPACITY_LEVEL_HIGH,
-    POWER_SUPPLY_CAPACITY_LEVEL_FULL,
-} syshal_batt_state_t;
+// Constants
+#define SYSHAL_BATT_NO_ERROR                   ( 0)
+#define SYSHAL_BATT_ERROR_DEVICE               (-1)
+#define SYSHAL_BATT_ERROR_BUSY                 (-2)
+#define SYSHAL_BATT_ERROR_TIMEOUT              (-3)
+#define SYSHAL_BATT_ERROR_DEVICE_UNRESPONSIVE  (-4)
 
-void syshal_batt_init(void);
+#define SYSHAL_BATT_LEVEL_LOW (10)
+
+int syshal_batt_init(void);
 uint16_t syshal_batt_temp(void);
 uint16_t syshal_batt_voltage(void);
-uint8_t syshal_batt_level(void);
-syshal_batt_state_t syshal_batt_state(void);
+int syshal_batt_level(void);
 bool syshal_batt_charging(void);
 
 #endif /* _SYSHAL_BATT_H_ */
