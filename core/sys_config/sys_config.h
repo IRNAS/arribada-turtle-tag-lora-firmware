@@ -357,7 +357,7 @@ typedef struct __attribute__((__packed__))
     sys_config_hdr_t hdr;
     struct __attribute__((__packed__))
     {
-        uint16_t mode;
+        uint8_t mode;
     } contents;
 } sys_config_temp_sensor_mode_t;
 
