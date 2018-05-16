@@ -80,177 +80,177 @@ int sys_config_get_data_ptr_priv(uint16_t tag, void ** data)
     {
         case SYS_CONFIG_TAG_GPS_LOG_POSITION_ENABLE:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_gps_log_position_enable_t);
-            *data = &sys_config.sys_config_gps_log_position_enable.contents;
+            *data = &sys_config.sys_config_gps_log_position_enable;
             break;
 
         case SYS_CONFIG_TAG_GPS_LOG_TTFF_ENABLE:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_gps_log_ttff_enable_t);
-            *data = &sys_config.sys_config_gps_log_ttff_enable.contents;
+            *data = &sys_config.sys_config_gps_log_ttff_enable;
             break;
 
         case SYS_CONFIG_TAG_GPS_TRIGGER_MODE:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_gps_trigger_mode_t);
-            *data = &sys_config.sys_config_gps_trigger_mode.contents;
+            *data = &sys_config.sys_config_gps_trigger_mode;
             break;
 
         case SYS_CONFIG_TAG_GPS_UART_BAUD_RATE:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_gps_uart_baud_rate_t);
-            *data = &sys_config.sys_config_gps_uart_baud_rate.contents;
+            *data = &sys_config.sys_config_gps_uart_baud_rate;
             break;
 
         case SYS_CONFIG_TAG_RTC_SYNC_TO_GPS_ENABLE:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_rtc_sync_to_gps_enable_t);
-            *data = &sys_config.sys_config_rtc_sync_to_gps_enable.contents;
+            *data = &sys_config.sys_config_rtc_sync_to_gps_enable;
             break;
 
         case SYS_CONFIG_TAG_RTC_CURRENT_DATE_AND_TIME:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_rtc_current_date_and_time_t);
-            *data = &sys_config.sys_config_rtc_current_date_and_time.contents;
+            *data = &sys_config.sys_config_rtc_current_date_and_time;
             break;
 
         case SYS_CONFIG_TAG_LOGGING_ENABLE:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_logging_enable_t);
-            *data = &sys_config.sys_config_logging_enable.contents;
+            *data = &sys_config.sys_config_logging_enable;
             break;
 
         case SYS_CONFIG_TAG_LOGGING_BYTES_WRITTEN:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_logging_bytes_written_t);
-            *data = &sys_config.sys_config_logging_bytes_written.contents;
+            *data = &sys_config.sys_config_logging_bytes_written;
             break;
 
         case SYS_CONFIG_TAG_LOGGING_FILE_SIZE:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_logging_file_size_t);
-            *data = &sys_config.sys_config_logging_file_size.contents;
+            *data = &sys_config.sys_config_logging_file_size;
             break;
 
         case SYS_CONFIG_TAG_LOGGING_FILE_TYPE:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_logging_file_type_t);
-            *data = &sys_config.sys_config_logging_file_type.contents;
+            *data = &sys_config.sys_config_logging_file_type;
             break;
 
         case SYS_CONFIG_TAG_LOGGING_GROUP_SENSOR_READINGS_ENABLE:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_logging_group_sensor_readings_enable_t);
-            *data = &sys_config.sys_config_logging_group_sensor_readings_enable.contents;
+            *data = &sys_config.sys_config_logging_group_sensor_readings_enable;
             break;
 
         case SYS_CONFIG_TAG_LOGGING_START_END_SYNC_ENABLE:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_logging_start_end_sync_enable_t);
-            *data = &sys_config.sys_config_logging_start_end_sync_enable.contents;
+            *data = &sys_config.sys_config_logging_start_end_sync_enable;
             break;
 
         case SYS_CONFIG_TAG_LOGGING_DATE_TIME_STAMP_ENABLE:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_logging_date_time_stamp_enable_t);
-            *data = &sys_config.sys_config_logging_date_time_stamp_enable.contents;
+            *data = &sys_config.sys_config_logging_date_time_stamp_enable;
             break;
 
         case SYS_CONFIG_TAG_LOGGING_HIGH_RESOLUTION_TIMER_ENABLE:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_logging_high_resolution_timer_enable_t);
-            *data = &sys_config.sys_config_logging_high_resolution_timer_enable.contents;
+            *data = &sys_config.sys_config_logging_high_resolution_timer_enable;
             break;
 
         case SYS_CONFIG_TAG_AXL_LOG_ENABLE:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_axl_log_enable_t);
-            *data = &sys_config.sys_config_axl_log_enable.contents;
+            *data = &sys_config.sys_config_axl_log_enable;
             break;
 
         case SYS_CONFIG_TAG_AXL_CONFIG:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_axl_config_t);
-            *data = &sys_config.sys_config_axl_config.contents;
+            *data = &sys_config.sys_config_axl_config;
             break;
 
         case SYS_CONFIG_TAG_AXL_G_FORCE_HIGH_THRESHOLD:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_axl_g_force_high_threshold_t);
-            *data = &sys_config.sys_config_axl_g_force_high_threshold.contents;
+            *data = &sys_config.sys_config_axl_g_force_high_threshold;
             break;
 
         case SYS_CONFIG_TAG_AXL_SAMPLE_RATE:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_axl_sample_rate_t);
-            *data = &sys_config.sys_config_axl_sample_rate.contents;
+            *data = &sys_config.sys_config_axl_sample_rate;
             break;
 
         case SYS_CONFIG_TAG_AXL_MODE:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_axl_mode_t);
-            *data = &sys_config.sys_config_axl_mode.contents;
+            *data = &sys_config.sys_config_axl_mode;
             break;
 
         case SYS_CONFIG_TAG_PRESSURE_SENSOR_LOG_ENABLE:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_pressure_sensor_log_enable_t);
-            *data = &sys_config.sys_config_pressure_sensor_log_enable.contents;
+            *data = &sys_config.sys_config_pressure_sensor_log_enable;
             break;
 
         case SYS_CONFIG_TAG_PRESSURE_SAMPLE_RATE:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_pressure_sample_rate_t);
-            *data = &sys_config.sys_config_pressure_sample_rate.contents;
+            *data = &sys_config.sys_config_pressure_sample_rate;
             break;
 
         case SYS_CONFIG_TAG_PRESSURE_LOW_THRESHOLD:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_pressure_low_threshold_t);
-            *data = &sys_config.sys_config_pressure_low_threshold.contents;
+            *data = &sys_config.sys_config_pressure_low_threshold;
             break;
 
         case SYS_CONFIG_TAG_PRESSURE_HIGH_THRESHOLD:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_pressure_high_threshold_t);
-            *data = &sys_config.sys_config_pressure_high_threshold.contents;
+            *data = &sys_config.sys_config_pressure_high_threshold;
             break;
 
         case SYS_CONFIG_TAG_PRESSURE_MODE:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_pressure_mode_t);
-            *data = &sys_config.sys_config_pressure_mode.contents;
+            *data = &sys_config.sys_config_pressure_mode;
             break;
 
         case SYS_CONFIG_TAG_TEMP_SENSOR_LOG_ENABLE:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_temp_sensor_log_enable_t);
-            *data = &sys_config.sys_config_temp_sensor_log_enable.contents;
+            *data = &sys_config.sys_config_temp_sensor_log_enable;
             break;
 
         case SYS_CONFIG_TAG_TEMP_SENSOR_SAMPLE_RATE:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_temp_sensor_sample_rate_t);
-            *data = &sys_config.sys_config_temp_sensor_sample_rate.contents;
+            *data = &sys_config.sys_config_temp_sensor_sample_rate;
             break;
 
         case SYS_CONFIG_TAG_TEMP_SENSOR_LOW_THRESHOLD:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_temp_sensor_low_threshold_t);
-            *data = &sys_config.sys_config_temp_sensor_low_threshold.contents;
+            *data = &sys_config.sys_config_temp_sensor_low_threshold;
             break;
 
         case SYS_CONFIG_TAG_TEMP_SENSOR_HIGH_THRESHOLD:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_temp_sensor_high_threshold_t);
-            *data = &sys_config.sys_config_temp_sensor_high_threshold.contents;
+            *data = &sys_config.sys_config_temp_sensor_high_threshold;
             break;
 
         case SYS_CONFIG_TAG_TEMP_SENSOR_MODE:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_temp_sensor_mode_t);
-            *data = &sys_config.sys_config_temp_sensor_mode.contents;
+            *data = &sys_config.sys_config_temp_sensor_mode;
             break;
 
         case SYS_CONFIG_TAG_SYSTEM_DEVICE_IDENTIFIER:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_system_device_identifier_t);
-            *data = &sys_config.sys_config_system_device_identifier.contents;
+            *data = &sys_config.sys_config_system_device_identifier;
             break;
 
         case SYS_CONFIG_TAG_BLUETOOTH_UUID:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_bluetooth_uuid_t);
-            *data = &sys_config.sys_config_bluetooth_uuid.contents;
+            *data = &sys_config.sys_config_bluetooth_uuid;
             break;
 
         case SYS_CONFIG_TAG_BLUETOOTH_BEACON_ENABLE:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_bluetooth_beacon_enable_t);
-            *data = &sys_config.sys_config_bluetooth_beacon_enable.contents;
+            *data = &sys_config.sys_config_bluetooth_beacon_enable;
             break;
 
         case SYS_CONFIG_TAG_BLUETOOTH_BEACON_GEO_FENCE_TRIGGER_LOCATION:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_bluetooth_beacon_geo_fence_trigger_location_t);
-            *data = &sys_config.sys_config_bluetooth_beacon_geo_fence_trigger_location.contents;
+            *data = &sys_config.sys_config_bluetooth_beacon_geo_fence_trigger_location;
             break;
 
         case SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_INTERVAL:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_bluetooth_beacon_advertising_interval_t);
-            *data = &sys_config.sys_config_bluetooth_beacon_advertising_interval.contents;
+            *data = &sys_config.sys_config_bluetooth_beacon_advertising_interval;
             break;
 
         case SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_CONFIGURATION:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_bluetooth_beacon_advertising_configuration_t);
-            *data = &sys_config.sys_config_bluetooth_beacon_advertising_configuration.contents;
+            *data = &sys_config.sys_config_bluetooth_beacon_advertising_configuration;
             break;
 
         default:
@@ -303,7 +303,7 @@ int sys_config_set(uint16_t tag, void * value, uint32_t length)
     // Copy data into the configuration tag
 #pragma GCC diagnostic push // Suppress data = NULL warning as this cannot happen as the function returns if that is the case
 #pragma GCC diagnostic ignored "-Wnonnull"
-    memcpy(data, value, length);
+    memcpy(data + sizeof(sys_config_hdr_t), value, length);
 #pragma GCC diagnostic pop
 
     // Set the configuration set tag
@@ -369,16 +369,13 @@ int sys_config_get(uint16_t tag, void ** value)
     if (return_code < 0)
         return return_code;
 
-    // If this configuration tag hasn't been previously set then return an error
-    if (false == ((sys_config_hdr_t *)data)->set)
-        return SYS_CONFIG_ERROR_TAG_NOT_SET;
-
     // Populate the sys_config values with the current date/time
     if (tag == SYS_CONFIG_TAG_RTC_CURRENT_DATE_AND_TIME)
     {
         syshal_rtc_data_and_time_t date_time;
         syshal_rtc_get_date_and_time(&date_time);
 
+        sys_config.sys_config_rtc_current_date_and_time.hdr.set = true;
         sys_config.sys_config_rtc_current_date_and_time.contents.day = date_time.day;
         sys_config.sys_config_rtc_current_date_and_time.contents.month = date_time.month;
         sys_config.sys_config_rtc_current_date_and_time.contents.year = date_time.year;
@@ -387,7 +384,11 @@ int sys_config_get(uint16_t tag, void ** value)
         sys_config.sys_config_rtc_current_date_and_time.contents.seconds = date_time.seconds;
     }
 
-    (*value) = data;
+    // If this configuration tag hasn't been previously set then return an error
+    if (false == ((sys_config_hdr_t *)data)->set)
+        return SYS_CONFIG_ERROR_TAG_NOT_SET;
+
+    (*value) = data + sizeof(sys_config_hdr_t);
     return return_code;
 }
 

@@ -1529,9 +1529,9 @@ static void battery_status_req(cmd_t * req, uint16_t size)
         Throw(EXCEPTION_TX_BUFFER_FULL);
     CMD_SET_HDR(resp, CMD_BATTERY_STATUS_RESP);
 
+#ifdef DUMMY_BATTERY_MONITOR
     DEBUG_PR_WARN("%s() NOT IMPLEMENTED, responding with spoof data", __FUNCTION__);
 
-#ifdef DUMMY_BATTERY_MONITOR
     resp->p.cmd_battery_status_resp.error_code = CMD_NO_ERROR;
     resp->p.cmd_battery_status_resp.charging_indicator = 1;
     resp->p.cmd_battery_status_resp.charge_level = 100;
