@@ -321,6 +321,22 @@ void syshal_axl_callback(syshal_axl_data_t data)
     }
 }
 
+void syshal_gps_callback(syshal_gps_event_t event)
+{
+    switch (event.event_id)
+    {
+        case SYSHAL_GPS_EVENT_STATUS:
+            DEBUG_PR_SYS("SYSHAL_GPS_EVENT_STATUS");
+            break;
+        case SYSHAL_GPS_EVENT_POSLLH:
+            DEBUG_PR_SYS("SYSHAL_GPS_EVENT_POSLLH");
+            break;
+        default:
+            DEBUG_PR_WARN("Unknown GPS event in %s : %d", __FUNCTION__, event.event_id);
+            break;
+    }
+}
+
 /**
  * @brief      Create the configuration file in FLASH memory
  *
