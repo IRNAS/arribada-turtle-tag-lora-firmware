@@ -1314,17 +1314,21 @@ static HAL_StatusTypeDef PCD_EP_ISR_Handler(PCD_HandleTypeDef *hpcd)
           PCD_FreeUserBuffer(hpcd->Instance, ep->num, PCD_EP_DBUF_OUT)  
         }
         /*multi-packet on the NON control OUT endpoint*/
-        ep->xfer_count+=count;
-        ep->xfer_buff+=count;
-       
-        if ((ep->xfer_len == 0U) || (count < ep->maxpacket))
+        // Fix ep->xfer_count only reporting the last packet size and not the accumulated size
+        // See https://community.st.com/thread/40983-halpcdepgetrxcount-returning-wrong-value
+        ep->xfer_count += count;
+        ep->xfer_buff += count;
+        
+        if ((ep->xfer_len == 0) || (count < ep->maxpacket))
         {
-          /* RX COMPLETE */
-          HAL_PCD_DataOutStageCallback(hpcd, ep->num);
+            /* RX COMPLETE */
+            HAL_PCD_DataOutStageCallback(hpcd, ep->num);
         }
         else
         {
-          HAL_PCD_EP_Receive(hpcd, ep->num, ep->xfer_buff, ep->xfer_len);
+            uint32_t tmp = ep->xfer_count;
+            HAL_PCD_EP_Receive(hpcd, ep->num, ep->xfer_buff, ep->xfer_len - tmp);
+            ep->xfer_count = tmp;
         }
         
       } /* if((wEPVal & EP_CTR_RX) */
