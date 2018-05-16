@@ -19,6 +19,9 @@
 #include "stm32f0xx_hal.h"
 #include "syshal_rtc.h"
 #include "sys_config.h"
+#include "debug.h"
+
+#define YEAR_OFFSET (2018) // RTC can only handle 100 years so offset by 2000
 
 RTC_HandleTypeDef rtc_handle;
 
@@ -56,7 +59,7 @@ int syshal_rtc_set_date_and_time(syshal_rtc_data_and_time_t date_time)
 
     RTC_DateTypeDef date;
     date.WeekDay = RTC_WEEKDAY_MONDAY; // Unused as we don't track the name of the day
-    date.Year = date_time.year;
+    date.Year = date_time.year - YEAR_OFFSET;
     date.Month = date_time.month;
     date.Date = date_time.day;
 
@@ -82,31 +85,35 @@ int syshal_rtc_get_date_and_time(syshal_rtc_data_and_time_t * date_time)
 {
     HAL_StatusTypeDef status;
 
-    RTC_DateTypeDef date;
-    status = HAL_RTC_GetDate(&rtc_handle, &date, RTC_FORMAT_BIN);
-    if (HAL_OK != status)
-        return hal_error_map[status];
-
-    date_time->year = date.Year;
-    date_time->month = date.Month;
-    date_time->day = date.Date;
-
+    // You must call HAL_RTC_GetDate() after HAL_RTC_GetTime() to unlock the values in
+    // the higher-order calendar shadow registers to ensure consistency between the time
+    // and date values. Reading RTC current time locks the values in calendar shadow 
+    // registers until Current date is read
     RTC_TimeTypeDef time;
     status = HAL_RTC_GetTime(&rtc_handle, &time, RTC_FORMAT_BIN);
     date_time->hours = time.Hours;
     date_time->minutes = time.Minutes;
     date_time->seconds = time.Seconds;
 
+    RTC_DateTypeDef date;
+    status = HAL_RTC_GetDate(&rtc_handle, &date, RTC_FORMAT_BIN);
+    if (HAL_OK != status)
+        return hal_error_map[status];
+
+    date_time->year = date.Year + YEAR_OFFSET;
+    date_time->month = date.Month;
+    date_time->day = date.Date;
+
     return hal_error_map[status];
 }
 
-void HAL_RTC_MspInit(RTC_HandleTypeDef* rtcHandle)
+void HAL_RTC_MspInit(RTC_HandleTypeDef * rtcHandle)
 {
     if (rtcHandle->Instance == RTC)
         __HAL_RCC_RTC_ENABLE();
 }
 
-void HAL_RTC_MspDeInit(RTC_HandleTypeDef* rtcHandle)
+void HAL_RTC_MspDeInit(RTC_HandleTypeDef * rtcHandle)
 {
     if (rtcHandle->Instance == RTC)
         __HAL_RCC_RTC_DISABLE();
