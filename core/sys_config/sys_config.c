@@ -388,7 +388,9 @@ int sys_config_get(uint16_t tag, void ** value)
     if (false == ((sys_config_hdr_t *)data)->set)
         return SYS_CONFIG_ERROR_TAG_NOT_SET;
 
-    (*value) = data + sizeof(sys_config_hdr_t);
+    if (value != NULL)
+        (*value) = data + sizeof(sys_config_hdr_t);
+    
     return return_code;
 }
 

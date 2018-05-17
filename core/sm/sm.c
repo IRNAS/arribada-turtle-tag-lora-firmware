@@ -244,15 +244,14 @@ static bool check_configuration_tags_set(void)
     bool ble_beacon_enabled;
 
     // Determine if Bluetooth beaconing is enabled
-    sys_config_bluetooth_beacon_enable_t tag_data;
-    ret = sys_config_get(SYS_CONFIG_TAG_BLUETOOTH_BEACON_ENABLE, (void *) &tag_data.contents);
+    ret = sys_config_get(SYS_CONFIG_TAG_BLUETOOTH_BEACON_ENABLE, NULL);
     if (ret < 0)
     {
         ble_beacon_enabled = false; // Tag is either not set or invalid, so default to disabled
     }
     else
     {
-        ble_beacon_enabled = tag_data.contents.enable;
+        ble_beacon_enabled = sys_config.sys_config_bluetooth_beacon_enable.contents.enable;
     }
 
     while (!sys_config_iterate(&tag, &last_index))

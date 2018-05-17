@@ -110,13 +110,7 @@ int syshal_axl_init(void)
     // Fetch all required configuration tags
     int ret;
 
-    sys_config_axl_sample_rate_t axl_sample_rate_tag;
-    ret = sys_config_get(SYS_CONFIG_TAG_AXL_SAMPLE_RATE, (void *) &axl_sample_rate_tag.contents);
-    if (ret < 0)
-        return SYSHAL_AXL_ERROR_PROVISIONING_NEEDED;
-
-    sys_config_axl_g_force_high_threshold_t axl_g_force_high_threshold_tag;
-    ret = sys_config_get(SYS_CONFIG_TAG_AXL_G_FORCE_HIGH_THRESHOLD, (void *) &axl_g_force_high_threshold_tag.contents);
+    ret = sys_config_get(SYS_CONFIG_TAG_AXL_SAMPLE_RATE, NULL);
     if (ret < 0)
         return SYSHAL_AXL_ERROR_PROVISIONING_NEEDED;
 
@@ -128,7 +122,7 @@ int syshal_axl_init(void)
     uint16_t valid_sample_rate_options[6] = {10, 50, 119, 238, 476, 952}; // Number of readings per second
 
     // Convert the configuration tag options to the closest supported option
-    uint16_t sample_rate = find_closest_value_priv(axl_sample_rate_tag.contents.sample_rate, valid_sample_rate_options, sizeof(valid_sample_rate_options));
+    uint16_t sample_rate = find_closest_value_priv(sys_config.sys_config_axl_sample_rate.contents.sample_rate, valid_sample_rate_options, sizeof(valid_sample_rate_options));
 
     // Populate the accelerometer CTRL_REG6_XL register
     reg_value = 0;
