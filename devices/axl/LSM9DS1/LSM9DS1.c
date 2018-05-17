@@ -155,13 +155,17 @@ int syshal_axl_init(void)
     LSM9D1_CTRL_REG6_XL_power_down_state = reg_value & (~LSM9D1_CTRL_REG6_XL_ODR_XL_MASK);
     syshal_i2c_write_reg(I2C_AXL, LSM9D1_AG_ADDR, LSM9D1_CTRL_REG6_XL, &LSM9D1_CTRL_REG6_XL_wake_state, 1);
 
+    // Setup the INT1_A/G interrupt GPIO pin to generate interrupts
+    syshal_gpio_init(GPIO_INT1_AG);
+    syshal_gpio_enable_interrupt(GPIO_INT1_AG, syshal_axl_int1_ag_interrupt_priv);
+
     // Enable accelerometer data ready interrupt generation on INT1_A/G
     uint8_t LSM9D1_INT1_CTRL_register = LSM9D1_INT1_CTRL_INT_DRDY_XL;
     syshal_i2c_write_reg(I2C_AXL, LSM9D1_AG_ADDR, LSM9D1_INT1_CTRL, &LSM9D1_INT1_CTRL_register, 1);
 
-    // Setup the INT1_A/G interrupt GPIO pin to generate interrupts
-    syshal_gpio_init(GPIO_INT1_AG);
-    syshal_gpio_enable_interrupt(GPIO_INT1_AG, syshal_axl_int1_ag_interrupt_priv);
+    // Is there already data waiting to be read?
+    if (syshal_gpio_get_input(GPIO_INT1_AG))
+        syshal_axl_int1_ag_interrupt_priv();
 
     return SYSHAL_AXL_NO_ERROR;
 }
