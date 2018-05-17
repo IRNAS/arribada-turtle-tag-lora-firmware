@@ -2114,7 +2114,7 @@ void boot_state(void)
     syshal_gpio_init(GPIO_LED1_GREEN);
     syshal_gpio_init(GPIO_LED2_RED);
 
-//    syshal_uart_init(UART_1);
+    syshal_uart_init(UART_1);
     syshal_uart_init(UART_2);
 //    syshal_uart_init(UART_3);
 
@@ -2124,7 +2124,7 @@ void boot_state(void)
     syshal_i2c_init(I2C_1);
     syshal_i2c_init(I2C_2);
 
-    syshal_axl_init();
+    syshal_gps_init();
 
     syshal_flash_init(0, SPI_FLASH);
 
@@ -2152,6 +2152,7 @@ void boot_state(void)
 
     int ret = fs_get_configuration_data();
 
+    syshal_axl_init();
     if (!(FS_NO_ERROR == ret || FS_ERROR_FILE_NOT_FOUND == ret))
         Throw(EXCEPTION_FS_ERROR);
 
@@ -2290,6 +2291,8 @@ void standby_provisioning_needed_state()
         return;
     }
 #endif
+
+    syshal_time_delay_ms(1);
 
     config_if_tick();
 }
