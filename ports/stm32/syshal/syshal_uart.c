@@ -362,7 +362,23 @@ static inline void uart_irq(UART_t instance)
 */
 void USART1_IRQHandler(void)
 {
-    uart_irq(UART_1);
+    // Did we receive data ?
+    if (__HAL_UART_GET_IT(&huart[UART_1], UART_IT_RXNE))
+    {
+        uint16_t byte; // Ensure correct alignment
+
+        byte = huart[UART_1].Instance->RDR;
+
+        uint8_t rxBuffer = (uint8_t)byte;
+#ifdef UART_1_SAFE_INSERT
+        // If the buffer is full and the user defines UART_SAFE_INSERT, ignore new bytes.
+        if (!rb_safe_insert(&rx_buffer[UART_1], rxBuffer))
+            DEBUG_PR_ERROR("Rx buffer UART_%u full", UART_1 + 1);
+#else
+        // If the buffer is full overwrite data
+        rb_push_insert(&rx_buffer[UART_1], rxBuffer);
+#endif
+    }
 }
 
 /**
@@ -370,7 +386,23 @@ void USART1_IRQHandler(void)
 */
 void USART2_IRQHandler(void)
 {
-    uart_irq(UART_2);
+    // Did we receive data ?
+    if (__HAL_UART_GET_IT(&huart[UART_2], UART_IT_RXNE))
+    {
+        uint16_t byte; // Ensure correct alignment
+
+        byte = huart[UART_2].Instance->RDR;
+
+        uint8_t rxBuffer = (uint8_t)byte;
+#ifdef UART_2_SAFE_INSERT
+        // If the buffer is full and the user defines UART_SAFE_INSERT, ignore new bytes.
+        if (!rb_safe_insert(&rx_buffer[UART_2], rxBuffer))
+            DEBUG_PR_ERROR("Rx buffer UART_%u full", UART_2 + 1);
+#else
+        // If the buffer is full overwrite data
+        rb_push_insert(&rx_buffer[UART_2], rxBuffer);
+#endif
+    }
 }
 
 /**
@@ -378,8 +410,23 @@ void USART2_IRQHandler(void)
 */
 void USART3_4_IRQHandler(void)
 {
-    uart_irq(UART_3);
-    //uart_irq(UART_4);
+    // Did we receive data ?
+    if (__HAL_UART_GET_IT(&huart[UART_3], UART_IT_RXNE))
+    {
+        uint16_t byte; // Ensure correct alignment
+
+        byte = huart[UART_3].Instance->RDR;
+
+        uint8_t rxBuffer = (uint8_t)byte;
+#ifdef UART_3_SAFE_INSERT
+        // If the buffer is full and the user defines UART_SAFE_INSERT, ignore new bytes.
+        if (!rb_safe_insert(&rx_buffer[UART_3], rxBuffer))
+            DEBUG_PR_ERROR("Rx buffer UART_%u full", UART_3 + 1);
+#else
+        // If the buffer is full overwrite data
+        rb_push_insert(&rx_buffer[UART_3], rxBuffer);
+#endif
+    }
 }
 
 // Override _write function to enable printf use, but only if we have printf assigned to a uart
