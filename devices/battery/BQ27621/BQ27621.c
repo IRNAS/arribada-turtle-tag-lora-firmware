@@ -112,7 +112,11 @@ int syshal_batt_init(void)
         return SYSHAL_BATT_ERROR_DEVICE_UNRESPONSIVE;
     }
 
-    // FIXME: Wait for initialised flag to be set
+    // Wait for battery reading to return it's first reading
+    while (syshal_batt_level() <= 0)
+    {
+        syshal_time_delay_ms(5);
+    }
 
     return SYSHAL_BATT_NO_ERROR;
 }

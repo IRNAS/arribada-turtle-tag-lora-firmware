@@ -86,30 +86,30 @@
 #define BQ27621_EXIT_CFGUPDATE   (0x0043) // Exits CONFIG UPDATE mode without an OCV measurement and without resimulating to update StateOfCharge( )
 #define BQ27621_EXIT_RESIM       (0x0044) // Exits CONFIG UPDATE mode without an OCV measurement and resimulates with the updated configuration data to update StateOfCharge( )
 
-// Status bit definitions */
-#define BQ27621_STATUS_SHUTDOWNEN (0x8000)
-#define BQ27621_STATUS_WDRESET    (0x4000)
-#define BQ27621_STATUS_SS         (0x2000)
-#define BQ27621_STATUS_CALMODE    (0x1000)
-#define BQ27621_STATUS_OCVCMDCOMP (0x0200)
-#define BQ27621_STATUS_OCVFAIL    (0x0100)
-#define BQ27621_STATUS_INITCOMP   (0x0080)
-#define BQ27621_STATUS_HIBERNATE  (0x0040)
-#define BQ27621_STATUS_POWERMIN   (0x0020)
-#define BQ27621_STATUS_SLEEP      (0x0010)
-#define BQ27621_STATUS_LDMD       (0x0008)
-#define BQ27621_STATUS_CHEMCHNG   (0x0001)
+// Status bit definitions
+#define BQ27621_STATUS_CHEMCHNG   (1 << 0)
+#define BQ27621_STATUS_LDMD       (1 << 3)
+#define BQ27621_STATUS_SLEEP      (1 << 4)
+#define BQ27621_STATUS_POWERMIN   (1 << 5)
+#define BQ27621_STATUS_HIBERNATE  (1 << 6)
+#define BQ27621_STATUS_INITCOMP   (1 << 7)
+#define BQ27621_STATUS_OCVFAIL    (1 << 8)
+#define BQ27621_STATUS_OCVCMDCOMP (1 << 9)
+#define BQ27621_STATUS_CALMODE    (1 << 12)
+#define BQ27621_STATUS_SS         (1 << 13)
+#define BQ27621_STATUS_WDRESET    (1 << 14)
+#define BQ27621_STATUS_SHUTDOWNEN (1 << 15)
 
 // Flags register bit definitions
-#define BQ27621_FLAG_DSG      (1 << 0) // Discharging detected
-#define BQ27621_FLAG_SOCF     (1 << 1) // State-of-Charge threshold final
-#define BQ27621_FLAG_SOC1     (1 << 2) // State-of-Charge threshold 1
-#define BQ27621_FLAG_BAT_DET  (1 << 3) // Battery insertion detected
-#define BQ27621_FLAG_CFGUP    (1 << 4) // Fuel gauge is in CONFIG UPDATE mode
-#define BQ27621_FLAG_ITPOR    (1 << 5) // Indicates a power-on reset or RESET has occured
-#define BQ27621_FLAG_OCVTAKEN (1 << 7) // Cleared on entry to relax mode and set to 1 when OCV measurement is performed in relax
-#define BQ27621_FLAG_CHG      (1 << 8) // Fast charging allowed
-#define BQ27621_FLAG_FC       (1 << 9) // Full charge detected
+#define BQ27621_FLAG_DSG      (1 << 0)  // Discharging detected
+#define BQ27621_FLAG_SOCF     (1 << 1)  // State-of-Charge threshold final
+#define BQ27621_FLAG_SOC1     (1 << 2)  // State-of-Charge threshold 1
+#define BQ27621_FLAG_BAT_DET  (1 << 3)  // Battery insertion detected
+#define BQ27621_FLAG_CFGUP    (1 << 4)  // Fuel gauge is in CONFIG UPDATE mode
+#define BQ27621_FLAG_ITPOR    (1 << 5)  // Indicates a power-on reset or RESET has occured
+#define BQ27621_FLAG_OCVTAKEN (1 << 7)  // Cleared on entry to relax mode and set to 1 when OCV measurement is performed in relax
+#define BQ27621_FLAG_CHG      (1 << 8)  // Fast charging allowed
+#define BQ27621_FLAG_FC       (1 << 9)  // Full charge detected
 #define BQ27621_FLAG_UT       (1 << 14) // Under temperature condition
 #define BQ27621_FLAG_OT       (1 << 15) // Over temperature condition
 
