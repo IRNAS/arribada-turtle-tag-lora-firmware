@@ -2292,8 +2292,6 @@ void standby_provisioning_needed_state()
     }
 #endif
 
-    syshal_time_delay_ms(1);
-
     config_if_tick();
 }
 

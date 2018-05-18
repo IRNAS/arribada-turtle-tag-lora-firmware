@@ -114,9 +114,7 @@ int syshal_batt_init(void)
 
     // Wait for battery reading to return it's first reading
     while (syshal_batt_level() <= 0)
-    {
-        syshal_time_delay_ms(5);
-    }
+    {}
 
     return SYSHAL_BATT_NO_ERROR;
 }
