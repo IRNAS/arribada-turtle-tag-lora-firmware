@@ -94,6 +94,8 @@ int syshal_uart_change_baud(uint32_t instance, uint32_t baudrate)
     if (instance >= UART_TOTAL_NUMBER)
         return SYSHAL_UART_ERROR_INVALID_INSTANCE;
 
+    DEBUG_PR_TRACE("Changing baudrate on UART_%lu to %lu", instance + 1, baudrate);
+
     HAL_StatusTypeDef status;
 
     // Populate internal handlers from bsp
@@ -329,31 +331,6 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef * huart)
 //        syshal_gpio_term(GPIO_UART4_TX);
 //        syshal_gpio_term(GPIO_UART4_RX);
 //    }
-
-}
-
-static inline void uart_irq(UART_t instance)
-{
-
-    // Did we receive data ?
-    if (__HAL_UART_GET_IT(&huart[instance], UART_IT_RXNE))
-    {
-        uint16_t byte; // Ensure correct alignment
-
-        byte = huart[instance].Instance->RDR;
-
-        uint8_t rxBuffer = (uint8_t)byte;
-
-#ifdef UART_SAFE_INSERT
-        // If the buffer is full and the user defines UART_SAFE_INSERT, ignore new bytes.
-        if (!rb_safe_insert(&rx_buffer[instance], rxBuffer))
-            DEBUG_PR_ERROR("Rx buffer UART_%u full", instance + 1);
-#else
-        // If the buffer is full overwrite data
-        rb_push_insert(&rx_buffer[instance], rxBuffer);
-#endif
-
-    }
 
 }
 

@@ -20,6 +20,7 @@
 #include "M8N.h"
 #include "syshal_gps.h"
 #include "syshal_uart.h"
+#include "sys_config.h"
 #include "debug.h"
 
 // Private functions
@@ -40,7 +41,15 @@ static int hal_error_map[] =
 
 void syshal_gps_init(void)
 {
-    // Make sure device is awake
+    // If we have a custom baudrate set, make sure we're using it
+    if (sys_config_get(SYS_CONFIG_TAG_GPS_UART_BAUD_RATE, NULL) >= 0)
+    {
+        // If so update our UART HW baudrate
+        syshal_uart_change_baud(GPS_UART, sys_config.sys_config_gps_uart_baud_rate.contents.baudrate);
+        DEBUG_PR_TRACE("%s(), changing baudrate to %lu", __FUNCTION__, sys_config.sys_config_gps_uart_baud_rate.contents.baudrate);
+    }
+
+    // Make sure the device is awake
     syshal_gps_wake_up();
 }
 

@@ -683,6 +683,13 @@ static void cfg_write_next_state(void)
             Throw(EXCEPTION_BAD_SYS_CONFIG_ERROR_CONDITION); // Exit and fail silent
         }
 
+        // Have we just changed our GPS baudrate
+        if (SYS_CONFIG_TAG_GPS_UART_BAUD_RATE == tag)
+        {
+            // If so update our UART HW baudrate
+            syshal_uart_change_baud(GPS_UART, sys_config.sys_config_gps_uart_baud_rate.contents.baudrate);
+        }
+
         buffer_offset += tag_size;
     }
 
@@ -1029,7 +1036,9 @@ static void gps_read_req(cmd_t * req, uint16_t size)
     // If bridging is enabled
     if (syshal_gps_bridging)
     {
-        sm_context.gps_read.length = syshal_gps_available_raw();
+        // Try to match the requested length, if not return as close to it as we can
+        //DEBUG_PR_TRACE("syshal_gps_available_raw() = %lu, req->p.cmd_gps_read_req.length = %lu", syshal_gps_available_raw(), req->p.cmd_gps_read_req.length);
+        sm_context.gps_read.length = MIN(syshal_gps_available_raw(), req->p.cmd_gps_read_req.length);
 
         resp->p.cmd_gps_read_resp.length = sm_context.gps_read.length;
         resp->p.cmd_gps_read_resp.error_code = CMD_NO_ERROR;
@@ -1090,6 +1099,14 @@ static void gps_config_req(cmd_t * req, uint16_t size)
         Throw(EXCEPTION_REQ_WRONG_SIZE);
 
     syshal_gps_bridging = req->p.cmd_gps_config_req.enable; // Disable or enable GPS bridging
+
+    // If we've just enabled bridging, remove any previous data in the GPS rx buffer
+    uint8_t flush;
+    if (syshal_gps_bridging)
+    {
+        while (syshal_gps_receive_raw(&flush, 1))
+        {}
+    }
 
     // Generate and send response
     cmd_t * resp;
@@ -2136,9 +2153,6 @@ void boot_state(void)
     syshal_gps_bridging = false;
     syshal_ble_bridging = false;
 
-    //syshal_gps_init();
-    //syshal_usb_init();
-
     // Print General System Info
     DEBUG_PR_SYS("Arribada Tracker Device");
     DEBUG_PR_SYS("Version:  %s", GIT_VERSION);
@@ -2152,10 +2166,11 @@ void boot_state(void)
 
     int ret = fs_get_configuration_data();
 
+    // Init the accelerometer after configuration data has been collected
     syshal_axl_init();
+
     if (!(FS_NO_ERROR == ret || FS_ERROR_FILE_NOT_FOUND == ret))
         Throw(EXCEPTION_FS_ERROR);
-
 
 #ifndef DUMMY_BATTERY_MONITOR
     // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
@@ -2172,11 +2187,14 @@ void boot_state(void)
         sm_set_state(SM_STATE_STANDBY_BATTERY_LEVEL_LOW);
         return;
     }
+#endif
 
     // If either the USB 5V input signal or the BLE reed switch are active and the battery level is sufficient then it shall be possible to transition directly to the PROVISIONING state.
     if (config_if_connected)
+    {
         sm_set_state(SM_STATE_PROVISIONING);
-#endif
+        return;
+    }
 
     if (!check_configuration_tags_set()) // Check that all configuration tags are set
         sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED); // Not all required configuration data is set
@@ -2338,11 +2356,12 @@ void operational_state(void)
     // sm_set_state(SM_SM_STATE_STANDBY_LOG_FILE_FULL);
 
     // If GPS bridging is disabled
-    if (!syshal_gps_bridging)
-        syshal_gps_tick(); // Process GPS messages
-
+//    if (!syshal_gps_bridging)
+//        syshal_gps_tick(); // Process GPS messages
 
     // Check to see if any state changes are required
+
+    config_if_tick();
 
     if (config_if_connected)
     {
