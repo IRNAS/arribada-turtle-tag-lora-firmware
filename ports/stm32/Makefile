@@ -72,6 +72,7 @@ $(USB_DIR)/Core/Src/usbd_ioreq.c \
 usb/usbd_conf.c \
 usb/usbd_desc.c \
 usb/usbd_vendor.c \
+../../syshal/src/syshal_switch.c \
 syshal/syshal_gpio.c \
 syshal/syshal_i2c.c \
 syshal/syshal_pmu.c \

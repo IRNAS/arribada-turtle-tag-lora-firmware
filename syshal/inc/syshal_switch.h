@@ -22,9 +22,17 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define SYSHAL_SWITCH_NO_ERROR  (0)
+#define SYSHAL_SWITCH_NO_ERROR (0)
+
+typedef enum
+{
+    SYSHAL_SWITCH_EVENT_OPEN,
+    SYSHAL_SWITCH_EVENT_CLOSED
+} syshal_switch_event_id_t;
 
 int syshal_switch_init(void);
 bool syshal_switch_get(void);
+
+void syshal_switch_callback(syshal_switch_event_id_t event);
 
 #endif /* _SYSHAL_SWITCH_H_ */

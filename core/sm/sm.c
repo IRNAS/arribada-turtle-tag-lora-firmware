@@ -37,6 +37,7 @@
 #include "syshal_pmu.h"
 #include "syshal_rtc.h"
 #include "syshal_spi.h"
+#include "syshal_switch.h"
 #include "syshal_uart.h"
 #include "syshal_usb.h"
 #include "version.h"
@@ -2166,8 +2167,9 @@ void boot_state(void)
 
     int ret = fs_get_configuration_data();
 
-    // Init the accelerometer after configuration data has been collected
+    // Init the peripheral devices after configuration data has been collected
     syshal_axl_init();
+    syshal_switch_init();
 
     if (!(FS_NO_ERROR == ret || FS_ERROR_FILE_NOT_FOUND == ret))
         Throw(EXCEPTION_FS_ERROR);
