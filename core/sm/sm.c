@@ -164,6 +164,7 @@ static uint8_t           spi_bridge_buffer[SYSHAL_USB_PACKET_SIZE + 1];
 static uint32_t          config_if_message_timeout;
 static volatile bool     config_if_connected = false;
 static fs_t              file_system;
+static volatile bool     gps_fix = false;
 
 ////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////// PROTOTYPES ///////////////////////////////////
@@ -326,10 +327,14 @@ void syshal_gps_callback(syshal_gps_event_t event)
     switch (event.event_id)
     {
         case SYSHAL_GPS_EVENT_STATUS:
-            DEBUG_PR_SYS("SYSHAL_GPS_EVENT_STATUS");
+            DEBUG_PR_TRACE("SYSHAL_GPS_EVENT_STATUS - Fix: %u", event.event_data.status.gpsFix);
+            if (event.event_data.status.gpsFix > 0)
+                gps_fix = true;
+            else
+                gps_fix = false;
             break;
         case SYSHAL_GPS_EVENT_POSLLH:
-            DEBUG_PR_SYS("SYSHAL_GPS_EVENT_POSLLH");
+            DEBUG_PR_TRACE("SYSHAL_GPS_EVENT_POSLLH - lat,long: %ld,%ld", event.event_data.location.lat, event.event_data.location.lon);
             break;
         default:
             DEBUG_PR_WARN("Unknown GPS event in %s : %d", __FUNCTION__, event.event_id);
@@ -1825,13 +1830,13 @@ int config_if_event_handler(config_if_event_t * event)
         case CONFIG_IF_EVENT_SEND_COMPLETE:
             buffer_read_advance(&config_if_send_buffer, event->send.size); // Remove it from the buffer
             config_if_tx_pending = false;
-            DEBUG_PR_TRACE("Send, Size: %lu", event->send.size);
+            //DEBUG_PR_TRACE("Send, Size: %lu", event->send.size);
             break;
 
         case CONFIG_IF_EVENT_RECEIVE_COMPLETE:
             buffer_write_advance(&config_if_receive_buffer, event->receive.size); // Store it in the buffer
             config_if_rx_queued = false;
-            DEBUG_PR_TRACE("Receive, Size: %lu", event->receive.size);
+            //DEBUG_PR_TRACE("Receive, Size: %lu", event->receive.size);
             break;
 
         case CONFIG_IF_EVENT_CONNECTED:
@@ -2142,8 +2147,6 @@ void boot_state(void)
     syshal_i2c_init(I2C_1);
     syshal_i2c_init(I2C_2);
 
-    syshal_gps_init();
-
     syshal_flash_init(0, SPI_FLASH);
 
 #ifndef DUMMY_BATTERY_MONITOR
@@ -2169,6 +2172,7 @@ void boot_state(void)
 
     // Init the peripheral devices after configuration data has been collected
     syshal_axl_init();
+    syshal_gps_init();
     syshal_switch_init();
 
     if (!(FS_NO_ERROR == ret || FS_ERROR_FILE_NOT_FOUND == ret))
@@ -2358,8 +2362,8 @@ void operational_state(void)
     // sm_set_state(SM_SM_STATE_STANDBY_LOG_FILE_FULL);
 
     // If GPS bridging is disabled
-//    if (!syshal_gps_bridging)
-//        syshal_gps_tick(); // Process GPS messages
+    if (!syshal_gps_bridging)
+        syshal_gps_tick(); // Process GPS messages
 
     // Check to see if any state changes are required
 
