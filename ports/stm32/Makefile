@@ -143,6 +143,7 @@ C_INCLUDES =  \
 -I$(CORE_DIR)/crc32 \
 -I$(CORE_DIR)/debug \
 -I$(CORE_DIR)/fs \
+-I$(CORE_DIR)/logging \
 -I$(CORE_DIR)/ring_buffer \
 -I$(CORE_DIR)/sm \
 -I$(CORE_DIR)/sys_config \

@@ -28,6 +28,7 @@
 #include "fs.h"
 #include "sm.h"
 #include "sys_config.h"
+#include "logging.h"
 #include "syshal_axl.h"
 #include "syshal_batt.h"
 #include "syshal_gpio.h"
@@ -145,12 +146,14 @@ static sm_context_t sm_context;
 ////////////////////////////////// GLOBALS /////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-
 #define FS_FILE_ID_CONF             (0) // The File ID of the configuration data
 #define FS_FILE_ID_STM32_IMAGE      (1) // STM32 application image
 #define FS_FILE_ID_BLE_APP_IMAGE    (2) // BLE application image
 #define FS_FILE_ID_BLE_SOFT_IMAGE   (3) // BLE soft-device image
 #define FS_FILE_ID_LOG              (4) // Sensor log file
+
+// Size of logging buffer that is used to store sensor data before it it written to FLASH
+#define LOGGING_BUFFER_SIZE (256)
 
 static volatile bool     config_if_tx_pending = false;
 static volatile bool     config_if_rx_queued = false;
@@ -158,13 +161,16 @@ static bool              syshal_gps_bridging = false;
 static bool              syshal_ble_bridging = false;
 static volatile buffer_t config_if_send_buffer;
 static volatile buffer_t config_if_receive_buffer;
+static volatile buffer_t logging_buffer;
 static volatile uint8_t  config_if_send_buffer_pool[SYSHAL_USB_PACKET_SIZE * 2];
 static volatile uint8_t  config_if_receive_buffer_pool[SYSHAL_USB_PACKET_SIZE];
+static volatile uint8_t  logging_buffer_pool[LOGGING_BUFFER_SIZE];
 static uint8_t           spi_bridge_buffer[SYSHAL_USB_PACKET_SIZE + 1];
 static uint32_t          config_if_message_timeout;
 static volatile bool     config_if_connected = false;
 static fs_t              file_system;
 static volatile bool     gps_fix = false;
+static fs_handle_t       log_file_handle = NULL;
 
 ////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////// PROTOTYPES ///////////////////////////////////
@@ -188,6 +194,11 @@ static void setup_buffers(void)
     buffer_init_policy(pool, &config_if_receive_buffer,
                        (uintptr_t) &config_if_receive_buffer_pool[0],
                        sizeof(config_if_receive_buffer_pool), 1);
+
+    // Logging buffer
+    buffer_init_policy(pool, &logging_buffer,
+                       (uintptr_t) &logging_buffer_pool[0],
+                       sizeof(logging_buffer_pool), 1);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -264,8 +275,8 @@ static bool check_configuration_tags_set(void)
         if (!ble_beacon_enabled) // If ble beacon is disabled
         {
             if (SYS_CONFIG_TAG_BLUETOOTH_BEACON_GEO_FENCE_TRIGGER_LOCATION == tag ||
-                SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_INTERVAL == tag ||
-                SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_CONFIGURATION == tag)
+                    SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_INTERVAL == tag ||
+                    SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_CONFIGURATION == tag)
             {
                 continue; // Then don't check the beacon tags
             }
@@ -286,6 +297,46 @@ static bool check_configuration_tags_set(void)
     }
 
     return !tag_not_set;
+}
+
+void logging_add_to_buffer(uint8_t * data, uint32_t size)
+{
+    uint32_t length = 0;
+    uint8_t * buf_ptr;
+    if (!buffer_write(&logging_buffer, (uintptr_t *)&buf_ptr))
+        Throw(EXCEPTION_TX_BUFFER_FULL);
+
+    // Are we supposed to be adding a timestamp with this value?
+    if (sys_config.sys_config_logging_date_time_stamp_enable.contents.enable)
+    {
+        logging_date_time_t * date_time = (logging_date_time_t *) buf_ptr;
+
+        LOGGING_SET_HDR(date_time, LOGGING_DATE_TIME);
+
+        syshal_rtc_data_and_time_t rtc_time;
+        syshal_rtc_get_date_and_time(&rtc_time);
+
+        date_time->year = rtc_time.year;
+        date_time->month = rtc_time.month;
+        date_time->day = rtc_time.day;
+        date_time->hours = rtc_time.hours;
+        date_time->minutes = rtc_time.minutes;
+        date_time->seconds = rtc_time.seconds;
+
+        buf_ptr += sizeof(logging_date_time_t);
+        length += sizeof(logging_date_time_t);
+    }
+
+    if (sys_config.sys_config_logging_high_resolution_timer_enable.contents.enable)
+    {
+        DEBUG_PR_ERROR("logging_high_resolution_timer NOT IMPLEMENTED");
+    }
+
+    // Add the supplied data to the buffer
+    memcpy(buf_ptr, data, size);
+    length += size;
+
+    buffer_write_advance(&logging_buffer, length);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -334,10 +385,53 @@ void syshal_gps_callback(syshal_gps_event_t event)
                 gps_fix = false;
             break;
         case SYSHAL_GPS_EVENT_POSLLH:
+
             DEBUG_PR_TRACE("SYSHAL_GPS_EVENT_POSLLH - lat,long: %ld,%ld", event.event_data.location.lat, event.event_data.location.lon);
+
+            // Add data to be logged
+            if ( gps_fix && (SM_STATE_OPERATIONAL == sm_get_state()) )
+            {
+                logging_gps_position_t position;
+
+                LOGGING_SET_HDR(&position, LOGGING_GPS_POSITION);
+                position.iTOW = event.event_data.location.iTOW;
+                position.lon = event.event_data.location.lon;
+                position.lat = event.event_data.location.lat;
+                position.height = event.event_data.location.height;
+
+                logging_add_to_buffer((uint8_t *) &position, sizeof(position));
+            }
             break;
         default:
-            DEBUG_PR_WARN("Unknown GPS event in %s : %d", __FUNCTION__, event.event_id);
+            DEBUG_PR_WARN("Unknown GPS event in %s() : %d", __FUNCTION__, event.event_id);
+            break;
+    }
+
+}
+
+void syshal_switch_callback(syshal_switch_event_id_t event)
+{
+    switch (event)
+    {
+        case SYSHAL_SWITCH_EVENT_OPEN:
+            if ((SM_STATE_OPERATIONAL == sm_get_state()))
+            {
+                logging_surfaced_t surfaced;
+                LOGGING_SET_HDR(&surfaced, LOGGING_SURFACED);
+                logging_add_to_buffer((uint8_t *) &surfaced, sizeof(surfaced));
+            }
+            break;
+        case SYSHAL_SWITCH_EVENT_CLOSED:
+            if ((SM_STATE_OPERATIONAL == sm_get_state()))
+            {
+                logging_submerged_t submerged;
+                LOGGING_SET_HDR(&submerged, LOGGING_SUBMERGED);
+                logging_add_to_buffer((uint8_t *) &submerged, sizeof(submerged));
+            }
+            break;
+
+        default:
+            DEBUG_PR_WARN("Unknown switch event in %s() : %d", __FUNCTION__, event);
             break;
     }
 }
@@ -1343,8 +1437,8 @@ static void fw_send_image_req(cmd_t * req, uint16_t size)
     sm_context.fw_send_image.image_type = req->p.cmd_fw_send_image_req.image_type;
 
     if ( (sm_context.fw_send_image.image_type == FS_FILE_ID_STM32_IMAGE)
-         || (sm_context.fw_send_image.image_type == FS_FILE_ID_BLE_SOFT_IMAGE)
-         || (sm_context.fw_send_image.image_type == FS_FILE_ID_BLE_APP_IMAGE))
+            || (sm_context.fw_send_image.image_type == FS_FILE_ID_BLE_SOFT_IMAGE)
+            || (sm_context.fw_send_image.image_type == FS_FILE_ID_BLE_APP_IMAGE))
     {
         int ret = fs_delete(file_system, sm_context.fw_send_image.image_type); // Must first delete any current image
 
@@ -1468,8 +1562,8 @@ static void fw_apply_image_req(cmd_t * req, uint16_t size)
     uint8_t image_type = req->p.cmd_fw_apply_image_req.image_type;
 
     if ( (image_type == FS_FILE_ID_STM32_IMAGE)
-         || (image_type == FS_FILE_ID_BLE_SOFT_IMAGE)
-         || (image_type == FS_FILE_ID_BLE_APP_IMAGE))
+            || (image_type == FS_FILE_ID_BLE_SOFT_IMAGE)
+            || (image_type == FS_FILE_ID_BLE_APP_IMAGE))
     {
         // Check image exists
         int ret = fs_open(file_system, &file_system_handle, image_type, FS_MODE_READONLY, NULL);
@@ -1624,6 +1718,16 @@ static void log_create_req(cmd_t * req, uint16_t size)
             case FS_NO_ERROR:
                 resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
                 fs_close(file_system_handle); // Close the file
+
+                // Set the sys_config log file type
+                sys_config_logging_file_type_t log_file_type;
+                log_file_type.contents.file_type = mode;
+                sys_config_set(SYS_CONFIG_TAG_LOGGING_FILE_TYPE, &log_file_type.contents, SYS_CONFIG_TAG_DATA_SIZE(sys_config_logging_file_type_t));
+
+                // Set the sys_config log file size
+                sys_config_logging_file_size_t log_file_size;
+                log_file_size.contents.file_size = mode;
+                sys_config_set(SYS_CONFIG_TAG_LOGGING_FILE_SIZE, &log_file_size.contents, SYS_CONFIG_TAG_DATA_SIZE(sys_config_logging_file_size_t));
                 break;
 
             case FS_ERROR_FILE_ALREADY_EXISTS:
@@ -1716,7 +1820,7 @@ static void log_read_req(cmd_t * req, uint16_t size)
             if ((0 == sm_context.log_read.length) && (0 == sm_context.log_read.start_offset))
                 sm_context.log_read.length = stat.size;
 
-            if (sm_context.log_read.start_offset >= stat.size) // Is the offset beyond the end of the file?
+            if (sm_context.log_read.start_offset > stat.size) // Is the offset beyond the end of the file?
             {
                 resp->p.cmd_log_read_resp.error_code = CMD_ERROR_INVALID_PARAMETER;
             }
@@ -1735,7 +1839,10 @@ static void log_read_req(cmd_t * req, uint16_t size)
                 if (FS_NO_ERROR == ret)
                 {
                     resp->p.cmd_log_read_resp.error_code = CMD_NO_ERROR;
-                    message_set_state(SM_MESSAGE_STATE_LOG_READ_NEXT);
+                    if (sm_context.log_read.length)
+                        message_set_state(SM_MESSAGE_STATE_LOG_READ_NEXT);
+                    else
+                        fs_close(sm_context.log_read.file_handle);
                 }
                 else
                 {
@@ -1754,6 +1861,8 @@ static void log_read_req(cmd_t * req, uint16_t size)
     }
 
     resp->p.cmd_log_read_resp.length = sm_context.log_read.length;
+
+    DEBUG_PR_TRACE("responding with error code: %d, and length %lu", resp->p.cmd_log_read_resp.error_code, sm_context.log_read.length);
 
     buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_log_read_resp_t));
     config_if_send_priv(&config_if_send_buffer);
@@ -1788,13 +1897,22 @@ static void log_read_next_state()
     // Read data out
     bytes_to_read = MIN(sm_context.log_read.length, SYSHAL_USB_PACKET_SIZE);
 
-    ret = fs_read(sm_context.log_read.file_handle, &read_buffer, bytes_to_read, &bytes_actually_read);
+    ret = fs_read(sm_context.log_read.file_handle, read_buffer, bytes_to_read, &bytes_actually_read);
+    DEBUG_PR_TRACE("Reading from Log File");
+    printf("Contents: ");
+    for (uint32_t i = 0; i < bytes_actually_read; ++i)
+        printf("%02X ", read_buffer[i]);
+    printf("\r\n");
+
     if (FS_NO_ERROR != ret)
     {
         Throw(EXCEPTION_FS_ERROR);
     }
 
     sm_context.log_read.length -= bytes_actually_read;
+
+    buffer_write_advance(&config_if_send_buffer, bytes_actually_read);
+    config_if_send_priv(&config_if_send_buffer);
 
     if (sm_context.log_read.length) // Is there still data to send?
     {
@@ -2357,20 +2475,73 @@ void provisioning_state(void)
 
 void operational_state(void)
 {
-    // FIXME:
-    // If Log File is full then...
-    // sm_set_state(SM_SM_STATE_STANDBY_LOG_FILE_FULL);
+    // If log file is not open
+    if (NULL == log_file_handle)
+    {
+        int ret = fs_open(file_system, &log_file_handle, FS_FILE_ID_LOG, FS_MODE_WRITEONLY, NULL);
 
+        switch (ret)
+        {
+            case FS_NO_ERROR:
+                break;
+
+            case FS_ERROR_FILE_NOT_FOUND:
+                log_file_handle = NULL;
+                sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED); // We still need provisioning
+                break;
+
+            case FS_ERROR_FILE_PROTECTED: // We never lock the log file so this shouldn't occur
+            default:
+                log_file_handle = NULL;
+                Throw(EXCEPTION_FS_ERROR);
+                break;
+        }
+    }
     // If GPS bridging is disabled
     if (!syshal_gps_bridging)
         syshal_gps_tick(); // Process GPS messages
 
-    // Check to see if any state changes are required
+    // Is there any data waiting to be written to the log file?
+    uint8_t * read_buffer;
+    uint32_t length = buffer_read(&logging_buffer, (uintptr_t *)&read_buffer);
+
+    if (length)
+    {
+        uint32_t bytes_written;
+        int ret = fs_write(log_file_handle, read_buffer, length, &bytes_written);
+        DEBUG_PR_TRACE("Writing to Log File");
+        printf("Contents: ");
+        for (uint32_t i = 0; i < length; ++i)
+            printf("%02X ", read_buffer[i]);
+        printf("\r\n");
+
+        switch (ret)
+        {
+            case FS_NO_ERROR:
+                buffer_read_advance(&logging_buffer, length);
+                break;
+
+            case FS_ERROR_FILESYSTEM_FULL: // Our log file is full
+                fs_close(log_file_handle);
+                sm_set_state(SM_STATE_STANDBY_LOG_FILE_FULL);
+                break;
+
+            case FS_ERROR_FLASH_MEDIA:
+            default:
+                DEBUG_PR_ERROR("%u: fs error: %d", __LINE__, ret);
+                fs_close(log_file_handle);
+                Throw(EXCEPTION_FS_ERROR);
+                break;
+        }
+    }
 
     config_if_tick();
 
+    // Check to see if any state changes are required
     if (config_if_connected)
     {
+        if (log_file_handle)
+            fs_close(log_file_handle);
         sm_set_state(SM_STATE_PROVISIONING); // Configuration interface connected
         return;
     }
@@ -2379,6 +2550,8 @@ void operational_state(void)
     // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
     if (syshal_batt_charging())
     {
+        if (log_file_handle)
+                fs_close(log_file_handle);
         sm_set_state(SM_STATE_STANDBY_BATTERY_CHARGING);
         return;
     }
@@ -2387,13 +2560,15 @@ void operational_state(void)
     int level = syshal_batt_level();
     if ( (level <= SYSHAL_BATT_LEVEL_LOW) && (level >= 0) )
     {
+        if (log_file_handle)
+                fs_close(log_file_handle);
         sm_set_state(SM_STATE_STANDBY_BATTERY_LEVEL_LOW);
         return;
     }
 #endif
 
-}
 
+}
 ////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////// STATE HANDLERS ////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -2402,8 +2577,53 @@ void state_exception_handler(CEXCEPTION_T e)
 {
     switch (e)
     {
+        case EXCEPTION_REQ_WRONG_SIZE:
+            DEBUG_PR_ERROR("EXCEPTION_REQ_WRONG_SIZE");
+            break;
+
+        case EXCEPTION_RESP_TX_PENDING:
+            DEBUG_PR_ERROR("EXCEPTION_RESP_TX_PENDING");
+            break;
+
+        case EXCEPTION_TX_BUFFER_FULL:
+            DEBUG_PR_ERROR("EXCEPTION_TX_BUFFER_FULL");
+            break;
+
+        case EXCEPTION_TX_BUSY:
+            DEBUG_PR_ERROR("EXCEPTION_TX_BUSY");
+            break;
+
+        case EXCEPTION_RX_BUFFER_EMPTY:
+            DEBUG_PR_ERROR("EXCEPTION_RX_BUFFER_EMPTY");
+            break;
+
+        case EXCEPTION_RX_BUFFER_FULL:
+            DEBUG_PR_ERROR("EXCEPTION_RX_BUFFER_FULL");
+            break;
+
+        case EXCEPTION_BAD_SYS_CONFIG_ERROR_CONDITION:
+            DEBUG_PR_ERROR("EXCEPTION_BAD_SYS_CONFIG_ERROR_CONDITION");
+            break;
+
+        case EXCEPTION_PACKET_WRONG_SIZE:
+            DEBUG_PR_ERROR("EXCEPTION_PACKET_WRONG_SIZE");
+            break;
+
+        case EXCEPTION_GPS_SEND_ERROR:
+            DEBUG_PR_ERROR("EXCEPTION_GPS_SEND_ERROR");
+            break;
+
+        case EXCEPTION_FS_ERROR:
+            DEBUG_PR_ERROR("EXCEPTION_FS_ERROR");
+            break;
+
+        case EXCEPTION_SPI_ERROR:
+            DEBUG_PR_ERROR("EXCEPTION_SPI_ERROR");
+            break;
+
+
         default:
-            DEBUG_PR_ERROR("Unknown state exception");
+            DEBUG_PR_ERROR("Unknown state exception %d", e);
             break;
     }
 }

@@ -117,6 +117,7 @@ void syshal_gps_tick(void)
         else if (GPS_UART_ERROR_INSUFFICIENT_BYTES == error)
         {
             //DEBUG_PR_TRACE("GPS Uart insufficient bytes");
+            break;
         }
         else if (GPS_UART_ERROR_MISSING_SYNC1 == error)
         {
@@ -128,7 +129,7 @@ void syshal_gps_tick(void)
         }
         else if (GPS_UART_ERROR_MSG_PENDING == error)
         {
-            //DEBUG_PR_TRACE("GPS message not fully received");
+            DEBUG_PR_TRACE("GPS message not fully received");
         }
         else if (GPS_UART_NO_ERROR != error)
         {

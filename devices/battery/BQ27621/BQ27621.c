@@ -150,17 +150,6 @@ int syshal_batt_level(void)
         return level;
 }
 
-/*
-    uint8_t level;
-
-    int status = syshal_i2c_read_reg(I2C_BATTERY, BQ27621_ADDR, BQ27621_REG_STATE_OF_CHARGE, &level, 1);
-
-    if (SYSHAL_BATT_NO_ERROR == i2c_error_map[status])
-        return level;
-    else
-        return i2c_error_map[status];
-*/
-
 /**
  * @brief      Is the battery currently in a charging state?
  *
@@ -168,19 +157,13 @@ int syshal_batt_level(void)
  */
 bool syshal_batt_charging(void)
 {
-    // Read the BQ27621_REG_FLAGS register
-//    uint8_t data[2];
-//
-//    syshal_i2c_read_reg(I2C_BATTERY, BQ27621_ADDR, BQ27621_REG_FLAGS, data, 2);
-//    uint16_t flags = (uint16_t) (data[0] << 8) | (data[1] & 0xff);
-//
-//    // Check for errors
-//    if (SYSHAL_I2C_ERROR_TIMEOUT == status)
-//        return SYSHAL_BATT_ERROR_TIMEOUT;
-//    else if (status < 0)
-//        return SYSHAL_BATT_ERROR_DEVICE_UNRESPONSIVE;
-//    // Read the discharging flag to determine if we're currently charging
-//    return !(flags && BQ27621_FLAG_DSG);
+    uint8_t data[2];
+    syshal_i2c_read_reg(I2C_BATTERY, BQ27621_ADDR, BQ27621_REG_AVERAGE_POWER, data, 2);
 
-    return false;
+    int16_t averagePower = ((int16_t)data[1] << 8) | ((int16_t)data[0] & 0xff);
+
+    if (averagePower >= 0)
+        return true;
+    else
+        return false;
 }

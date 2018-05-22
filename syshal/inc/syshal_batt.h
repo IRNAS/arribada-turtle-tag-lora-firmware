@@ -29,7 +29,7 @@
 #define SYSHAL_BATT_ERROR_TIMEOUT              (-3)
 #define SYSHAL_BATT_ERROR_DEVICE_UNRESPONSIVE  (-4)
 
-#define SYSHAL_BATT_LEVEL_LOW (10)
+#define SYSHAL_BATT_LEVEL_LOW (5)
 
 int syshal_batt_init(void);
 uint16_t syshal_batt_temp(void);
