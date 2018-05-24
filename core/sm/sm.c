@@ -1201,9 +1201,9 @@ static void gps_config_req(cmd_t * req, uint16_t size)
     syshal_gps_bridging = req->p.cmd_gps_config_req.enable; // Disable or enable GPS bridging
 
     // If we've just enabled bridging, remove any previous data in the GPS rx buffer
-    uint8_t flush;
     if (syshal_gps_bridging)
     {
+        uint8_t flush;
         while (syshal_gps_receive_raw(&flush, 1))
         {}
     }
@@ -2483,6 +2483,14 @@ void operational_state(void)
         switch (ret)
         {
             case FS_NO_ERROR:
+                // All systems go
+                // Flush any data that we previously may have in the buffers and start fresh
+                buffer_reset(&logging_buffer);
+
+                // Clear the GPS buffer
+                uint8_t flush;
+                while (syshal_gps_receive_raw(&flush, 1))
+                {}
                 break;
 
             case FS_ERROR_FILE_NOT_FOUND:
@@ -2540,8 +2548,11 @@ void operational_state(void)
     // Check to see if any state changes are required
     if (config_if_connected)
     {
-        if (log_file_handle)
+        if (log_file_handle) 
+        {
             fs_close(log_file_handle);
+            log_file_handle = NULL;
+        }
         sm_set_state(SM_STATE_PROVISIONING); // Configuration interface connected
         return;
     }
@@ -2550,8 +2561,11 @@ void operational_state(void)
     // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
     if (syshal_batt_charging())
     {
-        if (log_file_handle)
-                fs_close(log_file_handle);
+        if (log_file_handle) 
+        {
+            fs_close(log_file_handle);
+            log_file_handle = NULL;
+        }
         sm_set_state(SM_STATE_STANDBY_BATTERY_CHARGING);
         return;
     }
@@ -2560,8 +2574,11 @@ void operational_state(void)
     int level = syshal_batt_level();
     if ( (level <= SYSHAL_BATT_LEVEL_LOW) && (level >= 0) )
     {
-        if (log_file_handle)
-                fs_close(log_file_handle);
+        if (log_file_handle) 
+        {
+            fs_close(log_file_handle);
+            log_file_handle = NULL;
+        }
         sm_set_state(SM_STATE_STANDBY_BATTERY_LEVEL_LOW);
         return;
     }
