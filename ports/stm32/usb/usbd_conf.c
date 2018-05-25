@@ -53,6 +53,7 @@
 #include "usbd_def.h"
 #include "usbd_core.h"
 #include "usbd_vendor.h"
+#include "system_clock.h"
 
 /* Private variables ---------------------------------------------------------*/
 PCD_HandleTypeDef hpcd_USB_FS;
@@ -61,7 +62,6 @@ void _Error_Handler(char * file, int line);
 /* Private functions ---------------------------------------------------------*/
 static void SystemClockConfig_Resume(void);
 void HAL_PCDEx_SetConnectionState(PCD_HandleTypeDef * hpcd, uint8_t state);
-extern void SystemClock_Config(void);
 
 /*******************************************************************************
                        LL Driver Callbacks (PCD -> USB Device Library)
@@ -240,10 +240,7 @@ USBD_StatusTypeDef USBD_LL_Init(USBD_HandleTypeDef * pdev)
     hpcd_USB_FS.Init.low_power_enable = DISABLE;
     hpcd_USB_FS.Init.lpm_enable = DISABLE;
     hpcd_USB_FS.Init.battery_charging_enable = DISABLE;
-    if (HAL_PCD_Init(&hpcd_USB_FS) != HAL_OK)
-    {
-        _Error_Handler(__FILE__, __LINE__);
-    }
+    HAL_PCD_Init(&hpcd_USB_FS);
 
     HAL_PCDEx_PMAConfig((PCD_HandleTypeDef *)pdev->pData , 0x00 , PCD_SNG_BUF, 0x18);   // Control Zero endpoint
     HAL_PCDEx_PMAConfig((PCD_HandleTypeDef *)pdev->pData , 0x80 , PCD_SNG_BUF, 0x58);   
@@ -698,7 +695,7 @@ void USBD_static_free(void * p)
   */
 static void SystemClockConfig_Resume(void)
 {
-    SystemClock_Config();
+    system_clock_config();
 }
 
 /**

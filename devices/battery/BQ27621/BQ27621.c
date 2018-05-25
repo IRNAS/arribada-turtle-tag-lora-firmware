@@ -45,7 +45,7 @@ static inline uint16_t BQ27621_read(uint8_t regAddress)
     uint32_t length = syshal_i2c_read_reg(I2C_BATTERY, BQ27621_ADDR, regAddress, data, 2);
 
     if (2 == length)
-        return (data[0] << 8) | (data[1] & 0xff);
+        return (data[1] << 8) | (data[0] & 0xff);
     else
         return 0;
 }
@@ -157,13 +157,15 @@ int syshal_batt_level(void)
  */
 bool syshal_batt_charging(void)
 {
-    uint8_t data[2];
-    syshal_i2c_read_reg(I2C_BATTERY, BQ27621_ADDR, BQ27621_REG_AVERAGE_POWER, data, 2);
+    return false;
 
-    int16_t averagePower = ((int16_t)data[1] << 8) | ((int16_t)data[0] & 0xff);
-
-    if (averagePower >= 0)
-        return true;
-    else
-        return false;
+//    uint8_t data[2];
+//    syshal_i2c_read_reg(I2C_BATTERY, BQ27621_ADDR, BQ27621_REG_AVERAGE_POWER, data, 2);
+//
+//    int16_t averagePower = ((int16_t)data[1] << 8) | ((int16_t)data[0] & 0xff);
+//
+//    if (averagePower >= 0)
+//        return true;
+//    else
+//        return false;
 }

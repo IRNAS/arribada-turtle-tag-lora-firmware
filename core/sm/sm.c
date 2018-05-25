@@ -275,8 +275,8 @@ static bool check_configuration_tags_set(void)
         if (!ble_beacon_enabled) // If ble beacon is disabled
         {
             if (SYS_CONFIG_TAG_BLUETOOTH_BEACON_GEO_FENCE_TRIGGER_LOCATION == tag ||
-                    SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_INTERVAL == tag ||
-                    SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_CONFIGURATION == tag)
+                SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_INTERVAL == tag ||
+                SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_CONFIGURATION == tag)
             {
                 continue; // Then don't check the beacon tags
             }
@@ -375,6 +375,14 @@ void syshal_axl_callback(syshal_axl_data_t data)
 
 void syshal_gps_callback(syshal_gps_event_t event)
 {
+
+    // If accelerometer data logging is disabled
+    if (!sys_config.sys_config_gps_log_position_enable.contents.enable)
+    {
+        syshal_gps_shutdown(); // Sleep the gps device
+        return;
+    }
+
     switch (event.event_id)
     {
         case SYSHAL_GPS_EVENT_STATUS:
@@ -1437,8 +1445,8 @@ static void fw_send_image_req(cmd_t * req, uint16_t size)
     sm_context.fw_send_image.image_type = req->p.cmd_fw_send_image_req.image_type;
 
     if ( (sm_context.fw_send_image.image_type == FS_FILE_ID_STM32_IMAGE)
-            || (sm_context.fw_send_image.image_type == FS_FILE_ID_BLE_SOFT_IMAGE)
-            || (sm_context.fw_send_image.image_type == FS_FILE_ID_BLE_APP_IMAGE))
+         || (sm_context.fw_send_image.image_type == FS_FILE_ID_BLE_SOFT_IMAGE)
+         || (sm_context.fw_send_image.image_type == FS_FILE_ID_BLE_APP_IMAGE))
     {
         int ret = fs_delete(file_system, sm_context.fw_send_image.image_type); // Must first delete any current image
 
@@ -1562,8 +1570,8 @@ static void fw_apply_image_req(cmd_t * req, uint16_t size)
     uint8_t image_type = req->p.cmd_fw_apply_image_req.image_type;
 
     if ( (image_type == FS_FILE_ID_STM32_IMAGE)
-            || (image_type == FS_FILE_ID_BLE_SOFT_IMAGE)
-            || (image_type == FS_FILE_ID_BLE_APP_IMAGE))
+         || (image_type == FS_FILE_ID_BLE_SOFT_IMAGE)
+         || (image_type == FS_FILE_ID_BLE_APP_IMAGE))
     {
         // Check image exists
         int ret = fs_open(file_system, &file_system_handle, image_type, FS_MODE_READONLY, NULL);
@@ -2289,9 +2297,19 @@ void boot_state(void)
     int ret = fs_get_configuration_data();
 
     // Init the peripheral devices after configuration data has been collected
-    syshal_axl_init();
+    //syshal_axl_init();
     syshal_gps_init();
     syshal_switch_init();
+
+//    syshal_gps_shutdown();
+//    while(1)
+//    {
+//        syshal_pmu_set_level(POWER_STOP);
+//        syshal_uart_init(UART_2);
+//        syshal_time_delay_ms(1000);
+//        DEBUG_PR_TRACE("Device woken");
+//        syshal_time_delay_ms(1000);
+//    }
 
     if (!(FS_NO_ERROR == ret || FS_ERROR_FILE_NOT_FOUND == ret))
         Throw(EXCEPTION_FS_ERROR);
@@ -2323,7 +2341,22 @@ void boot_state(void)
     if (!check_configuration_tags_set()) // Check that all configuration tags are set
         sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED); // Not all required configuration data is set
     else
-        sm_set_state(SM_STATE_OPERATIONAL); // All systems go for standard operation
+    {
+        // And a log file exists
+        fs_handle_t file_system_handle;
+        int ret = fs_open(file_system, &file_system_handle, FS_FILE_ID_LOG, FS_MODE_READONLY, NULL);
+
+        if (FS_NO_ERROR == ret)
+        {
+            fs_close(file_system_handle);
+            sm_set_state(SM_STATE_OPERATIONAL); // All systems go for standard operation
+        }
+        else
+        {
+            syshal_gps_shutdown();
+            sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED); // We still need provisioning
+        }
+    }
 
 }
 
@@ -2350,9 +2383,6 @@ void standby_battery_charging_state()
 
 void standby_battery_level_low_state()
 {
-    // FIXME: If any file is open, close it to prevent data loss
-
-
 #ifndef DUMMY_BATTERY_MONITOR
     // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
     if (syshal_batt_charging())
@@ -2413,6 +2443,7 @@ void standby_provisioning_needed_state()
 
     if (config_if_connected)
     {
+        syshal_gps_wake_up();
         sm_set_state(SM_STATE_PROVISIONING); // Not all tags are set, we need provisioning
         return;
     }
@@ -2467,9 +2498,27 @@ void provisioning_state(void)
     {
         // If so we should change state
         if (check_configuration_tags_set())
-            sm_set_state(SM_STATE_OPERATIONAL); // All systems go for standard operation
+        {
+            // And a log file exists
+            fs_handle_t file_system_handle;
+            int ret = fs_open(file_system, &file_system_handle, FS_FILE_ID_LOG, FS_MODE_READONLY, NULL);
+
+            if (FS_NO_ERROR == ret)
+            {
+                fs_close(file_system_handle);
+                sm_set_state(SM_STATE_OPERATIONAL); // All systems go for standard operation
+            }
+            else
+            {
+                syshal_gps_shutdown();
+                sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED); // We still need provisioning
+            }
+        }
         else
+        {
+            syshal_gps_shutdown();
             sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED); // We still need provisioning
+        }
     }
 }
 
@@ -2487,10 +2536,19 @@ void operational_state(void)
                 // Flush any data that we previously may have in the buffers and start fresh
                 buffer_reset(&logging_buffer);
 
-                // Clear the GPS buffer
-                uint8_t flush;
-                while (syshal_gps_receive_raw(&flush, 1))
-                {}
+                if (sys_config.sys_config_gps_log_position_enable.contents.enable)
+                {
+                    syshal_gps_wake_up();
+                    // Clear the GPS buffer
+                    uint8_t flush;
+                    while (syshal_gps_receive_raw(&flush, 1))
+                    {}
+                    syshal_gps_shutdown();
+                }
+                else
+                {
+                    syshal_gps_shutdown();
+                }
                 break;
 
             case FS_ERROR_FILE_NOT_FOUND:
@@ -2505,8 +2563,9 @@ void operational_state(void)
                 break;
         }
     }
-    // If GPS bridging is disabled
-    if (!syshal_gps_bridging)
+
+    // If GPS bridging is disabled and GPS logging enabled
+    if ( (!syshal_gps_bridging) && (sys_config.sys_config_gps_log_position_enable.contents.enable) )
         syshal_gps_tick(); // Process GPS messages
 
     // Is there any data waiting to be written to the log file?
@@ -2536,7 +2595,6 @@ void operational_state(void)
 
             case FS_ERROR_FLASH_MEDIA:
             default:
-                DEBUG_PR_ERROR("%u: fs error: %d", __LINE__, ret);
                 fs_close(log_file_handle);
                 Throw(EXCEPTION_FS_ERROR);
                 break;
@@ -2548,7 +2606,7 @@ void operational_state(void)
     // Check to see if any state changes are required
     if (config_if_connected)
     {
-        if (log_file_handle) 
+        if (log_file_handle)
         {
             fs_close(log_file_handle);
             log_file_handle = NULL;
@@ -2561,7 +2619,7 @@ void operational_state(void)
     // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
     if (syshal_batt_charging())
     {
-        if (log_file_handle) 
+        if (log_file_handle)
         {
             fs_close(log_file_handle);
             log_file_handle = NULL;
@@ -2574,7 +2632,7 @@ void operational_state(void)
     int level = syshal_batt_level();
     if ( (level <= SYSHAL_BATT_LEVEL_LOW) && (level >= 0) )
     {
-        if (log_file_handle) 
+        if (log_file_handle)
         {
             fs_close(log_file_handle);
             log_file_handle = NULL;
@@ -2584,6 +2642,7 @@ void operational_state(void)
     }
 #endif
 
+    syshal_pmu_set_level(POWER_SLEEP);
 
 }
 ////////////////////////////////////////////////////////////////////////////////

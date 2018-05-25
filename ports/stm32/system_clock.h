@@ -1,4 +1,6 @@
-/* Copyright (C) 2018 Arribada
+/* system_clock.h - system clock configuration
+ *
+ * Copyright (C) 2018 Arribada
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -14,7 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef __MAIN_H__
-#define __MAIN_H__
+#ifndef _SYSTEM_CLOCK_H_
+#define _SYSTEM_CLOCK_H_
 
-#endif /* __MAIN_H__ */
+void system_clock_config(void);
+
+#endif /* _SYSTEM_CLOCK_H_ */

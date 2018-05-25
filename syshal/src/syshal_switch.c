@@ -31,31 +31,31 @@ static void syshal_switch_interrupt_priv(void)
 {
     // Generate a callback event
     syshal_switch_event_id_t event;
-    static uint32_t last_event = 0;
+//    static uint32_t last_event = 0;
     static uint8_t last_state = 2;
 
-    if (syshal_time_get_ticks_ms() > (last_event + SYSHAL_SWITCH_DEBOUNCE_TIME_MS))
+//    if (syshal_time_get_ticks_ms() > (last_event + SYSHAL_SWITCH_DEBOUNCE_TIME_MS))
+//    {
+    bool state = syshal_switch_get();
+    if (last_state != state)
     {
-        bool state = syshal_switch_get();
-        if (last_state != state)
+        if (state)
         {
-            if (state)
-            {
-                event = SYSHAL_SWITCH_EVENT_CLOSED;
-                DEBUG_PR_SYS("Saltwater Switch Closed");
-            }
-            else
-            {
-                event = SYSHAL_SWITCH_EVENT_OPEN;
-                DEBUG_PR_SYS("Saltwater Switch Open");
-            }
-
-            syshal_switch_callback(event);
-
-            last_event = syshal_time_get_ticks_ms();
-            last_state = state;
+            event = SYSHAL_SWITCH_EVENT_CLOSED;
+            DEBUG_PR_SYS("Saltwater Switch Closed");
         }
+        else
+        {
+            event = SYSHAL_SWITCH_EVENT_OPEN;
+            DEBUG_PR_SYS("Saltwater Switch Open");
+        }
+
+        syshal_switch_callback(event);
+
+//        last_event = syshal_time_get_ticks_ms();
+        last_state = state;
     }
+//    }
 }
 
 int syshal_switch_init(void)

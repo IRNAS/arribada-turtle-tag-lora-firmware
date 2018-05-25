@@ -24,7 +24,10 @@
   */
 
 #include "bsp.h"
+#include "system_clock.h"
 #include "syshal_pmu.h"
+#include "syshal_gpio.h"
+#include "stm32f0xx_hal_gpio.h"
 #include "debug.h"
 
 /**
@@ -39,17 +42,21 @@ void syshal_pmu_set_level(syshal_pmu_power_level_t level)
     {
         case POWER_STOP:
             DEBUG_PR_TRACE("Entering POWER_STOP mode");
-            HAL_PWR_EnterSTOPMode(PWR_MAINREGULATOR_ON, PWR_STOPENTRY_WFI);
+            HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI);
+            system_clock_config(); // Re-establish the clock settings
             break;
 
         case POWER_SLEEP:
             DEBUG_PR_TRACE("Entering POWER_SLEEP mode");
+            HAL_SuspendTick(); // Disable the Systick to prevent it waking us up
             HAL_PWR_EnterSLEEPMode(0, PWR_SLEEPENTRY_WFI);
+            HAL_ResumeTick(); // Re-enable the Systick
             break;
 
         case POWER_STANDBY:
             DEBUG_PR_TRACE("Entering POWER_STANDBY mode");
             HAL_PWR_EnterSTANDBYMode();
+            system_clock_config(); // Re-establish the clock settings
             break;
 
         default:
