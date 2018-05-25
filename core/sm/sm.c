@@ -2543,7 +2543,6 @@ void operational_state(void)
                     uint8_t flush;
                     while (syshal_gps_receive_raw(&flush, 1))
                     {}
-                    syshal_gps_shutdown();
                 }
                 else
                 {
