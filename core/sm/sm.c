@@ -376,7 +376,7 @@ void syshal_axl_callback(syshal_axl_data_t data)
 void syshal_gps_callback(syshal_gps_event_t event)
 {
 
-    // If accelerometer data logging is disabled
+    // If gps data logging is disabled
     if (!sys_config.sys_config_gps_log_position_enable.contents.enable)
     {
         syshal_gps_shutdown(); // Sleep the gps device
@@ -1677,7 +1677,7 @@ static void battery_status_req(cmd_t * req, uint16_t size)
     resp->p.cmd_battery_status_resp.charge_level = 100;
 #else
     resp->p.cmd_battery_status_resp.error_code = CMD_NO_ERROR;
-    resp->p.cmd_battery_status_resp.charging_indicator = syshal_batt_charging();
+    resp->p.cmd_battery_status_resp.charging_indicator = syshal_gpio_get_input(GPIO_VUSB);
     resp->p.cmd_battery_status_resp.charge_level = syshal_batt_level();
 #endif
 
@@ -2262,6 +2262,7 @@ void boot_state(void)
 
     syshal_gpio_init(GPIO_LED1_GREEN);
     syshal_gpio_init(GPIO_LED2_RED);
+    syshal_gpio_init(GPIO_VUSB);
 
     syshal_uart_init(UART_1);
     syshal_uart_init(UART_2);
@@ -2314,14 +2315,14 @@ void boot_state(void)
     if (!(FS_NO_ERROR == ret || FS_ERROR_FILE_NOT_FOUND == ret))
         Throw(EXCEPTION_FS_ERROR);
 
-#ifndef DUMMY_BATTERY_MONITOR
     // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
-    if (syshal_batt_charging())
+    if (syshal_gpio_get_input(GPIO_VUSB))
     {
         sm_set_state(SM_STATE_STANDBY_BATTERY_CHARGING);
         return;
     }
 
+#ifndef DUMMY_BATTERY_MONITOR
     // If the battery level is too low then the system shall transition to the BATTERY_LEVEL_LOW state
     int level = syshal_batt_level();
     if ( (level <= SYSHAL_BATT_LEVEL_LOW) && (level >= 0) )
@@ -2362,35 +2363,56 @@ void boot_state(void)
 
 void standby_battery_charging_state()
 {
-#ifndef DUMMY_BATTERY_MONITOR
-    if (!syshal_batt_charging())
+    if (syshal_gpio_get_input(GPIO_VUSB))
     {
+        // If USB is connected
+        config_if_tick();
+
+        // Look for a connection event
+        if (config_if_connected)
+            sm_set_state(SM_STATE_PROVISIONING);
+    }
+    else
+    {
+        // If we're no longer charging, transition state
         int level = syshal_batt_level();
-        if ( (level <= SYSHAL_BATT_LEVEL_LOW) && (level >= 0) )
+        if (level >= 0)
         {
-            if (config_if_connected)
-                sm_set_state(SM_STATE_PROVISIONING);
+            if (level > SYSHAL_BATT_LEVEL_LOW)
+            {
+                // Our battery is in a good state
+                // But are we okay to enter an operational state?
+                if (check_configuration_tags_set())
+                {
+                    // And a log file exists
+                    fs_handle_t file_system_handle;
+                    int ret = fs_open(file_system, &file_system_handle, FS_FILE_ID_LOG, FS_MODE_READONLY, NULL);
+
+                    if (FS_NO_ERROR == ret)
+                    {
+                        fs_close(file_system_handle);
+                        sm_set_state(SM_STATE_OPERATIONAL); // All systems go for standard operation
+                    }
+                    else
+                    {
+                        syshal_gps_shutdown();
+                        sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED); // We still need provisioning
+                    }
+                }
+            }
             else
-                sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED);
-        }
-        else
-        {
-            sm_set_state(SM_STATE_STANDBY_BATTERY_LEVEL_LOW);
+            {
+                sm_set_state(SM_STATE_STANDBY_BATTERY_LEVEL_LOW);
+            }
         }
     }
-#endif
 }
 
 void standby_battery_level_low_state()
 {
-#ifndef DUMMY_BATTERY_MONITOR
     // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
-    if (syshal_batt_charging())
-    {
+    if (syshal_gpio_get_input(GPIO_VUSB))
         sm_set_state(SM_STATE_STANDBY_BATTERY_CHARGING);
-        return;
-    }
-#endif
 }
 
 void standby_log_file_full_state()
@@ -2403,14 +2425,14 @@ void standby_log_file_full_state()
         return;
     }
 
-#ifndef DUMMY_BATTERY_MONITOR
     // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
-    if (syshal_batt_charging())
+    if (syshal_gpio_get_input(GPIO_VUSB))
     {
         sm_set_state(SM_STATE_STANDBY_BATTERY_CHARGING);
         return;
     }
 
+#ifndef DUMMY_BATTERY_MONITOR
     // If the battery level is too low then the system shall transition to the BATTERY_LEVEL_LOW state
     int level = syshal_batt_level();
     if ( (level <= SYSHAL_BATT_LEVEL_LOW) && (level >= 0) )
@@ -2448,14 +2470,14 @@ void standby_provisioning_needed_state()
         return;
     }
 
-#ifndef DUMMY_BATTERY_MONITOR
     // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
-    if (syshal_batt_charging())
+    if (syshal_gpio_get_input(GPIO_VUSB))
     {
         sm_set_state(SM_STATE_STANDBY_BATTERY_CHARGING);
         return;
     }
 
+#ifndef DUMMY_BATTERY_MONITOR
     // If the battery level is too low then the system shall transition to the BATTERY_LEVEL_LOW state
     int level = syshal_batt_level();
     if ( (level <= SYSHAL_BATT_LEVEL_LOW) && (level >= 0) )
@@ -2519,6 +2541,9 @@ void provisioning_state(void)
             syshal_gps_shutdown();
             sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED); // We still need provisioning
         }
+
+        syshal_time_delay_ms(1000); // Give time for GPIO_VUSB to settle
+        // This is because we are using GPIO_SPEED_FREQ_LOW to save power
     }
 }
 
@@ -2614,9 +2639,8 @@ void operational_state(void)
         return;
     }
 
-#ifndef DUMMY_BATTERY_MONITOR
     // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
-    if (syshal_batt_charging())
+    if (syshal_gpio_get_input(GPIO_VUSB))
     {
         if (log_file_handle)
         {
@@ -2627,6 +2651,7 @@ void operational_state(void)
         return;
     }
 
+#ifndef DUMMY_BATTERY_MONITOR
     // If the battery level is too low then the system shall transition to the BATTERY_LEVEL_LOW state
     int level = syshal_batt_level();
     if ( (level <= SYSHAL_BATT_LEVEL_LOW) && (level >= 0) )
@@ -2641,7 +2666,7 @@ void operational_state(void)
     }
 #endif
 
-    syshal_pmu_set_level(POWER_SLEEP);
+    //syshal_pmu_set_level(POWER_SLEEP);
 
 }
 ////////////////////////////////////////////////////////////////////////////////

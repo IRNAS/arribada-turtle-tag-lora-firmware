@@ -38,7 +38,7 @@ typedef enum
     GPIO_1,
     GPIO_2,
     GPIO_3,
-    GPIO_4,
+    GPIO_VUSB,
     GPIO_SWS,
     GPIO_REED_SW,
     GPIO_SPI1_CS_BT,
