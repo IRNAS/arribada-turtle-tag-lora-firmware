@@ -387,13 +387,28 @@ void syshal_gps_callback(syshal_gps_event_t event)
     {
         case SYSHAL_GPS_EVENT_STATUS:
             DEBUG_PR_TRACE("SYSHAL_GPS_EVENT_STATUS - Fix: %u", event.event_data.status.gpsFix);
+            
             if (event.event_data.status.gpsFix > 0)
+            {
                 gps_fix = true;
-            else
-                gps_fix = false;
-            break;
-        case SYSHAL_GPS_EVENT_POSLLH:
 
+                // If TTFF logging is enabled then log this
+                if (sys_config.sys_config_gps_log_ttff_enable.contents.enable)
+                {
+                    logging_gps_ttff_t gps_ttff;
+
+                    LOGGING_SET_HDR(&gps_ttff, LOGGING_GPS_TTFF);
+                    gps_ttff.ttff = event.event_data.status.ttff;
+                    logging_add_to_buffer((uint8_t *) &gps_ttff, sizeof(gps_ttff));
+                }
+            }
+            else
+            {
+                gps_fix = false;
+            }
+            break;
+
+        case SYSHAL_GPS_EVENT_POSLLH:
             DEBUG_PR_TRACE("SYSHAL_GPS_EVENT_POSLLH - lat,long: %ld,%ld", event.event_data.location.lat, event.event_data.location.lon);
 
             // Add data to be logged
@@ -410,6 +425,7 @@ void syshal_gps_callback(syshal_gps_event_t event)
                 logging_add_to_buffer((uint8_t *) &position, sizeof(position));
             }
             break;
+
         default:
             DEBUG_PR_WARN("Unknown GPS event in %s() : %d", __FUNCTION__, event.event_id);
             break;
@@ -424,6 +440,7 @@ void syshal_switch_callback(syshal_switch_event_id_t event)
         case SYSHAL_SWITCH_EVENT_OPEN:
             if ((SM_STATE_OPERATIONAL == sm_get_state()))
             {
+
                 logging_surfaced_t surfaced;
                 LOGGING_SET_HDR(&surfaced, LOGGING_SURFACED);
                 logging_add_to_buffer((uint8_t *) &surfaced, sizeof(surfaced));
