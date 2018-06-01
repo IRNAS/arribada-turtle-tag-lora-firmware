@@ -21,10 +21,11 @@
 
 #include <stdint.h>
 
-#define SYSHAL_RTC_NO_ERROR       ( 0)
-#define SYSHAL_RTC_ERROR_DEVICE   (-1)
-#define SYSHAL_RTC_ERROR_BUSY     (-2)
-#define SYSHAL_RTC_ERROR_TIMEOUT  (-3)
+#define SYSHAL_RTC_NO_ERROR           ( 0)
+#define SYSHAL_RTC_ERROR_DEVICE       (-1)
+#define SYSHAL_RTC_ERROR_BUSY         (-2)
+#define SYSHAL_RTC_ERROR_TIMEOUT      (-3)
+#define SYSHAL_RTC_INVALID_PARAMETER  (-4)
 
 typedef struct
 {
@@ -40,5 +41,8 @@ typedef struct
 int syshal_rtc_init(void);
 int syshal_rtc_set_date_and_time(syshal_rtc_data_and_time_t date_time);
 int syshal_rtc_get_date_and_time(syshal_rtc_data_and_time_t * date_time);
+
+int syshal_rtc_timer(uint32_t seconds);
+void syshal_rtc_callback(void);
 
 #endif /* _SYSHAL_RTC_H_ */

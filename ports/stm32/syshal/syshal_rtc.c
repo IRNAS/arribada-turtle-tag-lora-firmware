@@ -73,6 +73,7 @@ int syshal_rtc_set_date_and_time(syshal_rtc_data_and_time_t date_time)
     time.Seconds = date_time.seconds;
     time.SubSeconds = 0;
     time.SecondFraction = 0;
+    time.TimeFormat = RTC_HOURFORMAT12_AM;
     time.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
     time.StoreOperation = RTC_STOREOPERATION_SET;
 
@@ -87,7 +88,7 @@ int syshal_rtc_get_date_and_time(syshal_rtc_data_and_time_t * date_time)
 
     // You must call HAL_RTC_GetDate() after HAL_RTC_GetTime() to unlock the values in
     // the higher-order calendar shadow registers to ensure consistency between the time
-    // and date values. Reading RTC current time locks the values in calendar shadow 
+    // and date values. Reading RTC current time locks the values in calendar shadow
     // registers until Current date is read
     RTC_TimeTypeDef time;
     status = HAL_RTC_GetTime(&rtc_handle, &time, RTC_FORMAT_BIN);
@@ -107,14 +108,81 @@ int syshal_rtc_get_date_and_time(syshal_rtc_data_and_time_t * date_time)
     return hal_error_map[status];
 }
 
+int syshal_rtc_timer(uint32_t seconds)
+{
+    if (seconds >= (60 * 60 * 24))
+        return SYSHAL_RTC_INVALID_PARAMETER; // We can't set a timer for greater than 24 hours
+
+    RTC_AlarmTypeDef alarm_handle;
+
+    // Get the current time
+    syshal_rtc_data_and_time_t current_date_time;
+    syshal_rtc_get_date_and_time(&current_date_time);
+
+    // Add the number of seconds to our current date_time
+    uint32_t calc_hours, calc_minutes, calc_seconds;
+
+    calc_seconds = current_date_time.seconds + seconds;
+    calc_minutes = current_date_time.minutes + (calc_seconds / 60);
+    calc_hours = current_date_time.hours + (calc_minutes / 60);
+
+    calc_hours = calc_hours % 24;
+    calc_minutes = calc_minutes % 60;
+    calc_seconds = calc_seconds % 60;
+
+    DEBUG_PR_TRACE("Current time: %02u:%02u:%02u, Alarm: %02lu:%02lu:%02lu", current_date_time.hours, current_date_time.minutes, current_date_time.seconds, calc_hours, calc_minutes, calc_seconds);
+
+    alarm_handle.AlarmTime.Hours = calc_hours;
+    alarm_handle.AlarmTime.Minutes = calc_minutes;
+    alarm_handle.AlarmTime.Seconds = calc_seconds;
+    alarm_handle.AlarmTime.SubSeconds = 0x0;
+    alarm_handle.AlarmTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
+    alarm_handle.AlarmTime.StoreOperation = RTC_STOREOPERATION_RESET;
+    alarm_handle.AlarmMask = RTC_ALARMMASK_DATEWEEKDAY; // HH:MM:SS match
+    alarm_handle.AlarmSubSecondMask = RTC_ALARMSUBSECONDMASK_ALL;
+    alarm_handle.AlarmDateWeekDaySel = RTC_ALARMDATEWEEKDAYSEL_DATE;
+    alarm_handle.AlarmDateWeekDay = RTC_WEEKDAY_MONDAY; // Nonspecific
+    alarm_handle.Alarm = RTC_ALARM_A;
+    HAL_RTC_SetAlarm_IT(&rtc_handle, &alarm_handle, RTC_FORMAT_BIN);
+
+    return SYSHAL_RTC_NO_ERROR;
+}
+
+__attribute__((weak)) void syshal_timer_callback(void)
+{
+    DEBUG_PR_WARN("%s() Not implemented", __FUNCTION__);
+}
+
 void HAL_RTC_MspInit(RTC_HandleTypeDef * rtcHandle)
 {
     if (rtcHandle->Instance == RTC)
+    {
         __HAL_RCC_RTC_ENABLE();
+
+        HAL_NVIC_SetPriority(RTC_IRQn, 0, 0);
+        HAL_NVIC_EnableIRQ(RTC_IRQn);
+    }
 }
 
 void HAL_RTC_MspDeInit(RTC_HandleTypeDef * rtcHandle)
 {
     if (rtcHandle->Instance == RTC)
+    {
         __HAL_RCC_RTC_DISABLE();
+
+        HAL_NVIC_DisableIRQ(RTC_IRQn);
+    }
+}
+
+void RTC_IRQHandler(void)
+{
+    HAL_RTC_AlarmIRQHandler(&rtc_handle);
+    HAL_RTCEx_WakeUpTimerIRQHandler(&rtc_handle); // NOTE: is this needed?
+}
+
+void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef * hrtc)
+{
+    UNUSED(hrtc);
+
+    syshal_timer_callback();
 }
