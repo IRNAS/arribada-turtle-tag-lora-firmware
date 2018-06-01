@@ -33,8 +33,22 @@
 
 #define SYS_CONFIG_TAG_TOTAL_NUMBER (40) // Number of configuration tags - WARN: This has to be manually updated
 
+#define SYS_CONFIG_GPS_TRIGGER_MODE_SWITCH_TRIGGERED (0)
+#define SYS_CONFIG_GPS_TRIGGER_MODE_SCHEDULED        (1)
+#define SYS_CONFIG_GPS_TRIGGER_MODE_HYBRID           (2)
+
 #define SYS_CONFIG_AXL_MODE_PERIODIC      (0)
 #define SYS_CONFIG_AXL_MODE_TRIGGER_ABOVE (3)
+
+#define SYS_CONFIG_PRESSURE_MODE_PERIODIC        (0)
+#define SYS_CONFIG_PRESSURE_MODE_TRIGGER_BELOW   (1)
+#define SYS_CONFIG_PRESSURE_MODE_TRIGGER_BETWEEN (2)
+#define SYS_CONFIG_PRESSURE_MODE_TRIGGER_ABOVE   (3)
+
+#define SYS_CONFIG_TEMP_MODE_PERIODIC        (0)
+#define SYS_CONFIG_TEMP_MODE_TRIGGER_BELOW   (1)
+#define SYS_CONFIG_TEMP_MODE_TRIGGER_BETWEEN (2)
+#define SYS_CONFIG_TEMP_MODE_TRIGGER_ABOVE   (3)
 
 enum
 {
@@ -179,7 +193,7 @@ typedef struct __attribute__((__packed__))
     sys_config_hdr_t hdr;
     struct __attribute__((__packed__))
     {
-        uint8_t milliseconds;
+        uint16_t milliseconds;
     } contents;
 } sys_config_saltwater_switch_hysteresis_period_t;
 
