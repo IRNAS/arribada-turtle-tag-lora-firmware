@@ -36,6 +36,7 @@ static int hal_error_map[] =
 
 int syshal_rtc_init(void)
 {
+    RTC_AlarmTypeDef alarm_handle;
     HAL_StatusTypeDef status;
 
     rtc_handle.Instance = RTC;
@@ -49,6 +50,23 @@ int syshal_rtc_init(void)
     status = HAL_RTC_Init(&rtc_handle);
 
     sys_config.sys_config_rtc_current_date_and_time.hdr.set = true;
+
+    if (hal_error_map[status] < 0)
+        return hal_error_map[status];
+
+    alarm_handle.AlarmTime.Hours = 0;
+    alarm_handle.AlarmTime.Minutes = 0;
+    alarm_handle.AlarmTime.Seconds = 0;
+    alarm_handle.AlarmTime.SubSeconds = 0;
+    alarm_handle.AlarmTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
+    alarm_handle.AlarmTime.StoreOperation = RTC_STOREOPERATION_RESET;
+    alarm_handle.AlarmMask = RTC_ALARMMASK_ALL; // Interrupt every second
+    alarm_handle.AlarmSubSecondMask = RTC_ALARMSUBSECONDMASK_ALL;
+    alarm_handle.AlarmDateWeekDaySel = RTC_ALARMDATEWEEKDAYSEL_DATE;
+    alarm_handle.AlarmDateWeekDay = RTC_WEEKDAY_MONDAY; // Nonspecific
+    alarm_handle.Alarm = RTC_ALARM_A;
+
+    status = HAL_RTC_SetAlarm_IT(&rtc_handle, &alarm_handle, RTC_FORMAT_BIN);
 
     return hal_error_map[status];
 }
@@ -108,51 +126,6 @@ int syshal_rtc_get_date_and_time(syshal_rtc_data_and_time_t * date_time)
     return hal_error_map[status];
 }
 
-int syshal_rtc_timer(uint32_t seconds)
-{
-    if (seconds >= (60 * 60 * 24))
-        return SYSHAL_RTC_INVALID_PARAMETER; // We can't set a timer for greater than 24 hours
-
-    RTC_AlarmTypeDef alarm_handle;
-
-    // Get the current time
-    syshal_rtc_data_and_time_t current_date_time;
-    syshal_rtc_get_date_and_time(&current_date_time);
-
-    // Add the number of seconds to our current date_time
-    uint32_t calc_hours, calc_minutes, calc_seconds;
-
-    calc_seconds = current_date_time.seconds + seconds;
-    calc_minutes = current_date_time.minutes + (calc_seconds / 60);
-    calc_hours = current_date_time.hours + (calc_minutes / 60);
-
-    calc_hours = calc_hours % 24;
-    calc_minutes = calc_minutes % 60;
-    calc_seconds = calc_seconds % 60;
-
-    DEBUG_PR_TRACE("Current time: %02u:%02u:%02u, Alarm: %02lu:%02lu:%02lu", current_date_time.hours, current_date_time.minutes, current_date_time.seconds, calc_hours, calc_minutes, calc_seconds);
-
-    alarm_handle.AlarmTime.Hours = calc_hours;
-    alarm_handle.AlarmTime.Minutes = calc_minutes;
-    alarm_handle.AlarmTime.Seconds = calc_seconds;
-    alarm_handle.AlarmTime.SubSeconds = 0x0;
-    alarm_handle.AlarmTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
-    alarm_handle.AlarmTime.StoreOperation = RTC_STOREOPERATION_RESET;
-    alarm_handle.AlarmMask = RTC_ALARMMASK_DATEWEEKDAY; // HH:MM:SS match
-    alarm_handle.AlarmSubSecondMask = RTC_ALARMSUBSECONDMASK_ALL;
-    alarm_handle.AlarmDateWeekDaySel = RTC_ALARMDATEWEEKDAYSEL_DATE;
-    alarm_handle.AlarmDateWeekDay = RTC_WEEKDAY_MONDAY; // Nonspecific
-    alarm_handle.Alarm = RTC_ALARM_A;
-    HAL_RTC_SetAlarm_IT(&rtc_handle, &alarm_handle, RTC_FORMAT_BIN);
-
-    return SYSHAL_RTC_NO_ERROR;
-}
-
-__attribute__((weak)) void syshal_timer_callback(void)
-{
-    DEBUG_PR_WARN("%s() Not implemented", __FUNCTION__);
-}
-
 void HAL_RTC_MspInit(RTC_HandleTypeDef * rtcHandle)
 {
     if (rtcHandle->Instance == RTC)
@@ -178,11 +151,4 @@ void RTC_IRQHandler(void)
 {
     HAL_RTC_AlarmIRQHandler(&rtc_handle);
     HAL_RTCEx_WakeUpTimerIRQHandler(&rtc_handle); // NOTE: is this needed?
-}
-
-void HAL_RTC_AlarmAEventCallback(RTC_HandleTypeDef * hrtc)
-{
-    UNUSED(hrtc);
-
-    syshal_timer_callback();
 }

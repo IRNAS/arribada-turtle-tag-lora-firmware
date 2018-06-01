@@ -42,7 +42,4 @@ int syshal_rtc_init(void);
 int syshal_rtc_set_date_and_time(syshal_rtc_data_and_time_t date_time);
 int syshal_rtc_get_date_and_time(syshal_rtc_data_and_time_t * date_time);
 
-int syshal_rtc_timer(uint32_t seconds);
-void syshal_rtc_callback(void);
-
 #endif /* _SYSHAL_RTC_H_ */

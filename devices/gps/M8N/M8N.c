@@ -71,6 +71,11 @@ void syshal_gps_shutdown(void)
 {
     DEBUG_PR_TRACE("Shutdown GPS %s", __FUNCTION__);
 
+    // Ensure the device is actually awake to receive the shutdown command
+    uint8_t data = 0xAA;
+    syshal_uart_send(GPS_UART, &data, 1);
+
+    // Send the shutdown request
     UBX_Packet_t ubx_packet;
     UBX_SET_PACKET_HEADER(&ubx_packet, UBX_MSG_CLASS_RXM, UBX_MSG_ID_RXM_PMREQ, sizeof(UBX_RXM_PMREQ2_t));
     UBX_PAYLOAD(&ubx_packet, UBX_RXM_PMREQ2)->version = UBX_RXM_PMREQ_VERSION;

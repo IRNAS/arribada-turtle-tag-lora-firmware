@@ -19,6 +19,23 @@
 #ifndef _SYSHAL_TIMER_H_
 #define _SYSHAL_TIMER_H_
 
+#include <stdint.h>
 
+#define SYSHAL_TIMER_NO_ERROR          ( 0)
+#define SYSHAL_TIMER_INVALID_TIMER_ID  (-1)
+#define SYSHAL_TIMER_INVALID_TIME      (-2)
+
+#define SYSHAL_TIMER_NUMBER_OF_TIMERS  (16)
+
+#define SYSHAL_TIMER_NOT_SET (-1)
+
+int syshal_timer_init(void);
+
+int syshal_timer_set(uint32_t timer_id, uint32_t seconds);
+int syshal_timer_cancel(uint32_t timer_id);
+int syshal_timer_cancel_all(void);
+
+void syshal_timer_tick(void);
+void syshal_timer_callback(uint32_t timer_id);
 
 #endif /* _SYSHAL_TIMER_H_ */

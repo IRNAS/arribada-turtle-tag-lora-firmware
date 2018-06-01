@@ -22,8 +22,6 @@
 #include "syshal_gpio.h"
 #include "debug.h"
 
-#define SYSHAL_SWITCH_DEBOUNCE_TIME_MS (10)
-
 /**
  * @brief      Interrupt handler for when switch has been triggered
  */
