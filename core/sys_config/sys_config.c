@@ -30,6 +30,11 @@ static const uint16_t sys_config_lookup_priv[SYS_CONFIG_TAG_TOTAL_NUMBER] =
     SYS_CONFIG_TAG_GPS_LOG_TTFF_ENABLE,
     SYS_CONFIG_TAG_GPS_TRIGGER_MODE,
     SYS_CONFIG_TAG_GPS_UART_BAUD_RATE,
+    SYS_CONFIG_TAG_GPS_SCHEDULED_ACQUISITION_INTERVAL,
+    SYS_CONFIG_TAG_GPS_MAXIMUM_ACQUISITION_TIME,
+    SYS_CONFIG_TAG_GPS_SCHEDULED_ACQUISITION_NO_FIX_TIMEOUT,
+    SYS_CONFIG_SALTWATER_SWITCH_LOG_ENABLE,
+    SYS_CONFIG_SALTWATER_SWITCH_HYSTERESIS_PERIOD,
     SYS_CONFIG_TAG_RTC_SYNC_TO_GPS_ENABLE,
     SYS_CONFIG_TAG_RTC_CURRENT_DATE_AND_TIME,
     SYS_CONFIG_TAG_LOGGING_ENABLE,
@@ -96,6 +101,31 @@ int sys_config_get_data_ptr_priv(uint16_t tag, void ** data)
         case SYS_CONFIG_TAG_GPS_UART_BAUD_RATE:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_gps_uart_baud_rate_t);
             *data = &sys_config.sys_config_gps_uart_baud_rate;
+            break;
+
+        case SYS_CONFIG_TAG_GPS_SCHEDULED_ACQUISITION_INTERVAL:
+            len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_gps_scheduled_acquisition_interval_t);
+            *data = &sys_config.sys_config_gps_scheduled_acquisition_interval;
+            break;
+
+        case SYS_CONFIG_TAG_GPS_MAXIMUM_ACQUISITION_TIME:
+            len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_gps_maximum_acquisition_time_t);
+            *data = &sys_config.sys_config_gps_maximum_acquisition_time;
+            break;
+
+        case SYS_CONFIG_TAG_GPS_SCHEDULED_ACQUISITION_NO_FIX_TIMEOUT:
+            len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_gps_scheduled_acquisition_no_fix_timeout_t);
+            *data = &sys_config.sys_config_gps_scheduled_acquisition_no_fix_timeout;
+            break;
+
+        case SYS_CONFIG_SALTWATER_SWITCH_LOG_ENABLE:
+            len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_saltwater_switch_log_enable_t);
+            *data = &sys_config.sys_config_saltwater_switch_log_enable;
+            break;
+
+        case SYS_CONFIG_SALTWATER_SWITCH_HYSTERESIS_PERIOD:
+            len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_saltwater_switch_hysteresis_period_t);
+            *data = &sys_config.sys_config_saltwater_switch_hysteresis_period;
             break;
 
         case SYS_CONFIG_TAG_RTC_SYNC_TO_GPS_ENABLE:
@@ -390,7 +420,7 @@ int sys_config_get(uint16_t tag, void ** value)
 
     if (value != NULL)
         (*value) = data + sizeof(sys_config_hdr_t);
-    
+
     return return_code;
 }
 

@@ -31,7 +31,7 @@
 #define SYS_CONFIG_TAG_ID_SIZE (sizeof(uint16_t))
 #define SYS_CONFIG_TAG_DATA_SIZE(tag_type) (sizeof(((tag_type *)0)->contents)) // Size of data in tag. We exclude the set member
 
-#define SYS_CONFIG_TAG_TOTAL_NUMBER (35) // Number of configuration tags - WARN: This has to be manually updated
+#define SYS_CONFIG_TAG_TOTAL_NUMBER (40) // Number of configuration tags - WARN: This has to be manually updated
 
 #define SYS_CONFIG_AXL_MODE_PERIODIC      (0)
 #define SYS_CONFIG_AXL_MODE_TRIGGER_ABOVE (3)
@@ -39,10 +39,17 @@
 enum
 {
     // GPS
-    SYS_CONFIG_TAG_GPS_LOG_POSITION_ENABLE = 0x0000, // Enable logging of position information.
-    SYS_CONFIG_TAG_GPS_LOG_TTFF_ENABLE,              // Enable logging of time to first fix (TTFF)
-    SYS_CONFIG_TAG_GPS_TRIGGER_MODE,                 // Mode shall allow for continuous operation or external switch triggered operation.
-    SYS_CONFIG_TAG_GPS_UART_BAUD_RATE,               // The UART baud rate to be used for communications with the M8N GPS device.
+    SYS_CONFIG_TAG_GPS_LOG_POSITION_ENABLE = 0x0000,         // Enable logging of position information.
+    SYS_CONFIG_TAG_GPS_LOG_TTFF_ENABLE,                      // Enable logging of time to first fix (TTFF)
+    SYS_CONFIG_TAG_GPS_TRIGGER_MODE,                         // Mode shall allow for continuous operation or external switch triggered operation.
+    SYS_CONFIG_TAG_GPS_UART_BAUD_RATE,                       // The UART baud rate to be used for communications with the M8N GPS device.
+    SYS_CONFIG_TAG_GPS_SCHEDULED_ACQUISITION_INTERVAL,       // Interval in seconds between GPS acquisition attempts. Setting to zero means always on
+    SYS_CONFIG_TAG_GPS_MAXIMUM_ACQUISITION_TIME,             // Maximum time period, in seconds, to allow for GPS fixes. Setting to zero means no upper limit
+    SYS_CONFIG_TAG_GPS_SCHEDULED_ACQUISITION_NO_FIX_TIMEOUT, // When triggered by a scheduled acquisition, this is the timeout period in seconds during acquisition after which to shutdown the GPS if no fix is found
+
+    // Saltwater Switch
+    SYS_CONFIG_SALTWATER_SWITCH_LOG_ENABLE = 0x0800, // Controls whether switch change states should be logged
+    SYS_CONFIG_SALTWATER_SWITCH_HYSTERESIS_PERIOD,   // Switch de-bouncing period in milliseconds i.e., the switch should remain in a stable closed state for this period before considering the unit as sub-merged and powering down GPS acquisition. Set to zero for no debouncing
 
     // Real time crystal
     SYS_CONFIG_TAG_RTC_SYNC_TO_GPS_ENABLE = 0x0600, // If set, the RTC will sync to GPS time
@@ -130,6 +137,51 @@ typedef struct __attribute__((__packed__))
         uint32_t baudrate;
     } contents;
 } sys_config_gps_uart_baud_rate_t;
+
+typedef struct __attribute__((__packed__))
+{
+    sys_config_hdr_t hdr;
+    struct __attribute__((__packed__))
+    {
+        uint16_t seconds;
+    } contents;
+} sys_config_gps_scheduled_acquisition_interval_t;
+
+typedef struct __attribute__((__packed__))
+{
+    sys_config_hdr_t hdr;
+    struct __attribute__((__packed__))
+    {
+        uint16_t seconds;
+    } contents;
+} sys_config_gps_maximum_acquisition_time_t;
+
+typedef struct __attribute__((__packed__))
+{
+    sys_config_hdr_t hdr;
+    struct __attribute__((__packed__))
+    {
+        uint16_t seconds;
+    } contents;
+} sys_config_gps_scheduled_acquisition_no_fix_timeout_t;
+
+typedef struct __attribute__((__packed__))
+{
+    sys_config_hdr_t hdr;
+    struct __attribute__((__packed__))
+    {
+        uint8_t enable;
+    } contents;
+} sys_config_saltwater_switch_log_enable_t;
+
+typedef struct __attribute__((__packed__))
+{
+    sys_config_hdr_t hdr;
+    struct __attribute__((__packed__))
+    {
+        uint8_t milliseconds;
+    } contents;
+} sys_config_saltwater_switch_hysteresis_period_t;
 
 typedef struct __attribute__((__packed__))
 {
@@ -421,6 +473,11 @@ typedef struct __attribute__((__packed__))
     sys_config_gps_log_ttff_enable_t                            sys_config_gps_log_ttff_enable;
     sys_config_gps_trigger_mode_t                               sys_config_gps_trigger_mode;
     sys_config_gps_uart_baud_rate_t                             sys_config_gps_uart_baud_rate;
+    sys_config_gps_scheduled_acquisition_interval_t             sys_config_gps_scheduled_acquisition_interval;
+    sys_config_gps_maximum_acquisition_time_t                   sys_config_gps_maximum_acquisition_time;
+    sys_config_gps_scheduled_acquisition_no_fix_timeout_t       sys_config_gps_scheduled_acquisition_no_fix_timeout;
+    sys_config_saltwater_switch_log_enable_t                    sys_config_saltwater_switch_log_enable;
+    sys_config_saltwater_switch_hysteresis_period_t             sys_config_saltwater_switch_hysteresis_period;
     sys_config_rtc_sync_to_gps_enable_t                         sys_config_rtc_sync_to_gps_enable;
     sys_config_rtc_current_date_and_time_t                      sys_config_rtc_current_date_and_time;
     sys_config_logging_enable_t                                 sys_config_logging_enable;

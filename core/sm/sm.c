@@ -387,7 +387,7 @@ void syshal_gps_callback(syshal_gps_event_t event)
     {
         case SYSHAL_GPS_EVENT_STATUS:
             DEBUG_PR_TRACE("SYSHAL_GPS_EVENT_STATUS - Fix: %u", event.event_data.status.gpsFix);
-            
+
             if (event.event_data.status.gpsFix > 0)
             {
                 gps_fix = true;
@@ -440,18 +440,23 @@ void syshal_switch_callback(syshal_switch_event_id_t event)
         case SYSHAL_SWITCH_EVENT_OPEN:
             if ((SM_STATE_OPERATIONAL == sm_get_state()))
             {
-
-                logging_surfaced_t surfaced;
-                LOGGING_SET_HDR(&surfaced, LOGGING_SURFACED);
-                logging_add_to_buffer((uint8_t *) &surfaced, sizeof(surfaced));
+                if (sys_config.sys_config_saltwater_switch_log_enable.contents.enable)
+                {
+                    logging_surfaced_t surfaced;
+                    LOGGING_SET_HDR(&surfaced, LOGGING_SURFACED);
+                    logging_add_to_buffer((uint8_t *) &surfaced, sizeof(surfaced));
+                }
             }
             break;
         case SYSHAL_SWITCH_EVENT_CLOSED:
             if ((SM_STATE_OPERATIONAL == sm_get_state()))
             {
-                logging_submerged_t submerged;
-                LOGGING_SET_HDR(&submerged, LOGGING_SUBMERGED);
-                logging_add_to_buffer((uint8_t *) &submerged, sizeof(submerged));
+                if (sys_config.sys_config_saltwater_switch_log_enable.contents.enable)
+                {
+                    logging_submerged_t submerged;
+                    LOGGING_SET_HDR(&submerged, LOGGING_SUBMERGED);
+                    logging_add_to_buffer((uint8_t *) &submerged, sizeof(submerged));
+                }
             }
             break;
 
@@ -1433,9 +1438,9 @@ static void status_req(cmd_t * req, uint16_t size)
     DEBUG_PR_WARN("%s() NOT IMPLEMENTED, responding with spoof data", __FUNCTION__);
 
     resp->p.cmd_status_resp.error_code = CMD_NO_ERROR;
-    resp->p.cmd_status_resp.stm_firmware_version = 0;
+    resp->p.cmd_status_resp.stm_firmware_version = 1;
     resp->p.cmd_status_resp.ble_firmware_version = 0;
-    resp->p.cmd_status_resp.configuration_format_version = 0;
+    resp->p.cmd_status_resp.configuration_format_version = 1;
 
     buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_status_resp_t));
     config_if_send_priv(&config_if_send_buffer);
@@ -1751,7 +1756,7 @@ static void log_create_req(cmd_t * req, uint16_t size)
 
                 // Set the sys_config log file size
                 sys_config_logging_file_size_t log_file_size;
-                log_file_size.contents.file_size = mode;
+                log_file_size.contents.file_size = 0; // File is currently of zero size
                 sys_config_set(SYS_CONFIG_TAG_LOGGING_FILE_SIZE, &log_file_size.contents, SYS_CONFIG_TAG_DATA_SIZE(sys_config_logging_file_size_t));
                 break;
 
