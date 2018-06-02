@@ -38,7 +38,6 @@ static const uint16_t sys_config_lookup_priv[SYS_CONFIG_TAG_TOTAL_NUMBER] =
     SYS_CONFIG_TAG_RTC_SYNC_TO_GPS_ENABLE,
     SYS_CONFIG_TAG_RTC_CURRENT_DATE_AND_TIME,
     SYS_CONFIG_TAG_LOGGING_ENABLE,
-    SYS_CONFIG_TAG_LOGGING_BYTES_WRITTEN,
     SYS_CONFIG_TAG_LOGGING_FILE_SIZE,
     SYS_CONFIG_TAG_LOGGING_FILE_TYPE,
     SYS_CONFIG_TAG_LOGGING_GROUP_SENSOR_READINGS_ENABLE,
@@ -141,11 +140,6 @@ int sys_config_get_data_ptr_priv(uint16_t tag, void ** data)
         case SYS_CONFIG_TAG_LOGGING_ENABLE:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_logging_enable_t);
             *data = &sys_config.sys_config_logging_enable;
-            break;
-
-        case SYS_CONFIG_TAG_LOGGING_BYTES_WRITTEN:
-            len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_logging_bytes_written_t);
-            *data = &sys_config.sys_config_logging_bytes_written;
             break;
 
         case SYS_CONFIG_TAG_LOGGING_FILE_SIZE:
@@ -398,7 +392,7 @@ int sys_config_get(uint16_t tag, void ** value)
 
     if (return_code < 0)
         return return_code;
-    
+
     if (tag == SYS_CONFIG_TAG_RTC_CURRENT_DATE_AND_TIME)
     {
         // Populate the sys_config values with the current date/time
@@ -416,7 +410,6 @@ int sys_config_get(uint16_t tag, void ** value)
 
     // If this isn't a read only tag or a special tag check it's set flag
     if (SYS_CONFIG_TAG_RTC_CURRENT_DATE_AND_TIME != tag
-        && SYS_CONFIG_TAG_LOGGING_BYTES_WRITTEN != tag
         && SYS_CONFIG_TAG_LOGGING_FILE_SIZE != tag
         && SYS_CONFIG_TAG_LOGGING_FILE_TYPE != tag
         && SYS_CONFIG_TAG_LOGGING_START_END_SYNC_ENABLE != tag)

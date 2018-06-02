@@ -31,7 +31,7 @@
 #define SYS_CONFIG_TAG_ID_SIZE (sizeof(uint16_t))
 #define SYS_CONFIG_TAG_DATA_SIZE(tag_type) (sizeof(((tag_type *)0)->contents)) // Size of data in tag. We exclude the set member
 
-#define SYS_CONFIG_TAG_TOTAL_NUMBER (40) // Number of configuration tags - WARN: This has to be manually updated
+#define SYS_CONFIG_TAG_TOTAL_NUMBER (39) // Number of configuration tags - WARN: This has to be manually updated
 
 #define SYS_CONFIG_GPS_TRIGGER_MODE_SWITCH_TRIGGERED (0)
 #define SYS_CONFIG_GPS_TRIGGER_MODE_SCHEDULED        (1)
@@ -71,7 +71,6 @@ enum
 
     // Logging
     SYS_CONFIG_TAG_LOGGING_ENABLE = 0x0100,              // Controls whether the global logging function is enabled or disabled.
-    SYS_CONFIG_TAG_LOGGING_BYTES_WRITTEN,                // Total number of bytes used in configuration file.
     SYS_CONFIG_TAG_LOGGING_FILE_SIZE,                    // Maximum file size allowed for logging. This is set when the logging file is created.
     SYS_CONFIG_TAG_LOGGING_FILE_TYPE,                    // Indicates fill or circular mode. This is set when the logging file is created.
     SYS_CONFIG_TAG_LOGGING_GROUP_SENSOR_READINGS_ENABLE, // If set, the logging engine should attempt to group multiple sensor readings together into a single log entry.
@@ -228,15 +227,6 @@ typedef struct __attribute__((__packed__))
         uint8_t enable;
     } contents;
 } sys_config_logging_enable_t;
-
-typedef struct __attribute__((__packed__))
-{
-    sys_config_hdr_t hdr;
-    struct __attribute__((__packed__))
-    {
-        uint32_t bytes_written;
-    } contents;
-} sys_config_logging_bytes_written_t;
 
 typedef struct __attribute__((__packed__))
 {
@@ -495,7 +485,6 @@ typedef struct __attribute__((__packed__))
     sys_config_rtc_sync_to_gps_enable_t                         sys_config_rtc_sync_to_gps_enable;
     sys_config_rtc_current_date_and_time_t                      sys_config_rtc_current_date_and_time;
     sys_config_logging_enable_t                                 sys_config_logging_enable;
-    sys_config_logging_bytes_written_t                          sys_config_logging_bytes_written;
     sys_config_logging_file_size_t                              sys_config_logging_file_size;
     sys_config_logging_file_type_t                              sys_config_logging_file_type;
     sys_config_logging_group_sensor_readings_enable_t           sys_config_logging_group_sensor_readings_enable;
