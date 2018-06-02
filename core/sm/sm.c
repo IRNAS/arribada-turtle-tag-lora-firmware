@@ -2597,7 +2597,7 @@ void standby_provisioning_needed_state()
 #ifndef GTEST
     // Blink an LED to indicate this state
     static uint32_t blinkTimer = 0;
-    const uint32_t blinkTimeMs = 1000;
+    const uint32_t blinkTimeMs = 300;
 
     if (syshal_time_get_ticks_ms() >= (blinkTimeMs + blinkTimer))
     {
@@ -2649,25 +2649,44 @@ void standby_trigger_pending_state()
 
 void provisioning_state(void)
 {
-#ifndef GTEST
-    // Blink an LED to indicate this state
-    static uint32_t blinkTimer = 0;
-    const uint32_t blinkTimeMs = 200;
-
-    if (syshal_time_get_ticks_ms() >= (blinkTimeMs + blinkTimer))
-    {
-        syshal_gpio_set_output_high(GPIO_LED2_RED);
-        syshal_time_delay_ms(50);
-        syshal_gpio_set_output_low(GPIO_LED2_RED);
-        blinkTimer = syshal_time_get_ticks_ms();
-    }
-#endif
-
     config_if_tick();
 
     handle_config_if_messages(); // Process any config_if messages
 
+    // Determine if we are ready to enter the operational state or not
+    bool configuration_tags_all_set = false;
+    bool log_file_created = false;
+
+    configuration_tags_all_set = check_configuration_tags_set();
+
+    fs_handle_t file_system_handle;
+    int ret = fs_open(file_system, &file_system_handle, FS_FILE_ID_LOG, FS_MODE_READONLY, NULL);
+
+    if (FS_NO_ERROR == ret)
+    {
+        log_file_created = true;
+        fs_close(file_system_handle);
+    }
+
+    if (configuration_tags_all_set && log_file_created)
+    {
+        syshal_gpio_set_output_low(GPIO_LED2_RED);
+        syshal_gpio_set_output_high(GPIO_LED1_GREEN);
+
+        if (!config_if_connected)
+            sm_set_state(SM_STATE_OPERATIONAL); // All systems go for standard operation
+    }
+    else
+    {
+        syshal_gpio_set_output_high(GPIO_LED2_RED);
+        syshal_gpio_set_output_low(GPIO_LED1_GREEN);
+
+        if (!config_if_connected)
+            sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED); // We still need provisioning
+    }
+
     // Has our configuration interface been disconnected?
+    /*
     if (!config_if_connected)
     {
         // If so we should change state
@@ -2695,6 +2714,8 @@ void provisioning_state(void)
         syshal_time_delay_ms(1000); // Give time for GPIO_VUSB to settle
         // This is because we are using GPIO_SPEED_FREQ_LOW to save power
     }
+    */
+
 }
 
 void operational_state(void)
@@ -2715,6 +2736,19 @@ void operational_state(void)
                 syshal_timer_cancel(TIMER_ID_GPS_INTERVAL);
                 syshal_timer_cancel(TIMER_ID_GPS_NO_FIX);
                 syshal_timer_cancel(TIMER_ID_GPS_MAXIMUM_ACQUISITION);
+
+                // Flash the green LED for 5 seconds to indicate this state
+                syshal_gpio_set_output_low(GPIO_LED2_RED);
+                syshal_gpio_set_output_low(GPIO_LED1_GREEN);
+
+                const uint32_t number_of_blinks = 50;
+                const uint32_t milliseconds_to_blink = 5000;
+                for (uint32_t i = 0; i < number_of_blinks; ++i)
+                {
+                    syshal_time_delay_ms(milliseconds_to_blink / number_of_blinks);
+                    syshal_gpio_set_output_toggle(GPIO_LED1_GREEN);
+                }
+                syshal_gpio_set_output_low(GPIO_LED1_GREEN);
 
                 if (sys_config.sys_config_gps_log_position_enable.contents.enable)
                 {
