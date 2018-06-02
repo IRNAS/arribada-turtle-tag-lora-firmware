@@ -1942,9 +1942,6 @@ static void log_create_req(cmd_t * req, uint16_t size)
     // Get request's parameters
     uint8_t mode = req->p.cmd_log_create_req.mode;
     uint8_t sync_enable = req->p.cmd_log_create_req.sync_enable;
-    uint8_t max_file_size = req->p.cmd_log_create_req.max_file_size;
-
-    UNUSED(max_file_size);
 
     // Attempt to create the log file
     if (CMD_LOG_CREATE_REQ_MODE_FILL == mode || CMD_LOG_CREATE_REQ_MODE_CIRCULAR == mode)

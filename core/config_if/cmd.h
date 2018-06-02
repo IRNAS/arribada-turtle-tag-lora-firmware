@@ -235,7 +235,6 @@ typedef struct __attribute__((__packed__))
 {
     uint8_t mode;
     uint8_t sync_enable;
-    uint32_t max_file_size;
 } cmd_log_create_req_t;
 
 typedef struct __attribute__((__packed__))
