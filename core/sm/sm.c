@@ -2940,37 +2940,43 @@ void operational_state(void)
     if ( (!syshal_gps_bridging) && (sys_config.sys_config_gps_log_position_enable.contents.enable) )
         syshal_gps_tick(); // Process GPS messages
 
-    // Is there any data waiting to be written to the log file?
-    uint8_t * read_buffer;
-    uint32_t length = buffer_read(&logging_buffer, (uintptr_t *)&read_buffer);
-
-    if (length)
+    // Is global logging enabled?
+    if (sys_config.sys_config_gps_log_position_enable.contents.enable)
     {
-        uint32_t bytes_written;
-        int ret = fs_write(log_file_handle, read_buffer, length, &bytes_written);
-        DEBUG_PR_TRACE("Writing to Log File");
-        printf("Contents: ");
-        for (uint32_t i = 0; i < length; ++i)
-            printf("%02X ", read_buffer[i]);
-        printf("\r\n");
 
-        switch (ret)
+        // Is there any data waiting to be written to the log file?
+        uint8_t * read_buffer;
+        uint32_t length = buffer_read(&logging_buffer, (uintptr_t *)&read_buffer);
+
+        if (length)
         {
-            case FS_NO_ERROR:
-                buffer_read_advance(&logging_buffer, length);
-                break;
+            uint32_t bytes_written;
+            int ret = fs_write(log_file_handle, read_buffer, length, &bytes_written);
+            DEBUG_PR_TRACE("Writing to Log File");
+            printf("Contents: ");
+            for (uint32_t i = 0; i < length; ++i)
+                printf("%02X ", read_buffer[i]);
+            printf("\r\n");
 
-            case FS_ERROR_FILESYSTEM_FULL: // Our log file is full
-                fs_close(log_file_handle);
-                sm_set_state(SM_STATE_STANDBY_LOG_FILE_FULL);
-                break;
+            switch (ret)
+            {
+                case FS_NO_ERROR:
+                    buffer_read_advance(&logging_buffer, length);
+                    break;
 
-            case FS_ERROR_FLASH_MEDIA:
-            default:
-                fs_close(log_file_handle);
-                Throw(EXCEPTION_FS_ERROR);
-                break;
+                case FS_ERROR_FILESYSTEM_FULL: // Our log file is full
+                    fs_close(log_file_handle);
+                    sm_set_state(SM_STATE_STANDBY_LOG_FILE_FULL);
+                    break;
+
+                case FS_ERROR_FLASH_MEDIA:
+                default:
+                    fs_close(log_file_handle);
+                    Throw(EXCEPTION_FS_ERROR);
+                    break;
+            }
         }
+
     }
 
     config_if_tick();
