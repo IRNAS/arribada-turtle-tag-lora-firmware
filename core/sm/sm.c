@@ -410,30 +410,41 @@ void syshal_gps_callback(syshal_gps_event_t event)
 
             if (event.event_data.status.gpsFix > 0)
             {
-                sm_gps_state = SM_GPS_STATE_FIXED;
+                syshal_timer_cancel(TIMER_ID_GPS_NO_FIX); // Clear any no fix timer
 
-                // If TTFF logging is enabled then log this
-                if (sys_config.sys_config_gps_log_ttff_enable.contents.enable)
+                // Have we only just got a fix?
+                if (SM_GPS_STATE_ACQUIRING == sm_gps_state)
                 {
-                    logging_gps_ttff_t gps_ttff;
+                    // If TTFF logging is enabled then log this
+                    if (sys_config.sys_config_gps_log_ttff_enable.contents.enable)
+                    {
+                        logging_gps_ttff_t gps_ttff;
 
-                    LOGGING_SET_HDR(&gps_ttff, LOGGING_GPS_TTFF);
-                    gps_ttff.ttff = event.event_data.status.ttff;
-                    logging_add_to_buffer((uint8_t *) &gps_ttff, sizeof(gps_ttff));
+                        LOGGING_SET_HDR(&gps_ttff, LOGGING_GPS_TTFF);
+                        gps_ttff.ttff = event.event_data.status.ttff;
+                        logging_add_to_buffer((uint8_t *) &gps_ttff, sizeof(gps_ttff));
+                    }
                 }
 
-                syshal_timer_cancel(TIMER_ID_GPS_NO_FIX); // Clear any no fix timer
+                sm_gps_state = SM_GPS_STATE_FIXED;
             }
             else
             {
                 // Have we just lost GPS fix?
                 if (SM_GPS_STATE_FIXED == sm_gps_state)
                 {
-                    // If we have and we are either in scheduled mode or hybrid + underwater then start the no-fix timer
-                    if ((SYS_CONFIG_GPS_TRIGGER_MODE_SCHEDULED == sys_config.sys_config_gps_trigger_mode.contents.mode) ||
-                        ((SYS_CONFIG_GPS_TRIGGER_MODE_HYBRID == sys_config.sys_config_gps_trigger_mode.contents.mode) && (!tracker_above_water)))
+
+                    // Are we supposed to be scheduling a no fix timer?
+                    // If our interval time is 0 this is a special case meaning run the GPS forever
+                    if (sys_config.sys_config_gps_scheduled_acquisition_interval.contents.seconds)
                     {
-                        syshal_timer_set(TIMER_ID_GPS_NO_FIX, sys_config.sys_config_gps_scheduled_acquisition_no_fix_timeout.contents.seconds);
+                        // If we are and we are either in scheduled mode or hybrid + underwater then start the no-fix timer
+                        if ((SYS_CONFIG_GPS_TRIGGER_MODE_SCHEDULED == sys_config.sys_config_gps_trigger_mode.contents.mode) ||
+                            ((SYS_CONFIG_GPS_TRIGGER_MODE_HYBRID == sys_config.sys_config_gps_trigger_mode.contents.mode) && (!tracker_above_water)))
+                        {
+                            syshal_timer_set(TIMER_ID_GPS_NO_FIX, sys_config.sys_config_gps_scheduled_acquisition_no_fix_timeout.contents.seconds);
+                        }
+
                     }
 
                 }
