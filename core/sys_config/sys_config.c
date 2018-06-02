@@ -398,10 +398,10 @@ int sys_config_get(uint16_t tag, void ** value)
 
     if (return_code < 0)
         return return_code;
-
-    // Populate the sys_config values with the current date/time
+    
     if (tag == SYS_CONFIG_TAG_RTC_CURRENT_DATE_AND_TIME)
     {
+        // Populate the sys_config values with the current date/time
         syshal_rtc_data_and_time_t date_time;
         syshal_rtc_get_date_and_time(&date_time);
 
@@ -414,9 +414,17 @@ int sys_config_get(uint16_t tag, void ** value)
         sys_config.sys_config_rtc_current_date_and_time.contents.seconds = date_time.seconds;
     }
 
-    // If this configuration tag hasn't been previously set then return an error
-    if (false == ((sys_config_hdr_t *)data)->set)
-        return SYS_CONFIG_ERROR_TAG_NOT_SET;
+    // If this isn't a read only tag or a special tag check it's set flag
+    if (SYS_CONFIG_TAG_RTC_CURRENT_DATE_AND_TIME != tag
+        && SYS_CONFIG_TAG_LOGGING_BYTES_WRITTEN != tag
+        && SYS_CONFIG_TAG_LOGGING_FILE_SIZE != tag
+        && SYS_CONFIG_TAG_LOGGING_FILE_TYPE != tag
+        && SYS_CONFIG_TAG_LOGGING_START_END_SYNC_ENABLE != tag)
+    {
+        // If this configuration tag hasn't been previously set then return an error
+        if (false == ((sys_config_hdr_t *)data)->set)
+            return SYS_CONFIG_ERROR_TAG_NOT_SET;
+    }
 
     if (value != NULL)
         (*value) = data + sizeof(sys_config_hdr_t);

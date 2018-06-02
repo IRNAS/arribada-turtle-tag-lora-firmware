@@ -18,7 +18,6 @@
 
 #include "stm32f0xx_hal.h"
 #include "syshal_rtc.h"
-#include "sys_config.h"
 #include "debug.h"
 
 #define YEAR_OFFSET (2018) // RTC can only handle 100 years so offset by 2000
@@ -48,8 +47,6 @@ int syshal_rtc_init(void)
     rtc_handle.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
 
     status = HAL_RTC_Init(&rtc_handle);
-
-    sys_config.sys_config_rtc_current_date_and_time.hdr.set = true;
 
     if (hal_error_map[status] < 0)
         return hal_error_map[status];
