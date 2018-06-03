@@ -190,6 +190,7 @@ static volatile bool     config_if_connected = false;
 static fs_t              file_system;
 static fs_handle_t       log_file_handle = NULL;
 static volatile bool     tracker_above_water = true; // Is the device above water?
+static volatile bool     log_file_created = false; // Does a log file exist?
 
 ////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////// PROTOTYPES ///////////////////////////////////
@@ -1959,6 +1960,7 @@ static void log_create_req(cmd_t * req, uint16_t size)
         switch (ret)
         {
             case FS_NO_ERROR:
+                log_file_created = true;
                 resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
                 fs_close(file_system_handle); // Close the file
 
@@ -2012,6 +2014,7 @@ static void log_erase_req(cmd_t * req, uint16_t size)
     switch (ret)
     {
         case FS_NO_ERROR:
+            log_file_created = false;
             resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
             break;
 
@@ -2532,7 +2535,21 @@ void boot_state(void)
     fs_init(FS_DEVICE);
     fs_mount(FS_DEVICE, &file_system);
 
-    int ret = fs_get_configuration_data();
+    // Determine if a log file exists or not
+    fs_handle_t file_system_handle;
+    int ret = fs_open(file_system, &file_system_handle, FS_FILE_ID_LOG, FS_MODE_READONLY, NULL);
+
+    if (FS_NO_ERROR == ret)
+    {
+        log_file_created = true;
+        fs_close(file_system_handle);
+    }
+    else
+    {
+        log_file_created = false;
+    }
+
+    ret = fs_get_configuration_data();
 
     // Init the peripheral devices after configuration data has been collected
     //syshal_axl_init();
@@ -2568,23 +2585,13 @@ void boot_state(void)
         return;
     }
 
-    if (!check_configuration_tags_set()) // Check that all configuration tags are set
-        sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED); // Not all required configuration data is set
+    if (check_configuration_tags_set() && log_file_created)
+    {
+        sm_set_state(SM_STATE_OPERATIONAL); // All systems go for standard operation
+    }
     else
     {
-        // And a log file exists
-        fs_handle_t file_system_handle;
-        int ret = fs_open(file_system, &file_system_handle, FS_FILE_ID_LOG, FS_MODE_READONLY, NULL);
-
-        if (FS_NO_ERROR == ret)
-        {
-            fs_close(file_system_handle);
-            sm_set_state(SM_STATE_OPERATIONAL); // All systems go for standard operation
-        }
-        else
-        {
-            sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED); // We still need provisioning
-        }
+        sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED); // We still need provisioning
     }
 
 }
@@ -2610,22 +2617,10 @@ void standby_battery_charging_state()
             {
                 // Our battery is in a good state
                 // But are we okay to enter an operational state?
-                if (check_configuration_tags_set())
-                {
-                    // And a log file exists
-                    fs_handle_t file_system_handle;
-                    int ret = fs_open(file_system, &file_system_handle, FS_FILE_ID_LOG, FS_MODE_READONLY, NULL);
-
-                    if (FS_NO_ERROR == ret)
-                    {
-                        fs_close(file_system_handle);
-                        sm_set_state(SM_STATE_OPERATIONAL); // All systems go for standard operation
-                    }
-                    else
-                    {
-                        sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED); // We still need provisioning
-                    }
-                }
+                if (check_configuration_tags_set() && log_file_created)
+                    sm_set_state(SM_STATE_OPERATIONAL); // All systems go for standard operation
+                else
+                    sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED); // We still need provisioning
             }
             else
             {
@@ -2736,21 +2731,7 @@ void provisioning_state(void)
     handle_config_if_messages(); // Process any config_if messages
 
     // Determine if we are ready to enter the operational state or not
-    bool configuration_tags_all_set = false;
-    bool log_file_created = false;
-
-    configuration_tags_all_set = check_configuration_tags_set();
-
-    fs_handle_t file_system_handle;
-    int ret = fs_open(file_system, &file_system_handle, FS_FILE_ID_LOG, FS_MODE_READONLY, NULL);
-
-    if (FS_NO_ERROR == ret)
-    {
-        log_file_created = true;
-        fs_close(file_system_handle);
-    }
-
-    if (configuration_tags_all_set && log_file_created)
+    if (check_configuration_tags_set() && log_file_created)
     {
         syshal_gpio_set_output_low(GPIO_LED2_RED);
         syshal_gpio_set_output_high(GPIO_LED1_GREEN);
@@ -2766,37 +2747,6 @@ void provisioning_state(void)
         if (!config_if_connected)
             sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED); // We still need provisioning
     }
-
-    // Has our configuration interface been disconnected?
-    /*
-    if (!config_if_connected)
-    {
-        // If so we should change state
-        if (check_configuration_tags_set())
-        {
-            // And a log file exists
-            fs_handle_t file_system_handle;
-            int ret = fs_open(file_system, &file_system_handle, FS_FILE_ID_LOG, FS_MODE_READONLY, NULL);
-
-            if (FS_NO_ERROR == ret)
-            {
-                fs_close(file_system_handle);
-                sm_set_state(SM_STATE_OPERATIONAL); // All systems go for standard operation
-            }
-            else
-            {
-                sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED); // We still need provisioning
-            }
-        }
-        else
-        {
-            sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED); // We still need provisioning
-        }
-
-        syshal_time_delay_ms(1000); // Give time for GPIO_VUSB to settle
-        // This is because we are using GPIO_SPEED_FREQ_LOW to save power
-    }
-    */
 
 }
 
@@ -2846,10 +2796,9 @@ void operational_state(void)
                         {
                             // Wake the GPS if it is asleep
                             if (SM_GPS_STATE_ASLEEP == sm_gps_state)
-                            {
-                                sm_gps_state = SM_GPS_STATE_ACQUIRING;
                                 syshal_gps_wake_up();
-                            }
+
+                            sm_gps_state = SM_GPS_STATE_ACQUIRING;
 
                             // Do we have a maximum acquisition time to adhere to?
                             if (sys_config.sys_config_gps_maximum_acquisition_time.contents.seconds)
@@ -2872,10 +2821,9 @@ void operational_state(void)
                     {
                         // Wake the GPS if it is asleep
                         if (SM_GPS_STATE_ASLEEP == sm_gps_state)
-                        {
-                            sm_gps_state = SM_GPS_STATE_ACQUIRING;
                             syshal_gps_wake_up();
-                        }
+
+                        sm_gps_state = SM_GPS_STATE_ACQUIRING;
 
                         // If our interval time is 0 this is a special case meaning run the GPS forever
                         if (sys_config.sys_config_gps_scheduled_acquisition_interval.contents.seconds)
@@ -2890,10 +2838,9 @@ void operational_state(void)
                     {
                         // Wake the GPS if it is asleep
                         if (SM_GPS_STATE_ASLEEP == sm_gps_state)
-                        {
-                            sm_gps_state = SM_GPS_STATE_ACQUIRING;
                             syshal_gps_wake_up();
-                        }
+
+                        sm_gps_state = SM_GPS_STATE_ACQUIRING;
 
                         // Start our scheduled mode timers
                         if (sys_config.sys_config_gps_scheduled_acquisition_interval.contents.seconds)
