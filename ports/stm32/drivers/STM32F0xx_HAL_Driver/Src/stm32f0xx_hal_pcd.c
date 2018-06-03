@@ -133,7 +133,7 @@ void PCD_ReadPMA(USB_TypeDef  *USBx, uint8_t *pbUsrBuf, uint16_t wPMABufAddr, ui
   * @param  hpcd PCD handle
   * @retval HAL status
   */
-HAL_StatusTypeDef HAL_PCD_Init(PCD_HandleTypeDef *hpcd)
+HAL_StatusTypeDef __attribute__((optimize("O0"))) HAL_PCD_Init(PCD_HandleTypeDef *hpcd)
 { 
   uint32_t i = 0U;
 
