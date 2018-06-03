@@ -683,6 +683,23 @@ void syshal_timer_callback(uint32_t timer_id)
     }
 }
 
+static void populate_log_file_size_tag(void)
+{
+    if (log_file_created)
+    {
+        fs_stat_t stat;
+        int ret = fs_stat(file_system, FS_FILE_ID_LOG, &stat);
+        if (FS_NO_ERROR == ret)
+            sys_config.sys_config_logging_file_size.contents.file_size = stat.size;
+        else
+            sys_config.sys_config_logging_file_size.contents.file_size = 0;
+    }
+    else
+    {
+        sys_config.sys_config_logging_file_size.contents.file_size = 0;
+    }
+}
+
 /**
  * @brief      Create the configuration file in FLASH memory
  *
@@ -820,6 +837,11 @@ void cfg_read_populate_buffer(void)
     while (!sys_config_iterate(&tag, &sm_context.cfg_read.last_index))
     {
         void * src;
+
+        // If this is a request for the current log file size
+        if (SYS_CONFIG_TAG_LOGGING_FILE_SIZE == tag)
+            populate_log_file_size_tag();
+
         ret = sys_config_get(tag, &src);
         if (ret > 0)
         {
@@ -890,6 +912,11 @@ void cfg_read_req(cmd_t * req, uint16_t size)
     {
         void * src;
         /* Requested a single configuration tag */
+
+        // If this is a request for the current log file size
+        if (SYS_CONFIG_TAG_LOGGING_FILE_SIZE == req->p.cmd_cfg_read_req.configuration_tag)
+            populate_log_file_size_tag();
+
         int ret = sys_config_get(req->p.cmd_cfg_read_req.configuration_tag, &src);
 
         if (ret < 0)
