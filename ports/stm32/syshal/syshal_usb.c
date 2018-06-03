@@ -162,7 +162,7 @@ int syshal_usb_tick(void)
             syshal_usb_event_handler(&event);
         }
 
-        DEBUG_PR_TRACE("Event status: %u", hUsbDeviceFS.dev_state);
+        //DEBUG_PR_TRACE("Event status: %u", hUsbDeviceFS.dev_state);
 
     }
 

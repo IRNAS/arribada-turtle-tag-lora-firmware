@@ -2556,8 +2556,6 @@ void boot_state(void)
     DEBUG_PR_SYS("Version:  %s", GIT_VERSION);
     DEBUG_PR_SYS("Compiled: %s %s With %s", COMPILE_DATE, COMPILE_TIME, COMPILER_NAME);
 
-    config_if_init(CONFIG_IF_BACKEND_USB);
-
     // Load the file system
     fs_init(FS_DEVICE);
     fs_mount(FS_DEVICE, &file_system);
@@ -2591,6 +2589,7 @@ void boot_state(void)
     // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
     if (syshal_gpio_get_input(GPIO_VUSB))
     {
+        config_if_init(CONFIG_IF_BACKEND_USB);
         sm_set_state(SM_STATE_STANDBY_BATTERY_CHARGING);
         return;
     }
@@ -2604,13 +2603,6 @@ void boot_state(void)
         return;
     }
 #endif
-
-    // If either the USB 5V input signal or the BLE reed switch are active and the battery level is sufficient then it shall be possible to transition directly to the PROVISIONING state.
-    if (config_if_connected)
-    {
-        sm_set_state(SM_STATE_PROVISIONING);
-        return;
-    }
 
     if (check_configuration_tags_set() && log_file_created)
     {
@@ -2627,15 +2619,18 @@ void standby_battery_charging_state()
 {
     if (syshal_gpio_get_input(GPIO_VUSB))
     {
-        // If USB is connected
         config_if_tick();
-
+        
         // Look for a connection event
         if (config_if_connected)
+        {
+            syshal_gps_wake_up();
             sm_set_state(SM_STATE_PROVISIONING);
+        }
     }
     else
     {
+        config_if_term(); // Stop the configuration interface
         // If we're no longer charging, transition state
         int level = syshal_batt_level();
         if (level >= 0)
@@ -2661,22 +2656,20 @@ void standby_battery_level_low_state()
 {
     // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
     if (syshal_gpio_get_input(GPIO_VUSB))
+    {
+        config_if_init(CONFIG_IF_BACKEND_USB);
         sm_set_state(SM_STATE_STANDBY_BATTERY_CHARGING);
+    }
 }
 
 void standby_log_file_full_state()
 {
     // Check to see if any state changes are required
 
-    if (config_if_connected)
-    {
-        sm_set_state(SM_STATE_PROVISIONING); // Configuration interface connected
-        return;
-    }
-
     // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
     if (syshal_gpio_get_input(GPIO_VUSB))
     {
+        config_if_init(CONFIG_IF_BACKEND_USB);
         sm_set_state(SM_STATE_STANDBY_BATTERY_CHARGING);
         return;
     }
@@ -2719,16 +2712,10 @@ void standby_provisioning_needed_state()
         syshal_gps_shutdown();
     }
 
-    if (config_if_connected)
-    {
-        syshal_gps_wake_up();
-        sm_set_state(SM_STATE_PROVISIONING); // Not all tags are set, we need provisioning
-        return;
-    }
-
     // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
     if (syshal_gpio_get_input(GPIO_VUSB))
     {
+        config_if_init(CONFIG_IF_BACKEND_USB);
         sm_set_state(SM_STATE_STANDBY_BATTERY_CHARGING);
         return;
     }
@@ -2742,8 +2729,6 @@ void standby_provisioning_needed_state()
         return;
     }
 #endif
-
-    config_if_tick();
 }
 
 void standby_trigger_pending_state()
@@ -2757,24 +2742,35 @@ void provisioning_state(void)
 
     handle_config_if_messages(); // Process any config_if messages
 
+    if (syshal_gpio_get_input(GPIO_VUSB) && !config_if_connected)
+    {
+        sm_set_state(SM_STATE_STANDBY_BATTERY_CHARGING);
+        return;
+    }
+
     // Determine if we are ready to enter the operational state or not
     if (check_configuration_tags_set() && log_file_created)
     {
         syshal_gpio_set_output_low(GPIO_LED2_RED);
         syshal_gpio_set_output_high(GPIO_LED1_GREEN);
 
-        if (!config_if_connected)
+        if (!syshal_gpio_get_input(GPIO_VUSB))
+        {
+            config_if_term();
             sm_set_state(SM_STATE_OPERATIONAL); // All systems go for standard operation
+        }
     }
     else
     {
         syshal_gpio_set_output_high(GPIO_LED2_RED);
         syshal_gpio_set_output_low(GPIO_LED1_GREEN);
 
-        if (!config_if_connected)
+        if (!syshal_gpio_get_input(GPIO_VUSB))
+        {
+            config_if_term();
             sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED); // We still need provisioning
+        }
     }
-
 }
 
 void operational_state(void)
@@ -2953,20 +2949,7 @@ void operational_state(void)
 
     }
 
-    config_if_tick();
     syshal_timer_tick();
-
-    // Check to see if any state changes are required
-    if (config_if_connected)
-    {
-        if (log_file_handle)
-        {
-            fs_close(log_file_handle);
-            log_file_handle = NULL;
-        }
-        sm_set_state(SM_STATE_PROVISIONING); // Configuration interface connected
-        return;
-    }
 
     // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
     if (syshal_gpio_get_input(GPIO_VUSB))
@@ -2976,6 +2959,7 @@ void operational_state(void)
             fs_close(log_file_handle);
             log_file_handle = NULL;
         }
+        config_if_init(CONFIG_IF_BACKEND_USB);
         sm_set_state(SM_STATE_STANDBY_BATTERY_CHARGING);
         return;
     }
