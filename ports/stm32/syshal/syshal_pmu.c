@@ -49,7 +49,9 @@ void syshal_pmu_set_level(syshal_pmu_power_level_t level)
         case POWER_SLEEP:
             DEBUG_PR_TRACE("Entering POWER_SLEEP mode");
             HAL_SuspendTick(); // Disable the Systick to prevent it waking us up
+            HAL_NVIC_DisableIRQ(RTC_IRQn); // Disable the RTC from waking us up
             HAL_PWR_EnterSLEEPMode(0, PWR_SLEEPENTRY_WFI);
+            HAL_NVIC_EnableIRQ(RTC_IRQn);
             HAL_ResumeTick(); // Re-enable the Systick
             break;
 

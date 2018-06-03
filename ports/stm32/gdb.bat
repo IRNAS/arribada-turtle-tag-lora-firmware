@@ -1,1 +1,1 @@
-"../../../Toolchain/gcc-arm-none-eabi-7-2017-q4-major/bin/arm-none-eabi-gdb.exe" build/ArribadaSTM32.elf -ex "target remote localhost:3333" -ex "monitor reset"
+"../../../Toolchain/gcc-arm-none-eabi-7-2017-q4-major/bin/arm-none-eabi-gdb.exe" build/ArribadaSTM32.elf -ex "target remote localhost:2331" -ex "monitor reset"
