@@ -26,6 +26,8 @@
 #define SYS_CONFIG_ERROR_NO_MORE_TAGS     (-3)
 #define SYS_CONFIG_ERROR_TAG_NOT_SET      (-4)
 
+#define SYS_CONFIG_FORMAT_VERSION (1) // This should be incremented if the sys_config layout is modified
+
 #define SYS_CONFIG_MAX_DATA_SIZE (60) // Max size the configuration tag's data can be in bytes
 
 #define SYS_CONFIG_TAG_ID_SIZE (sizeof(uint16_t))
@@ -473,6 +475,7 @@ typedef struct __attribute__((__packed__))
 
 typedef struct __attribute__((__packed__))
 {
+    uint8_t                                                     format_version; // A version number to keep track of the format/contents of this struct
     sys_config_gps_log_position_enable_t                        sys_config_gps_log_position_enable;
     sys_config_gps_log_ttff_enable_t                            sys_config_gps_log_ttff_enable;
     sys_config_gps_trigger_mode_t                               sys_config_gps_trigger_mode;

@@ -113,6 +113,7 @@ typedef enum
     CMD_ERROR_INVALID_PARAMETER,     // An invalid parameter has been provided
     CMD_ERROR_INVALID_FW_IMAGE_TYPE, // An invalid image type was received in a CMD_FW_SEND_IMAGE_REQ
     CMD_ERROR_IMAGE_CRC_MISMATCH,    // The firmware images CRC does not match one in flash
+    CMD_ERROR_FILE_INCOMPATIBLE,     // This file is incompatible with this firmware version
 } cmd_error_t;
 
 // Exposed functions

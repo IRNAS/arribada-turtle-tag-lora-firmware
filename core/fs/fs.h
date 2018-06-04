@@ -29,16 +29,17 @@
 #define FS_FILE_WRITEABLE  0x04 /*!< File is writeable flag */
 #define FS_FILE_CIRCULAR   0x02 /*!< File is circular flag */
 
-#define FS_NO_ERROR                   0
-#define FS_ERROR_FLASH_MEDIA         -1
-#define FS_ERROR_FILE_ALREADY_EXISTS -2
-#define FS_ERROR_FILE_NOT_FOUND      -3
-#define FS_ERROR_FILE_PROTECTED      -4
-#define FS_ERROR_NO_FREE_HANDLE      -5
-#define FS_ERROR_INVALID_MODE        -6
-#define FS_ERROR_FILESYSTEM_FULL     -7
-#define FS_ERROR_END_OF_FILE         -8
-#define FS_ERROR_BAD_DEVICE          -9
+#define FS_NO_ERROR                    (  0)
+#define FS_ERROR_FLASH_MEDIA           ( -1)
+#define FS_ERROR_FILE_ALREADY_EXISTS   ( -2)
+#define FS_ERROR_FILE_NOT_FOUND        ( -3)
+#define FS_ERROR_FILE_PROTECTED        ( -4)
+#define FS_ERROR_NO_FREE_HANDLE        ( -5)
+#define FS_ERROR_INVALID_MODE          ( -6)
+#define FS_ERROR_FILESYSTEM_FULL       ( -7)
+#define FS_ERROR_END_OF_FILE           ( -8)
+#define FS_ERROR_BAD_DEVICE            ( -9)
+#define FS_ERROR_FILE_VERSION_MISMATCH (-10)
 
 /* Macros */
 

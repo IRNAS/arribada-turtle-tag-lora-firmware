@@ -310,7 +310,7 @@ static bool check_configuration_tags_set(void)
         // Ignore any non-essential tags
         if (!sys_config.sys_config_logging_enable.contents.enable)
         {
-            if (SYS_CONFIG_TAG_GPS_LOG_POSITION_ENABLE == tag ||
+            if (SYS_CONFIG_TAG_LOGGING_ENABLE == tag ||
                 SYS_CONFIG_TAG_LOGGING_FILE_SIZE == tag ||
                 SYS_CONFIG_TAG_LOGGING_FILE_TYPE == tag ||
                 SYS_CONFIG_TAG_LOGGING_GROUP_SENSOR_READINGS_ENABLE == tag ||
@@ -435,7 +435,7 @@ static bool check_configuration_tags_set(void)
         if (SYS_CONFIG_ERROR_TAG_NOT_SET == ret)
         {
             tag_not_set = true;
-            DEBUG_PR_WARN("Configuration tag %u not set", tag);
+            DEBUG_PR_WARN("Configuration tag 0x%04X not set", tag);
         }
     }
 
@@ -816,6 +816,10 @@ static int fs_set_configuration_data(void)
     // We have now created and opened our unformatted configuration file
     // So lets write our configuration data to it
     uint32_t bytes_written;
+
+    // Ensure our configuration version flag is set
+    sys_config.format_version = SYS_CONFIG_FORMAT_VERSION;
+
     ret = fs_write(file_system_handle, &sys_config, sizeof(sys_config), &bytes_written);
 
     fs_close(file_system_handle); // Close the file and flush any data
@@ -841,6 +845,8 @@ static int fs_set_configuration_data(void)
  * @return     @ref FS_ERROR_FLASH_MEDIA if the amount of data written to the file
  *             is not of expected length
  * @return     @ref FS_ERROR_NO_FREE_HANDLE if no file handle could be allocated.
+ * @return     @ref FS_ERROR_FILE_VERSION_MISMATCH if the configuration file found
+ *             is not compatible with this firmware.
  */
 static int fs_get_configuration_data(void)
 {
@@ -851,10 +857,26 @@ static int fs_get_configuration_data(void)
     if (FS_NO_ERROR != ret)
         return ret; // An unrecoverable error has occured
 
-    // We have opened the configuration file, so now we need to load the data from it
+    // Check the configuration version number matches our firmware one
     uint32_t bytes_read;
-    ret = fs_read(file_system_handle, &sys_config, sizeof(sys_config), &bytes_read);
 
+    uint8_t format_version = 0;
+    ret = fs_read(file_system_handle, &sys_config, sizeof(sys_config.format_version), &bytes_read);
+
+    if (FS_NO_ERROR != ret)
+        return ret; // An unrecoverable error has occured
+
+    fs_close(file_system_handle); // We're done reading from this file
+
+    if (SYS_CONFIG_FORMAT_VERSION != format_version)
+    {
+        DEBUG_PR_WARN("%s() configuration file is an incompatible format version", __FUNCTION__);
+        return FS_ERROR_FILE_VERSION_MISMATCH;
+    }
+
+    // Populate our sys_config RAM struct from the FLASH file
+    ret  = fs_open(file_system, &file_system_handle, FS_FILE_ID_CONF, FS_MODE_READONLY, NULL);
+    ret |= fs_read(file_system_handle, &sys_config, sizeof(sys_config), &bytes_read);
     fs_close(file_system_handle); // We're done reading from this file
 
     if (FS_NO_ERROR != ret)
@@ -1232,6 +1254,10 @@ static void cfg_restore_req(cmd_t * req, uint16_t size)
 
         case FS_ERROR_FILE_NOT_FOUND:
             resp->p.cmd_generic_resp.error_code = CMD_ERROR_FILE_NOT_FOUND;
+            break;
+
+        case FS_ERROR_FILE_VERSION_MISMATCH:
+            resp->p.cmd_generic_resp.error_code = CMD_ERROR_FILE_INCOMPATIBLE;
             break;
 
         default:
@@ -1738,7 +1764,7 @@ static void status_req(cmd_t * req, uint16_t size)
     resp->p.cmd_status_resp.error_code = CMD_NO_ERROR;
     resp->p.cmd_status_resp.stm_firmware_version = 1;
     resp->p.cmd_status_resp.ble_firmware_version = 0;
-    resp->p.cmd_status_resp.configuration_format_version = 1;
+    resp->p.cmd_status_resp.configuration_format_version = SYS_CONFIG_FORMAT_VERSION;
 
     buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_status_resp_t));
     config_if_send_priv(&config_if_send_buffer);
@@ -2630,15 +2656,16 @@ void boot_state(void)
 
     ret = fs_get_configuration_data();
 
+    if (!(FS_NO_ERROR == ret || FS_ERROR_FILE_NOT_FOUND == ret || FS_ERROR_FILE_VERSION_MISMATCH == ret))
+        Throw(EXCEPTION_FS_ERROR);
+
     // Init the peripheral devices after configuration data has been collected
     //syshal_axl_init();
-    sm_gps_state = SM_GPS_STATE_ACQUIRING;
     syshal_gps_init();
+    sm_gps_state = SM_GPS_STATE_ACQUIRING;
+
     syshal_switch_init();
     tracker_above_water = !syshal_switch_get();
-
-    if (!(FS_NO_ERROR == ret || FS_ERROR_FILE_NOT_FOUND == ret))
-        Throw(EXCEPTION_FS_ERROR);
 
     // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
     if (syshal_gpio_get_input(GPIO_VUSB))
