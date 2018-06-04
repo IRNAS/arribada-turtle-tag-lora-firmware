@@ -869,7 +869,7 @@ static int fs_get_configuration_data(void)
     uint32_t bytes_read;
 
     uint8_t format_version = 0;
-    ret = fs_read(file_system_handle, &sys_config, sizeof(sys_config.format_version), &bytes_read);
+    ret = fs_read(file_system_handle, &format_version, sizeof(sys_config.format_version), &bytes_read);
 
     if (FS_NO_ERROR != ret)
         return ret; // An unrecoverable error has occured
