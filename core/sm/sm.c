@@ -191,6 +191,7 @@ static fs_t              file_system;
 static fs_handle_t       log_file_handle = NULL;
 static volatile bool     tracker_above_water = true; // Is the device above water?
 static volatile bool     log_file_created = false; // Does a log file exist?
+static volatile bool     gps_ttff_reading_logged = false; // Have we read the most recent gps ttff reading?
 
 ////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////// PROTOTYPES ///////////////////////////////////
@@ -519,7 +520,8 @@ void syshal_gps_callback(syshal_gps_event_t event)
 {
 
     // If gps data logging is disabled
-    if (!sys_config.sys_config_gps_log_position_enable.contents.enable)
+    if (!sys_config.sys_config_gps_log_position_enable.contents.enable &&
+        !sys_config.sys_config_gps_log_ttff_enable.contents.enable)
     {
         sm_gps_state = SM_GPS_STATE_ASLEEP;
         syshal_gps_shutdown(); // Sleep the gps device
@@ -535,18 +537,16 @@ void syshal_gps_callback(syshal_gps_event_t event)
             {
                 syshal_timer_cancel(TIMER_ID_GPS_NO_FIX); // Clear any no fix timer
 
-                // Have we only just got a fix?
-                if (SM_GPS_STATE_ACQUIRING == sm_gps_state)
+                // If TTFF logging is enabled then log this
+                if (!gps_ttff_reading_logged && sys_config.sys_config_gps_log_ttff_enable.contents.enable)
                 {
-                    // If TTFF logging is enabled then log this
-                    if (sys_config.sys_config_gps_log_ttff_enable.contents.enable)
-                    {
-                        logging_gps_ttff_t gps_ttff;
+                    logging_gps_ttff_t gps_ttff;
 
-                        LOGGING_SET_HDR(&gps_ttff, LOGGING_GPS_TTFF);
-                        gps_ttff.ttff = event.event_data.status.ttff;
-                        logging_add_to_buffer((uint8_t *) &gps_ttff, sizeof(gps_ttff));
-                    }
+                    LOGGING_SET_HDR(&gps_ttff, LOGGING_GPS_TTFF);
+                    gps_ttff.ttff = event.event_data.status.ttff;
+                    logging_add_to_buffer((uint8_t *) &gps_ttff, sizeof(gps_ttff));
+
+                    gps_ttff_reading_logged = true;
                 }
 
                 sm_gps_state = SM_GPS_STATE_FIXED;
@@ -697,6 +697,7 @@ void syshal_timer_callback(uint32_t timer_id)
             // So shutdown the GPS
             if (SM_GPS_STATE_ASLEEP != sm_gps_state)
             {
+                gps_ttff_reading_logged = false;
                 sm_gps_state = SM_GPS_STATE_ASLEEP;
                 syshal_gps_shutdown();
             }
@@ -709,6 +710,7 @@ void syshal_timer_callback(uint32_t timer_id)
             // So shutdown the GPS
             if (SM_GPS_STATE_ASLEEP != sm_gps_state)
             {
+                gps_ttff_reading_logged = false;
                 sm_gps_state = SM_GPS_STATE_ASLEEP;
                 syshal_gps_shutdown();
             }
@@ -2829,6 +2831,8 @@ void operational_state(void)
                 syshal_timer_cancel(TIMER_ID_GPS_NO_FIX);
                 syshal_timer_cancel(TIMER_ID_GPS_MAXIMUM_ACQUISITION);
 
+                gps_ttff_reading_logged = false; // Make sure we read the first TTFF reading
+
                 // Flash the green LED for 5 seconds to indicate this state
                 syshal_gpio_set_output_low(GPIO_LED2_RED);
                 syshal_gpio_set_output_low(GPIO_LED1_GREEN);
@@ -2842,7 +2846,8 @@ void operational_state(void)
                 }
                 syshal_gpio_set_output_low(GPIO_LED1_GREEN);
 
-                if (sys_config.sys_config_gps_log_position_enable.contents.enable)
+                if (sys_config.sys_config_gps_log_position_enable.contents.enable ||
+                    sys_config.sys_config_gps_log_ttff_enable.contents.enable)
                 {
                     // Clear the GPS buffer
                     uint8_t flush;
@@ -2944,11 +2949,17 @@ void operational_state(void)
     }
 
     // If GPS bridging is disabled and GPS logging enabled
-    if ( (!syshal_gps_bridging) && (sys_config.sys_config_gps_log_position_enable.contents.enable) )
+    if ( (!syshal_gps_bridging) &&
+         (sys_config.sys_config_gps_log_position_enable.contents.enable ||
+          sys_config.sys_config_gps_log_ttff_enable.contents.enable) )
         syshal_gps_tick(); // Process GPS messages
 
+    syshal_gpio_set_output_low(GPIO_LED1_GREEN);
+    syshal_pmu_set_level(POWER_SLEEP);
+    syshal_gpio_set_output_high(GPIO_LED1_GREEN);
+
     // Is global logging enabled?
-    if (sys_config.sys_config_gps_log_position_enable.contents.enable)
+    if (sys_config.sys_config_logging_enable.contents.enable)
     {
 
         // Is there any data waiting to be written to the log file?
@@ -3015,8 +3026,6 @@ void operational_state(void)
         return;
     }
 #endif
-
-    //syshal_pmu_set_level(POWER_SLEEP);
 
 }
 ////////////////////////////////////////////////////////////////////////////////
