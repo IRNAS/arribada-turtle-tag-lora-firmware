@@ -276,87 +276,67 @@ static bool check_configuration_tags_set(void)
     int ret;
 
     // Conditional branching booleans for checking what configuration tags are required to be set
-    bool logging_enabled = false;
-    bool gps_log_position_enabled = false;
-    bool gps_log_ttff_enabled = false;
-    bool saltwater_log_enabled = false;
-    bool ble_beacon_enabled = false;
-    bool temp_log_enabled = false;
-    bool pressure_log_enabled = false;
-    bool axl_log_enabled = false;
 
-    // Populate the booleans
-    if (sys_config_get(SYS_CONFIG_TAG_LOGGING_ENABLE, NULL) >= SYS_CONFIG_NO_ERROR)
-        logging_enabled = sys_config.sys_config_gps_log_position_enable.contents.enable;
-    else
-        return false; // If our main logging flag is not set then this is a problem
+    // If one of the following tags is not set, default to false
+    if (SYS_CONFIG_ERROR_TAG_NOT_SET == sys_config_get(SYS_CONFIG_TAG_LOGGING_ENABLE, NULL))
+        sys_config.sys_config_logging_enable.contents.enable = false;
 
-    if (sys_config_get(SYS_CONFIG_TAG_GPS_LOG_POSITION_ENABLE, NULL) >= SYS_CONFIG_NO_ERROR)
-        gps_log_position_enabled = sys_config.sys_config_gps_log_position_enable.contents.enable;
+    if (SYS_CONFIG_ERROR_TAG_NOT_SET == sys_config_get(SYS_CONFIG_TAG_GPS_LOG_POSITION_ENABLE, NULL))
+        sys_config.sys_config_gps_log_position_enable.contents.enable = false;
 
-    if (sys_config_get(SYS_CONFIG_TAG_GPS_LOG_TTFF_ENABLE, NULL) >= SYS_CONFIG_NO_ERROR)
-        gps_log_ttff_enabled = sys_config.sys_config_gps_log_ttff_enable.contents.enable;
+    if (SYS_CONFIG_ERROR_TAG_NOT_SET == sys_config_get(SYS_CONFIG_TAG_GPS_LOG_TTFF_ENABLE, NULL))
+        sys_config.sys_config_gps_log_ttff_enable.contents.enable = false;
 
-    if (sys_config_get(SYS_CONFIG_SALTWATER_SWITCH_LOG_ENABLE, NULL) >= SYS_CONFIG_NO_ERROR)
-        saltwater_log_enabled = sys_config.sys_config_saltwater_switch_log_enable.contents.enable;
+    if (SYS_CONFIG_ERROR_TAG_NOT_SET == sys_config_get(SYS_CONFIG_SALTWATER_SWITCH_LOG_ENABLE, NULL))
+        sys_config.sys_config_saltwater_switch_log_enable.contents.enable = false;
 
-    if (sys_config_get(SYS_CONFIG_TAG_BLUETOOTH_BEACON_ENABLE, NULL) >= SYS_CONFIG_NO_ERROR)
-        ble_beacon_enabled = sys_config.sys_config_bluetooth_beacon_enable.contents.enable;
+    if (SYS_CONFIG_ERROR_TAG_NOT_SET == sys_config_get(SYS_CONFIG_TAG_BLUETOOTH_BEACON_ENABLE, NULL))
+        sys_config.sys_config_bluetooth_beacon_enable.contents.enable = false;
 
-    if (sys_config_get(SYS_CONFIG_TAG_TEMP_SENSOR_LOG_ENABLE, NULL) >= SYS_CONFIG_NO_ERROR)
-        temp_log_enabled = sys_config.sys_config_temp_sensor_log_enable.contents.enable;
+    if (SYS_CONFIG_ERROR_TAG_NOT_SET == sys_config_get(SYS_CONFIG_TAG_TEMP_SENSOR_LOG_ENABLE, NULL))
+        sys_config.sys_config_temp_sensor_log_enable.contents.enable = false;
 
-    if (sys_config_get(SYS_CONFIG_TAG_PRESSURE_SENSOR_LOG_ENABLE, NULL) >= SYS_CONFIG_NO_ERROR)
-        pressure_log_enabled = sys_config.sys_config_pressure_sensor_log_enable.contents.enable;
+    if (SYS_CONFIG_ERROR_TAG_NOT_SET == sys_config_get(SYS_CONFIG_TAG_PRESSURE_SENSOR_LOG_ENABLE, NULL))
+        sys_config.sys_config_pressure_sensor_log_enable.contents.enable = false;
 
-    if (sys_config_get(SYS_CONFIG_TAG_AXL_LOG_ENABLE, NULL) >= SYS_CONFIG_NO_ERROR)
-        axl_log_enabled = sys_config.sys_config_axl_log_enable.contents.enable;
+    if (SYS_CONFIG_ERROR_TAG_NOT_SET == sys_config_get(SYS_CONFIG_TAG_AXL_LOG_ENABLE, NULL))
+        sys_config.sys_config_axl_log_enable.contents.enable = false;
 
-    UNUSED(saltwater_log_enabled);
-    UNUSED(gps_log_ttff_enabled);
 
     while (!sys_config_iterate(&tag, &last_index))
     {
 
         // Ignore any non-essential tags
-        if (!logging_enabled)
+        if (!sys_config.sys_config_logging_enable.contents.enable)
         {
             if (SYS_CONFIG_TAG_GPS_LOG_POSITION_ENABLE == tag ||
+                SYS_CONFIG_TAG_LOGGING_FILE_SIZE == tag ||
+                SYS_CONFIG_TAG_LOGGING_FILE_TYPE == tag ||
+                SYS_CONFIG_TAG_LOGGING_GROUP_SENSOR_READINGS_ENABLE == tag ||
+                SYS_CONFIG_TAG_LOGGING_START_END_SYNC_ENABLE == tag ||
+                SYS_CONFIG_TAG_LOGGING_DATE_TIME_STAMP_ENABLE == tag ||
+                SYS_CONFIG_TAG_LOGGING_HIGH_RESOLUTION_TIMER_ENABLE == tag ||
+                SYS_CONFIG_TAG_GPS_LOG_POSITION_ENABLE == tag ||
                 SYS_CONFIG_TAG_GPS_LOG_TTFF_ENABLE == tag ||
-                SYS_CONFIG_SALTWATER_SWITCH_LOG_ENABLE == tag ||
-                SYS_CONFIG_TAG_TEMP_SENSOR_LOG_ENABLE == tag ||
-                SYS_CONFIG_TAG_PRESSURE_SENSOR_LOG_ENABLE == tag ||
-                SYS_CONFIG_TAG_AXL_LOG_ENABLE == tag)
-            {
-                continue;
-            }
-        }
-
-        if (!gps_log_position_enabled || !logging_enabled)
-        {
-            if (SYS_CONFIG_TAG_GPS_TRIGGER_MODE == tag ||
+                SYS_CONFIG_TAG_GPS_TRIGGER_MODE == tag ||
+                SYS_CONFIG_TAG_GPS_UART_BAUD_RATE == tag ||
                 SYS_CONFIG_TAG_GPS_SCHEDULED_ACQUISITION_INTERVAL == tag ||
                 SYS_CONFIG_TAG_GPS_MAXIMUM_ACQUISITION_TIME == tag ||
-                SYS_CONFIG_TAG_GPS_SCHEDULED_ACQUISITION_NO_FIX_TIMEOUT == tag)
-            {
-                continue;
-            }
-        }
-
-        if (!ble_beacon_enabled)
-        {
-            // Then don't check the beacon tags
-            if (SYS_CONFIG_TAG_BLUETOOTH_BEACON_GEO_FENCE_TRIGGER_LOCATION == tag ||
-                SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_INTERVAL == tag ||
-                SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_CONFIGURATION == tag)
-            {
-                continue;
-            }
-        }
-
-        if (!temp_log_enabled || !logging_enabled)
-        {
-            if (SYS_CONFIG_TAG_TEMP_SENSOR_SAMPLE_RATE == tag ||
+                SYS_CONFIG_TAG_GPS_SCHEDULED_ACQUISITION_NO_FIX_TIMEOUT == tag ||
+                SYS_CONFIG_SALTWATER_SWITCH_LOG_ENABLE == tag ||
+                SYS_CONFIG_SALTWATER_SWITCH_HYSTERESIS_PERIOD == tag ||
+                SYS_CONFIG_TAG_AXL_LOG_ENABLE == tag ||
+                SYS_CONFIG_TAG_AXL_CONFIG == tag ||
+                SYS_CONFIG_TAG_AXL_G_FORCE_HIGH_THRESHOLD == tag ||
+                SYS_CONFIG_TAG_AXL_SAMPLE_RATE == tag ||
+                SYS_CONFIG_TAG_AXL_MODE == tag ||
+                SYS_CONFIG_TAG_PRESSURE_SENSOR_LOG_ENABLE == tag ||
+                SYS_CONFIG_TAG_PRESSURE_SAMPLE_RATE == tag ||
+                SYS_CONFIG_TAG_PRESSURE_LOW_THRESHOLD == tag ||
+                SYS_CONFIG_TAG_PRESSURE_HIGH_THRESHOLD == tag ||
+                SYS_CONFIG_TAG_PRESSURE_MODE == tag ||
+                SYS_CONFIG_TAG_TEMP_SENSOR_LOG_ENABLE == tag ||
+                SYS_CONFIG_TAG_TEMP_SENSOR_SAMPLE_RATE == tag ||
                 SYS_CONFIG_TAG_TEMP_SENSOR_LOW_THRESHOLD == tag ||
                 SYS_CONFIG_TAG_TEMP_SENSOR_HIGH_THRESHOLD == tag ||
                 SYS_CONFIG_TAG_TEMP_SENSOR_MODE == tag)
@@ -365,9 +345,69 @@ static bool check_configuration_tags_set(void)
             }
         }
 
-        if (!pressure_log_enabled || !logging_enabled)
+        if (!sys_config.sys_config_gps_log_position_enable.contents.enable)
         {
-            if (SYS_CONFIG_TAG_PRESSURE_SAMPLE_RATE == tag ||
+            if (SYS_CONFIG_TAG_GPS_LOG_POSITION_ENABLE == tag ||
+                SYS_CONFIG_TAG_GPS_TRIGGER_MODE == tag ||
+                SYS_CONFIG_TAG_GPS_SCHEDULED_ACQUISITION_INTERVAL == tag ||
+                SYS_CONFIG_TAG_GPS_MAXIMUM_ACQUISITION_TIME == tag ||
+                SYS_CONFIG_TAG_GPS_SCHEDULED_ACQUISITION_NO_FIX_TIMEOUT == tag)
+            {
+                continue;
+            }
+        }
+
+        if (!sys_config.sys_config_gps_log_ttff_enable.contents.enable)
+        {
+            if (SYS_CONFIG_TAG_GPS_LOG_TTFF_ENABLE == tag)
+                continue;
+        }
+
+        if (!sys_config.sys_config_saltwater_switch_log_enable.contents.enable)
+        {
+            if (SYS_CONFIG_SALTWATER_SWITCH_LOG_ENABLE == tag)
+                continue;
+        }
+
+        // If we're in switch only trigger mode, then ignore any options meant for SCHEDULED or HYBRID modes
+        if (SYS_CONFIG_GPS_TRIGGER_MODE_SWITCH_TRIGGERED == sys_config.sys_config_gps_trigger_mode.contents.mode)
+        {
+            if (SYS_CONFIG_TAG_GPS_SCHEDULED_ACQUISITION_INTERVAL == tag ||
+                SYS_CONFIG_TAG_GPS_MAXIMUM_ACQUISITION_TIME == tag ||
+                SYS_CONFIG_TAG_GPS_SCHEDULED_ACQUISITION_NO_FIX_TIMEOUT == tag)
+            {
+                continue;
+            }
+        }
+
+        if (!sys_config.sys_config_bluetooth_beacon_enable.contents.enable)
+        {
+            // Then don't check the beacon tags
+            if (SYS_CONFIG_TAG_BLUETOOTH_BEACON_ENABLE == tag ||
+                SYS_CONFIG_TAG_BLUETOOTH_BEACON_GEO_FENCE_TRIGGER_LOCATION == tag ||
+                SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_INTERVAL == tag ||
+                SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_CONFIGURATION == tag)
+            {
+                continue;
+            }
+        }
+
+        if (!sys_config.sys_config_temp_sensor_log_enable.contents.enable)
+        {
+            if (SYS_CONFIG_TAG_TEMP_SENSOR_LOG_ENABLE == tag ||
+                SYS_CONFIG_TAG_TEMP_SENSOR_SAMPLE_RATE == tag ||
+                SYS_CONFIG_TAG_TEMP_SENSOR_LOW_THRESHOLD == tag ||
+                SYS_CONFIG_TAG_TEMP_SENSOR_HIGH_THRESHOLD == tag ||
+                SYS_CONFIG_TAG_TEMP_SENSOR_MODE == tag)
+            {
+                continue;
+            }
+        }
+
+        if (!sys_config.sys_config_pressure_sensor_log_enable.contents.enable)
+        {
+            if (SYS_CONFIG_TAG_PRESSURE_SENSOR_LOG_ENABLE == tag ||
+                SYS_CONFIG_TAG_PRESSURE_SAMPLE_RATE == tag ||
                 SYS_CONFIG_TAG_PRESSURE_LOW_THRESHOLD == tag ||
                 SYS_CONFIG_TAG_PRESSURE_HIGH_THRESHOLD == tag ||
                 SYS_CONFIG_TAG_PRESSURE_MODE == tag)
@@ -376,9 +416,10 @@ static bool check_configuration_tags_set(void)
             }
         }
 
-        if (!axl_log_enabled || !logging_enabled)
+        if (!sys_config.sys_config_axl_log_enable.contents.enable)
         {
-            if (SYS_CONFIG_TAG_AXL_CONFIG == tag ||
+            if (SYS_CONFIG_TAG_AXL_LOG_ENABLE == tag ||
+                SYS_CONFIG_TAG_AXL_CONFIG == tag ||
                 SYS_CONFIG_TAG_AXL_G_FORCE_HIGH_THRESHOLD == tag ||
                 SYS_CONFIG_TAG_AXL_SAMPLE_RATE == tag ||
                 SYS_CONFIG_TAG_AXL_MODE == tag)
@@ -393,12 +434,8 @@ static bool check_configuration_tags_set(void)
         if (SYS_CONFIG_ERROR_TAG_NOT_SET == ret)
         {
             tag_not_set = true;
+            DEBUG_PR_WARN("Configuration tag %u not set", tag);
         }
-    }
-
-    if (tag_not_set)
-    {
-        DEBUG_PR_WARN("Configuration tags not set");
     }
 
     return !tag_not_set;
@@ -2620,7 +2657,7 @@ void standby_battery_charging_state()
     if (syshal_gpio_get_input(GPIO_VUSB))
     {
         config_if_tick();
-        
+
         // Look for a connection event
         if (config_if_connected)
         {
