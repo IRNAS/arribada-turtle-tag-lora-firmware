@@ -518,7 +518,6 @@ void syshal_axl_callback(syshal_axl_data_t data)
 
 void syshal_gps_callback(syshal_gps_event_t event)
 {
-
     // If gps data logging is disabled
     if (!sys_config.sys_config_gps_log_position_enable.contents.enable &&
         !sys_config.sys_config_gps_log_ttff_enable.contents.enable)
@@ -535,7 +534,12 @@ void syshal_gps_callback(syshal_gps_event_t event)
 
             if (event.event_data.status.gpsFix > 0)
             {
-                syshal_timer_cancel(TIMER_ID_GPS_NO_FIX); // Clear any no fix timer
+
+                if (SM_GPS_STATE_ASLEEP != sm_gps_state) // If we haven't already slept the GPS
+                {
+                    syshal_timer_cancel(TIMER_ID_GPS_NO_FIX); // Clear any no fix timer
+                    sm_gps_state = SM_GPS_STATE_FIXED;
+                }
 
                 // If TTFF logging is enabled then log this
                 if (!gps_ttff_reading_logged && sys_config.sys_config_gps_log_ttff_enable.contents.enable)
@@ -549,30 +553,29 @@ void syshal_gps_callback(syshal_gps_event_t event)
                     gps_ttff_reading_logged = true;
                 }
 
-                sm_gps_state = SM_GPS_STATE_FIXED;
             }
             else
             {
-                // Have we just lost GPS fix?
-                if (SM_GPS_STATE_FIXED == sm_gps_state)
+                if (SM_GPS_STATE_ASLEEP != sm_gps_state) // If we haven't already slept the GPS
                 {
-
-                    // Are we supposed to be scheduling a no fix timer?
-                    // If our interval time is 0 this is a special case meaning run the GPS forever
-                    if (sys_config.sys_config_gps_scheduled_acquisition_interval.contents.seconds)
+                    // Have we just lost GPS fix?
+                    if (SM_GPS_STATE_FIXED == sm_gps_state)
                     {
-                        // If we are and we are either in scheduled mode or hybrid + underwater then start the no-fix timer
-                        if ((SYS_CONFIG_GPS_TRIGGER_MODE_SCHEDULED == sys_config.sys_config_gps_trigger_mode.contents.mode) ||
-                            ((SYS_CONFIG_GPS_TRIGGER_MODE_HYBRID == sys_config.sys_config_gps_trigger_mode.contents.mode) && (!tracker_above_water)))
+                        // Are we supposed to be scheduling a no fix timer?
+                        // If our interval time is 0 this is a special case meaning run the GPS forever
+                        if (sys_config.sys_config_gps_scheduled_acquisition_interval.contents.seconds)
                         {
-                            syshal_timer_set(TIMER_ID_GPS_NO_FIX, sys_config.sys_config_gps_scheduled_acquisition_no_fix_timeout.contents.seconds);
+                            // If we are and we are either in scheduled mode or hybrid + underwater then start the no-fix timer
+                            if ((SYS_CONFIG_GPS_TRIGGER_MODE_SCHEDULED == sys_config.sys_config_gps_trigger_mode.contents.mode) ||
+                                ((SYS_CONFIG_GPS_TRIGGER_MODE_HYBRID == sys_config.sys_config_gps_trigger_mode.contents.mode) && (!tracker_above_water)))
+                            {
+                                syshal_timer_set(TIMER_ID_GPS_NO_FIX, sys_config.sys_config_gps_scheduled_acquisition_no_fix_timeout.contents.seconds);
+                            }
                         }
-
                     }
 
+                    sm_gps_state = SM_GPS_STATE_ACQUIRING;
                 }
-
-                sm_gps_state = SM_GPS_STATE_ACQUIRING;
             }
             break;
 
@@ -631,6 +634,7 @@ void syshal_switch_callback(syshal_switch_event_id_t event)
                 // If our maximum acquisition time is not set to forever (0)
                 if (sys_config.sys_config_gps_maximum_acquisition_time.contents.seconds)
                 {
+                    syshal_timer_cancel(TIMER_ID_GPS_NO_FIX); // We ignore the no fix timeout when on the surface
                     syshal_timer_set(TIMER_ID_GPS_MAXIMUM_ACQUISITION, sys_config.sys_config_gps_maximum_acquisition_time.contents.seconds);
                 }
             }
@@ -678,28 +682,39 @@ void syshal_timer_callback(uint32_t timer_id)
         case TIMER_ID_GPS_INTERVAL:
             DEBUG_PR_TRACE("TIMER_ID_GPS_INTERVAL");
 
-            // Our scheduled interval has elapsed
-            // So wake up the GPS
-            if (SM_GPS_STATE_ASLEEP == sm_gps_state)
+            // If we are and we are either in scheduled mode or hybrid + underwater
+            if ((SYS_CONFIG_GPS_TRIGGER_MODE_SCHEDULED == sys_config.sys_config_gps_trigger_mode.contents.mode) ||
+                ((SYS_CONFIG_GPS_TRIGGER_MODE_HYBRID == sys_config.sys_config_gps_trigger_mode.contents.mode) && (!tracker_above_water)))
             {
-                sm_gps_state = SM_GPS_STATE_ACQUIRING;
-                syshal_gps_wake_up();
+                // Our scheduled interval has elapsed
+                // So wake up the GPS
+                if (SM_GPS_STATE_ASLEEP == sm_gps_state)
+                {
+                    sm_gps_state = SM_GPS_STATE_ACQUIRING;
+                    syshal_gps_wake_up();
+                }
+
+                syshal_timer_set(TIMER_ID_GPS_NO_FIX, sys_config.sys_config_gps_scheduled_acquisition_no_fix_timeout.contents.seconds);
             }
 
             syshal_timer_set(TIMER_ID_GPS_INTERVAL, sys_config.sys_config_gps_scheduled_acquisition_interval.contents.seconds);
-            syshal_timer_set(TIMER_ID_GPS_NO_FIX, sys_config.sys_config_gps_scheduled_acquisition_no_fix_timeout.contents.seconds);
             break;
 
         case TIMER_ID_GPS_NO_FIX:
             DEBUG_PR_TRACE("TIMER_ID_GPS_NO_FIX");
 
-            // We have been unable to achieve a GPS fix
-            // So shutdown the GPS
-            if (SM_GPS_STATE_ASLEEP != sm_gps_state)
+            // If we are and we are either in scheduled mode or hybrid + underwater
+            if ((SYS_CONFIG_GPS_TRIGGER_MODE_SCHEDULED == sys_config.sys_config_gps_trigger_mode.contents.mode) ||
+                ((SYS_CONFIG_GPS_TRIGGER_MODE_HYBRID == sys_config.sys_config_gps_trigger_mode.contents.mode) && (!tracker_above_water)))
             {
-                gps_ttff_reading_logged = false;
-                sm_gps_state = SM_GPS_STATE_ASLEEP;
-                syshal_gps_shutdown();
+                // We have been unable to achieve a GPS fix
+                // So shutdown the GPS
+                if (SM_GPS_STATE_ASLEEP != sm_gps_state)
+                {
+                    gps_ttff_reading_logged = false;
+                    sm_gps_state = SM_GPS_STATE_ASLEEP;
+                    syshal_gps_shutdown();
+                }
             }
             break;
 
@@ -2574,10 +2589,10 @@ void boot_state(void)
 
     syshal_timer_init();
 
-    syshal_spi_init(SPI_1);
+//    syshal_spi_init(SPI_1);
     syshal_spi_init(SPI_2);
 
-    syshal_i2c_init(I2C_1);
+//    syshal_i2c_init(I2C_1);
     syshal_i2c_init(I2C_2);
 
     syshal_flash_init(0, SPI_FLASH);
@@ -2954,9 +2969,11 @@ void operational_state(void)
           sys_config.sys_config_gps_log_ttff_enable.contents.enable) )
         syshal_gps_tick(); // Process GPS messages
 
-    syshal_gpio_set_output_low(GPIO_LED1_GREEN);
-    syshal_pmu_set_level(POWER_SLEEP);
-    syshal_gpio_set_output_high(GPIO_LED1_GREEN);
+    // Determine how deep a sleep we should take
+    if (SM_GPS_STATE_ASLEEP == sm_gps_state)
+        syshal_pmu_set_level(POWER_STOP);
+    else
+        syshal_pmu_set_level(POWER_SLEEP);
 
     // Is global logging enabled?
     if (sys_config.sys_config_logging_enable.contents.enable)

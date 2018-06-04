@@ -25,6 +25,7 @@
 
 // Logical device mappings to physical devices
 #define GPS_UART        UART_1
+#define PRINTF_UART     UART_2 // This is used by debug.c/h
 #define I2C_AXL         I2C_2
 #define I2C_BATTERY     I2C_2
 #define SPI_BLE         SPI_1
@@ -144,8 +145,6 @@ typedef struct
 } UART_InitTypeDefAndInst_t;
 
 extern const UART_InitTypeDefAndInst_t UART_Inits[UART_TOTAL_NUMBER];
-
-#define PRINTF_UART UART_2 // Leave undefined if unused
 
 ///////////////////////////////// USB definitions /////////////////////////////////
 #define USB_RX_BUF_SIZE 512
