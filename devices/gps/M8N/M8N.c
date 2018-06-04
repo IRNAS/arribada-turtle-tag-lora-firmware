@@ -153,7 +153,7 @@ void syshal_gps_tick(void)
         }
 
     }
-    while ( error != GPS_UART_NO_ERROR ); // Repeat this for every packet correctly received
+    while ( error == GPS_UART_NO_ERROR ); // Repeat this for every packet correctly received
 
 }
 
