@@ -303,6 +303,8 @@ static bool check_configuration_tags_set(void)
     if (SYS_CONFIG_ERROR_TAG_NOT_SET == sys_config_get(SYS_CONFIG_TAG_AXL_LOG_ENABLE, NULL))
         sys_config.sys_config_axl_log_enable.contents.enable = false;
 
+    if (SYS_CONFIG_ERROR_TAG_NOT_SET == sys_config_get(SYS_CONFIG_TAG_RTC_SYNC_TO_GPS_ENABLE, NULL))
+        sys_config.sys_config_rtc_sync_to_gps_enable.contents.enable = false;
 
     while (!sys_config_iterate(&tag, &last_index))
     {
@@ -427,6 +429,12 @@ static bool check_configuration_tags_set(void)
             {
                 continue;
             }
+        }
+
+        if (!sys_config.sys_config_rtc_sync_to_gps_enable.contents.enable)
+        {
+            if (SYS_CONFIG_TAG_RTC_SYNC_TO_GPS_ENABLE == tag)
+                continue;
         }
 
         void * src;
@@ -1758,8 +1766,6 @@ static void status_req(cmd_t * req, uint16_t size)
     if (!buffer_write(&config_if_send_buffer, (uintptr_t *)&resp))
         Throw(EXCEPTION_TX_BUFFER_FULL);
     CMD_SET_HDR(resp, CMD_STATUS_RESP);
-
-    DEBUG_PR_WARN("%s() NOT IMPLEMENTED, responding with spoof data", __FUNCTION__);
 
     resp->p.cmd_status_resp.error_code = CMD_NO_ERROR;
     resp->p.cmd_status_resp.stm_firmware_version = 1;
