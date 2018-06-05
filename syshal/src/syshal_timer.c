@@ -46,6 +46,8 @@ int syshal_timer_set(uint32_t timer_id, uint32_t seconds)
     if (seconds >= SECONDS_IN_A_DAY)
         return SYSHAL_TIMER_INVALID_TIME;
 
+    DEBUG_PR_SYS("%s(%lu, %lu);", __FUNCTION__, timer_id, seconds);
+
     syshal_timer[timer_id] = (syshal_timer_time_in_seconds_priv() + seconds) % SECONDS_IN_A_DAY;
 
     return SYSHAL_TIMER_NO_ERROR;
@@ -55,6 +57,8 @@ int syshal_timer_cancel(uint32_t timer_id)
 {
     if (timer_id > SYSHAL_TIMER_NUMBER_OF_TIMERS)
         return SYSHAL_TIMER_INVALID_TIMER_ID;
+
+    DEBUG_PR_SYS("%s(%lu);", __FUNCTION__, timer_id);
 
     syshal_timer[timer_id] = SYSHAL_TIMER_NOT_SET;
 
