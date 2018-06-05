@@ -33,7 +33,7 @@
 #define SYS_CONFIG_TAG_ID_SIZE (sizeof(uint16_t))
 #define SYS_CONFIG_TAG_DATA_SIZE(tag_type) (sizeof(((tag_type *)0)->contents)) // Size of data in tag. We exclude the set member
 
-#define SYS_CONFIG_TAG_TOTAL_NUMBER (39) // Number of configuration tags - WARN: This has to be manually updated
+#define SYS_CONFIG_TAG_TOTAL_NUMBER (41) // Number of configuration tags - WARN: This has to be manually updated
 
 #define SYS_CONFIG_GPS_TRIGGER_MODE_SWITCH_TRIGGERED (0)
 #define SYS_CONFIG_GPS_TRIGGER_MODE_SCHEDULED        (1)
@@ -110,6 +110,10 @@ enum
     SYS_CONFIG_TAG_BLUETOOTH_BEACON_GEO_FENCE_TRIGGER_LOCATION,  // Beacon function is only enabled at the specified geo-fence location.
     SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_INTERVAL,        // The beacon advertising interval expressed in milliseconds.
     SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_CONFIGURATION,   // TBD - for future expansion of the advertising payload to convey in the beacon.
+
+    // Battery
+    SYS_CONFIG_BATTERY_LOG_ENABLE = 0x0900, // The battery charge state shall be enabled for logging.
+    SYS_CONFIG_BATTERY_LOW_THRESHOLD        // If set, the device will enter the low battery state and preserve any data when the battery charge goes below this threshold
 };
 
 typedef struct __attribute__((__packed__))
@@ -475,6 +479,24 @@ typedef struct __attribute__((__packed__))
 
 typedef struct __attribute__((__packed__))
 {
+    sys_config_hdr_t hdr;
+    struct __attribute__((__packed__))
+    {
+        uint8_t enable;
+    } contents;
+} sys_config_battery_log_enable_t;
+
+typedef struct __attribute__((__packed__))
+{
+    sys_config_hdr_t hdr;
+    struct __attribute__((__packed__))
+    {
+        uint8_t threshold;
+    } contents;
+} sys_config_battery_low_threshold_t;
+
+typedef struct __attribute__((__packed__))
+{
     uint8_t                                                     format_version; // A version number to keep track of the format/contents of this struct
     sys_config_gps_log_position_enable_t                        sys_config_gps_log_position_enable;
     sys_config_gps_log_ttff_enable_t                            sys_config_gps_log_ttff_enable;
@@ -515,6 +537,8 @@ typedef struct __attribute__((__packed__))
     sys_config_bluetooth_beacon_geo_fence_trigger_location_t    sys_config_bluetooth_beacon_geo_fence_trigger_location;
     sys_config_bluetooth_beacon_advertising_interval_t          sys_config_bluetooth_beacon_advertising_interval;
     sys_config_bluetooth_beacon_advertising_configuration_t     sys_config_bluetooth_beacon_advertising_configuration;
+    sys_config_battery_log_enable_t                             sys_config_battery_log_enable;
+    sys_config_battery_low_threshold_t                          sys_config_battery_low_threshold;
 } sys_config_t;
 
 // Exposed variables

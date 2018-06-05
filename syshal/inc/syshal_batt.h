@@ -29,8 +29,6 @@
 #define SYSHAL_BATT_ERROR_TIMEOUT              (-3)
 #define SYSHAL_BATT_ERROR_DEVICE_UNRESPONSIVE  (-4)
 
-#define SYSHAL_BATT_LEVEL_LOW (15)
-
 int syshal_batt_init(void);
 uint16_t syshal_batt_temp(void);
 uint16_t syshal_batt_voltage(void);

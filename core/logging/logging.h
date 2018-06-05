@@ -35,6 +35,7 @@
 #define LOGGING_TEMPERATURE   (0x06)
 #define LOGGING_SURFACED      (0x07) // Saltwater switch opened event
 #define LOGGING_SUBMERGED     (0x08) // Saltwater switch closed event
+#define LOGGING_BATTERY       (0x09) // Battery charge state
 
 typedef struct __attribute__((__packed__))
 {
@@ -106,5 +107,11 @@ typedef struct __attribute__((__packed__))
 {
     logging_hdr_t h;
 } logging_submerged_t;
+
+typedef struct __attribute__((__packed__))
+{
+    logging_hdr_t h;
+    uint8_t charge;
+} logging_battery_t;
 
 #endif /* _LOGGING_H_ */

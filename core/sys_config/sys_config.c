@@ -65,6 +65,8 @@ static const uint16_t sys_config_lookup_priv[SYS_CONFIG_TAG_TOTAL_NUMBER] =
     SYS_CONFIG_TAG_BLUETOOTH_BEACON_GEO_FENCE_TRIGGER_LOCATION,
     SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_INTERVAL,
     SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_CONFIGURATION,
+    SYS_CONFIG_BATTERY_LOG_ENABLE,
+    SYS_CONFIG_BATTERY_LOW_THRESHOLD,
 };
 
 /**
@@ -275,6 +277,16 @@ int sys_config_get_data_ptr_priv(uint16_t tag, void ** data)
         case SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_CONFIGURATION:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_bluetooth_beacon_advertising_configuration_t);
             *data = &sys_config.sys_config_bluetooth_beacon_advertising_configuration;
+            break;
+
+        case SYS_CONFIG_BATTERY_LOG_ENABLE:
+            len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_battery_log_enable_t);
+            *data = &sys_config.sys_config_battery_log_enable;
+            break;
+
+        case SYS_CONFIG_BATTERY_LOW_THRESHOLD:
+            len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_battery_low_threshold_t);
+            *data = &sys_config.sys_config_battery_low_threshold;
             break;
 
         default:

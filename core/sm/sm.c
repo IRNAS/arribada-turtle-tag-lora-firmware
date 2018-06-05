@@ -193,6 +193,7 @@ static fs_handle_t       log_file_handle = NULL;
 static volatile bool     tracker_above_water = true; // Is the device above water?
 static volatile bool     log_file_created = false; // Does a log file exist?
 static volatile bool     gps_ttff_reading_logged = false; // Have we read the most recent gps ttff reading?
+static uint8_t           last_battery_reading;
 
 ////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////// PROTOTYPES ///////////////////////////////////
@@ -306,6 +307,9 @@ static bool check_configuration_tags_set(void)
 
     if (SYS_CONFIG_ERROR_TAG_NOT_SET == sys_config_get(SYS_CONFIG_TAG_RTC_SYNC_TO_GPS_ENABLE, NULL))
         sys_config.sys_config_rtc_sync_to_gps_enable.contents.enable = false;
+
+    if (SYS_CONFIG_ERROR_TAG_NOT_SET == sys_config_get(SYS_CONFIG_BATTERY_LOG_ENABLE, NULL))
+        sys_config.sys_config_battery_log_enable.contents.enable = false;
 
     while (!sys_config_iterate(&tag, &last_index))
     {
@@ -436,6 +440,10 @@ static bool check_configuration_tags_set(void)
             if (SYS_CONFIG_TAG_RTC_SYNC_TO_GPS_ENABLE == tag)
                 continue;
         }
+
+        // It does not matter if the low battery threshold is set or not
+        if (SYS_CONFIG_BATTERY_LOW_THRESHOLD == tag)
+            continue;
 
         void * src;
         ret = sys_config_get(tag, &src);
@@ -2876,6 +2884,7 @@ void operational_state(void)
                 syshal_timer_cancel(TIMER_ID_GPS_MAXIMUM_ACQUISITION);
 
                 gps_ttff_reading_logged = false; // Make sure we read the first TTFF reading
+                last_battery_reading = 0xFF; // Ensure the first battery reading is logged
 
                 // Flash the green LED for 5 seconds to indicate this state
                 syshal_gpio_set_output_low(GPIO_LED2_RED);
@@ -2904,7 +2913,7 @@ void operational_state(void)
                         if (tracker_above_water)
                         {
                             // Wake the GPS if it is asleep
-                            if (SM_GPS_STATE_ASLEEP == sm_gps_state) 
+                            if (SM_GPS_STATE_ASLEEP == sm_gps_state)
                                 syshal_gps_wake_up();
 
                             gps_ttff_reading_logged = false;
@@ -3066,20 +3075,42 @@ void operational_state(void)
         return;
     }
 
-#ifndef DUMMY_BATTERY_MONITOR
-    // If the battery level is too low then the system shall transition to the BATTERY_LEVEL_LOW state
+    // Get the battery level state
     int level = syshal_batt_level();
-    if ( (level <= SYSHAL_BATT_LEVEL_LOW) && (level >= 0) )
+    if (level >= 0) // If we've read the battery level successfully
     {
-        if (log_file_handle)
+        // Has our battery level decreased
+        if (last_battery_reading > level)
         {
-            fs_close(log_file_handle);
-            log_file_handle = NULL;
+            // Should we log this?
+            if (sys_config.sys_config_battery_log_enable.contents.enable)
+            {
+                // Log the battery level
+                logging_battery_t battery_log;
+
+                LOGGING_SET_HDR(&battery_log, LOGGING_BATTERY);
+                battery_log.charge = level;
+                logging_add_to_buffer((uint8_t *) &battery_log, sizeof(battery_log));
+            }
+
+            // Should we check to see if we should enter a low power state?
+            if (sys_config.sys_config_battery_low_threshold.hdr.set)
+            {
+                if (level <= sys_config.sys_config_battery_low_threshold.contents.threshold)
+                {
+                    if (log_file_handle)
+                    {
+                        fs_close(log_file_handle);
+                        log_file_handle = NULL;
+                    }
+                    sm_set_state(SM_STATE_STANDBY_BATTERY_LEVEL_LOW);
+                    return;
+                }
+            }
+            
+            last_battery_reading = level;
         }
-        sm_set_state(SM_STATE_STANDBY_BATTERY_LEVEL_LOW);
-        return;
     }
-#endif
 
 }
 ////////////////////////////////////////////////////////////////////////////////
