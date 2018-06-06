@@ -498,6 +498,7 @@ typedef struct __attribute__((__packed__))
 typedef struct __attribute__((__packed__))
 {
     uint8_t                                                     format_version; // A version number to keep track of the format/contents of this struct
+    sys_config_system_device_identifier_t                       sys_config_system_device_identifier;    
     sys_config_gps_log_position_enable_t                        sys_config_gps_log_position_enable;
     sys_config_gps_log_ttff_enable_t                            sys_config_gps_log_ttff_enable;
     sys_config_gps_trigger_mode_t                               sys_config_gps_trigger_mode;
@@ -531,7 +532,6 @@ typedef struct __attribute__((__packed__))
     sys_config_temp_sensor_low_threshold_t                      sys_config_temp_sensor_low_threshold;
     sys_config_temp_sensor_high_threshold_t                     sys_config_temp_sensor_high_threshold;
     sys_config_temp_sensor_mode_t                               sys_config_temp_sensor_mode;
-    sys_config_system_device_identifier_t                       sys_config_system_device_identifier;
     sys_config_bluetooth_uuid_t                                 sys_config_bluetooth_uuid;
     sys_config_bluetooth_beacon_enable_t                        sys_config_bluetooth_beacon_enable;
     sys_config_bluetooth_beacon_geo_fence_trigger_location_t    sys_config_bluetooth_beacon_geo_fence_trigger_location;

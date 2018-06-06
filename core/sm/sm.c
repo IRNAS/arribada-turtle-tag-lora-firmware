@@ -287,6 +287,18 @@ static bool check_configuration_tags_set(void)
     if (SYS_CONFIG_ERROR_TAG_NOT_SET == sys_config_get(SYS_CONFIG_TAG_LOGGING_ENABLE, NULL))
         sys_config.sys_config_logging_enable.contents.enable = false;
 
+    if (SYS_CONFIG_ERROR_TAG_NOT_SET == sys_config_get(SYS_CONFIG_TAG_LOGGING_GROUP_SENSOR_READINGS_ENABLE, NULL))
+        sys_config.sys_config_logging_group_sensor_readings_enable.contents.enable = false;
+
+    if (SYS_CONFIG_ERROR_TAG_NOT_SET == sys_config_get(SYS_CONFIG_TAG_LOGGING_START_END_SYNC_ENABLE, NULL))
+        sys_config.sys_config_logging_start_end_sync_enable.contents.enable = false;
+
+    if (SYS_CONFIG_ERROR_TAG_NOT_SET == sys_config_get(SYS_CONFIG_TAG_LOGGING_DATE_TIME_STAMP_ENABLE, NULL))
+        sys_config.sys_config_logging_date_time_stamp_enable.contents.enable = false;
+
+    if (SYS_CONFIG_ERROR_TAG_NOT_SET == sys_config_get(SYS_CONFIG_TAG_LOGGING_HIGH_RESOLUTION_TIMER_ENABLE, NULL))
+        sys_config.sys_config_logging_high_resolution_timer_enable.contents.enable = false;
+
     if (SYS_CONFIG_ERROR_TAG_NOT_SET == sys_config_get(SYS_CONFIG_TAG_GPS_LOG_POSITION_ENABLE, NULL))
         sys_config.sys_config_gps_log_position_enable.contents.enable = false;
 
@@ -444,12 +456,30 @@ static bool check_configuration_tags_set(void)
                 continue;
         }
 
+        if (SYS_CONFIG_TAG_LOGGING_GROUP_SENSOR_READINGS_ENABLE == tag)
+            continue;
+
+        if (SYS_CONFIG_TAG_LOGGING_START_END_SYNC_ENABLE == tag)
+            continue;
+
+        if (SYS_CONFIG_TAG_LOGGING_DATE_TIME_STAMP_ENABLE == tag)
+            continue;
+
+        if (SYS_CONFIG_TAG_LOGGING_HIGH_RESOLUTION_TIMER_ENABLE == tag)
+            continue;
+
+        if (SYS_CONFIG_BATTERY_LOG_ENABLE == tag)
+            continue;
+
         // It does not matter if the low battery threshold is set or not
         if (SYS_CONFIG_BATTERY_LOW_THRESHOLD == tag)
             continue;
 
-        void * src;
-        ret = sys_config_get(tag, &src);
+        // We don't care about the bluetooth UUID
+        if (SYS_CONFIG_TAG_BLUETOOTH_UUID == tag)
+            continue;
+
+        ret = sys_config_get(tag, NULL);
 
         if (SYS_CONFIG_ERROR_TAG_NOT_SET == ret)
         {
