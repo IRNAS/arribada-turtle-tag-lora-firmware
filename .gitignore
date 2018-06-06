@@ -1,4 +1,4 @@
-ports/stm32/Build/
+ports/stm32/build/
 *.sublime-project
 *.sublime-workspace
 *.gcda
