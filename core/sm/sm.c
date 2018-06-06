@@ -619,7 +619,8 @@ void syshal_gps_callback(syshal_gps_event_t event)
                             if ((SYS_CONFIG_GPS_TRIGGER_MODE_SCHEDULED == sys_config.sys_config_gps_trigger_mode.contents.mode) ||
                                 ((SYS_CONFIG_GPS_TRIGGER_MODE_HYBRID == sys_config.sys_config_gps_trigger_mode.contents.mode) && (!tracker_above_water)))
                             {
-                                syshal_timer_set(TIMER_ID_GPS_NO_FIX, sys_config.sys_config_gps_scheduled_acquisition_no_fix_timeout.contents.seconds);
+                                if (sys_config.sys_config_gps_scheduled_acquisition_no_fix_timeout.contents.seconds) // Don't set a no fix timeout if it's zero as this is a special case
+                                    syshal_timer_set(TIMER_ID_GPS_NO_FIX, sys_config.sys_config_gps_scheduled_acquisition_no_fix_timeout.contents.seconds);
                             }
                         }
                     }
@@ -731,7 +732,9 @@ void syshal_timer_callback(uint32_t timer_id)
                 }
 
                 syshal_timer_set(TIMER_ID_GPS_MAXIMUM_ACQUISITION, sys_config.sys_config_gps_maximum_acquisition_time.contents.seconds);
-                syshal_timer_set(TIMER_ID_GPS_NO_FIX, sys_config.sys_config_gps_scheduled_acquisition_no_fix_timeout.contents.seconds);
+
+                if (sys_config.sys_config_gps_scheduled_acquisition_no_fix_timeout.contents.seconds) // Don't set a no fix timeout if it's zero as this is a special case
+                    syshal_timer_set(TIMER_ID_GPS_NO_FIX, sys_config.sys_config_gps_scheduled_acquisition_no_fix_timeout.contents.seconds);
             }
 
             syshal_timer_set(TIMER_ID_GPS_INTERVAL, sys_config.sys_config_gps_scheduled_acquisition_interval.contents.seconds);
