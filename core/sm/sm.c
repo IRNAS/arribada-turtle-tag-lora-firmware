@@ -173,6 +173,7 @@ static volatile sm_gps_state_t sm_gps_state; // The current operating state of t
 #define TIMER_ID_GPS_NO_FIX               (1)
 #define TIMER_ID_GPS_MAXIMUM_ACQUISITION  (2)
 #define TIMER_ID_LOG_FLUSH                (3)
+#define TIMER_ID_SWITCH_HYSTERESIS        (4)
 
 // Size of logging buffer that is used to store sensor data before it it written to FLASH
 #define LOGGING_BUFFER_SIZE (32)
@@ -659,6 +660,7 @@ void syshal_switch_callback(syshal_switch_event_id_t event)
     {
         case SYSHAL_SWITCH_EVENT_OPEN:
             tracker_above_water = true;
+            syshal_timer_cancel(TIMER_ID_SWITCH_HYSTERESIS);
 
             if ((SM_STATE_OPERATIONAL == sm_get_state()))
             {
@@ -668,54 +670,35 @@ void syshal_switch_callback(syshal_switch_event_id_t event)
                     LOGGING_SET_HDR(&surfaced, LOGGING_SURFACED);
                     logging_add_to_buffer((uint8_t *) &surfaced, sizeof(surfaced));
                 }
-            }
 
-            // Are we supposed to be waking the GPS?
-            if (SYS_CONFIG_GPS_TRIGGER_MODE_SWITCH_TRIGGERED == sys_config.sys_config_gps_trigger_mode.contents.mode
-                || SYS_CONFIG_GPS_TRIGGER_MODE_HYBRID == sys_config.sys_config_gps_trigger_mode.contents.mode)
-            {
-                if (SM_GPS_STATE_ASLEEP == sm_gps_state)
+                // Are we supposed to be waking the GPS?
+                if (SYS_CONFIG_GPS_TRIGGER_MODE_SWITCH_TRIGGERED == sys_config.sys_config_gps_trigger_mode.contents.mode
+                    || SYS_CONFIG_GPS_TRIGGER_MODE_HYBRID == sys_config.sys_config_gps_trigger_mode.contents.mode)
                 {
-                    sm_gps_state = SM_GPS_STATE_ACQUIRING;
-                    gps_ttff_reading_logged = false;
-                    syshal_gps_wake_up();
+                    if (SM_GPS_STATE_ASLEEP == sm_gps_state)
+                    {
+                        sm_gps_state = SM_GPS_STATE_ACQUIRING;
+                        gps_ttff_reading_logged = false;
+                        syshal_gps_wake_up();
+                    }
+
+                    // If our maximum acquisition time is not set to forever (0)
+                    if (sys_config.sys_config_gps_maximum_acquisition_time.contents.seconds)
+                        syshal_timer_set(TIMER_ID_GPS_MAXIMUM_ACQUISITION, sys_config.sys_config_gps_maximum_acquisition_time.contents.seconds);
                 }
 
-                // If our maximum acquisition time is not set to forever (0)
-                if (sys_config.sys_config_gps_maximum_acquisition_time.contents.seconds)
-                {
-                    syshal_timer_cancel(TIMER_ID_GPS_NO_FIX); // We ignore the no fix timeout when on the surface
-                    syshal_timer_set(TIMER_ID_GPS_MAXIMUM_ACQUISITION, sys_config.sys_config_gps_maximum_acquisition_time.contents.seconds);
-                }
+                syshal_timer_cancel(TIMER_ID_GPS_NO_FIX); // We ignore the no fix timeout when on the surface
             }
             break;
 
         case SYSHAL_SWITCH_EVENT_CLOSED:
-            tracker_above_water = false;
+            if (sys_config.sys_config_saltwater_switch_hysteresis_period.contents.seconds &&
+                sys_config.sys_config_saltwater_switch_hysteresis_period.hdr.set &&
+                SM_STATE_OPERATIONAL == sm_get_state())
+                syshal_timer_set(TIMER_ID_SWITCH_HYSTERESIS, sys_config.sys_config_saltwater_switch_hysteresis_period.contents.seconds);
+            else
+                syshal_timer_callback(TIMER_ID_SWITCH_HYSTERESIS); // Trigger an instant switch timeout
 
-            if ((SM_STATE_OPERATIONAL == sm_get_state()))
-            {
-                if (sys_config.sys_config_saltwater_switch_log_enable.contents.enable)
-                {
-                    logging_submerged_t submerged;
-                    LOGGING_SET_HDR(&submerged, LOGGING_SUBMERGED);
-                    logging_add_to_buffer((uint8_t *) &submerged, sizeof(submerged));
-                }
-            }
-
-            // Are we supposed to be sleeping the GPS?
-            if (SYS_CONFIG_GPS_TRIGGER_MODE_SWITCH_TRIGGERED == sys_config.sys_config_gps_trigger_mode.contents.mode
-                || SYS_CONFIG_GPS_TRIGGER_MODE_HYBRID == sys_config.sys_config_gps_trigger_mode.contents.mode)
-            {
-                if (SM_GPS_STATE_ASLEEP != sm_gps_state)
-                {
-                    // We are no longer aquiring GPS data so cancel any timer for this
-                    syshal_timer_cancel(TIMER_ID_GPS_MAXIMUM_ACQUISITION);
-
-                    sm_gps_state = SM_GPS_STATE_ASLEEP;
-                    syshal_gps_shutdown();
-                }
-            }
             break;
 
         default:
@@ -782,12 +765,44 @@ void syshal_timer_callback(uint32_t timer_id)
             break;
 
         case TIMER_ID_LOG_FLUSH:
+            DEBUG_PR_TRACE("TIMER_ID_LOG_FLUSH");
             // Flush and log data to the FLASH
             if (log_file_handle)
             {
                 fs_flush(log_file_handle);
                 syshal_timer_set(TIMER_ID_LOG_FLUSH, LOG_FILE_FLUSH_PERIOD_SECONDS);
             }
+            break;
+
+        case TIMER_ID_SWITCH_HYSTERESIS:
+            DEBUG_PR_TRACE("TIMER_ID_SWITCH_HYSTERESIS");
+            // The tracker has been underwater for the configured amount of time
+            tracker_above_water = false;
+
+            if ((SM_STATE_OPERATIONAL == sm_get_state()))
+            {
+                if (sys_config.sys_config_saltwater_switch_log_enable.contents.enable)
+                {
+                    logging_submerged_t submerged;
+                    LOGGING_SET_HDR(&submerged, LOGGING_SUBMERGED);
+                    logging_add_to_buffer((uint8_t *) &submerged, sizeof(submerged));
+                }
+
+                // Are we supposed to be sleeping the GPS?
+                if (SYS_CONFIG_GPS_TRIGGER_MODE_SWITCH_TRIGGERED == sys_config.sys_config_gps_trigger_mode.contents.mode
+                    || SYS_CONFIG_GPS_TRIGGER_MODE_HYBRID == sys_config.sys_config_gps_trigger_mode.contents.mode)
+                {
+                    if (SM_GPS_STATE_ASLEEP != sm_gps_state)
+                    {
+                        // We are no longer aquiring GPS data so cancel any timer for this
+                        syshal_timer_cancel(TIMER_ID_GPS_MAXIMUM_ACQUISITION);
+
+                        sm_gps_state = SM_GPS_STATE_ASLEEP;
+                        syshal_gps_shutdown();
+                    }
+                }
+            }
+
             break;
 
         default:
@@ -2922,10 +2937,15 @@ void operational_state(void)
                 syshal_timer_cancel(TIMER_ID_GPS_NO_FIX);
                 syshal_timer_cancel(TIMER_ID_GPS_MAXIMUM_ACQUISITION);
 
+                // Ensure the GPS module is off
+                if (SM_GPS_STATE_ASLEEP != sm_gps_state)
+                    syshal_gps_shutdown();
+                sm_gps_state = SM_GPS_STATE_ASLEEP;
+
                 // Start the log file flushing timer
                 syshal_timer_set(TIMER_ID_LOG_FLUSH, LOG_FILE_FLUSH_PERIOD_SECONDS);
 
-                gps_ttff_reading_logged = false; // Make sure we read the first TTFF reading
+                gps_ttff_reading_logged = false; // Make sure we read/log the first TTFF reading
                 last_battery_reading = 0xFF; // Ensure the first battery reading is logged
 
                 // Flash the green LED for 5 seconds to indicate this state

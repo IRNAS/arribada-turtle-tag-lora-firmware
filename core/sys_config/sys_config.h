@@ -198,7 +198,7 @@ typedef struct __attribute__((__packed__))
     sys_config_hdr_t hdr;
     struct __attribute__((__packed__))
     {
-        uint16_t milliseconds;
+        uint16_t seconds;
     } contents;
 } sys_config_saltwater_switch_hysteresis_period_t;
 
