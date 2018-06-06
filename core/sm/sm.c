@@ -944,7 +944,7 @@ static int fs_get_configuration_data(void)
     if (bytes_read != sizeof(sys_config))
     {
         DEBUG_PR_WARN("%s() size mismatch", __FUNCTION__);
-        return FS_ERROR_FLASH_MEDIA;
+        return FS_ERROR_FILE_VERSION_MISMATCH;
     }
 
     return FS_NO_ERROR;
@@ -2718,6 +2718,13 @@ void boot_state(void)
 
     syshal_switch_init();
     tracker_above_water = !syshal_switch_get();
+
+    if (FS_ERROR_FILE_VERSION_MISMATCH == ret)
+    {
+        // This configuration file is of an incorrect size or type
+        sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED); // We still need provisioning
+        return;
+    }
 
     // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
     if (syshal_gpio_get_input(GPIO_VUSB))
