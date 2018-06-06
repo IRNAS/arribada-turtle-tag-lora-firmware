@@ -659,10 +659,10 @@ void syshal_switch_callback(syshal_switch_event_id_t event)
     switch (event)
     {
         case SYSHAL_SWITCH_EVENT_OPEN:
-            tracker_above_water = true;
             syshal_timer_cancel(TIMER_ID_SWITCH_HYSTERESIS);
 
-            if ((SM_STATE_OPERATIONAL == sm_get_state()))
+            // If we're in the operational state and we were previously underwater
+            if ((SM_STATE_OPERATIONAL == sm_get_state()) && !tracker_above_water)
             {
                 if (sys_config.sys_config_saltwater_switch_log_enable.contents.enable)
                 {
@@ -689,6 +689,8 @@ void syshal_switch_callback(syshal_switch_event_id_t event)
 
                 syshal_timer_cancel(TIMER_ID_GPS_NO_FIX); // We ignore the no fix timeout when on the surface
             }
+
+            tracker_above_water = true;
             break;
 
         case SYSHAL_SWITCH_EVENT_CLOSED:
@@ -742,6 +744,7 @@ void syshal_timer_callback(uint32_t timer_id)
             if ((SYS_CONFIG_GPS_TRIGGER_MODE_SCHEDULED == sys_config.sys_config_gps_trigger_mode.contents.mode) ||
                 ((SYS_CONFIG_GPS_TRIGGER_MODE_HYBRID == sys_config.sys_config_gps_trigger_mode.contents.mode) && (!tracker_above_water)))
             {
+                syshal_timer_cancel(TIMER_ID_GPS_MAXIMUM_ACQUISITION);
                 // We have been unable to achieve a GPS fix
                 // So shutdown the GPS
                 if (SM_GPS_STATE_ASLEEP != sm_gps_state)
@@ -754,6 +757,8 @@ void syshal_timer_callback(uint32_t timer_id)
 
         case TIMER_ID_GPS_MAXIMUM_ACQUISITION:
             DEBUG_PR_TRACE("TIMER_ID_GPS_MAXIMUM_ACQUISITION");
+
+            syshal_timer_cancel(TIMER_ID_GPS_NO_FIX);
 
             // We have been GPS logging for our maximum allowed time
             // So shutdown the GPS
@@ -3041,9 +3046,10 @@ void operational_state(void)
                                 syshal_gps_shutdown();
 
                             sm_gps_state = SM_GPS_STATE_ASLEEP;
-
-                            syshal_timer_set(TIMER_ID_GPS_INTERVAL, sys_config.sys_config_gps_scheduled_acquisition_interval.contents.seconds);
                         }
+
+                        // Start our interval timer
+                        syshal_timer_set(TIMER_ID_GPS_INTERVAL, sys_config.sys_config_gps_scheduled_acquisition_interval.contents.seconds);
                     }
 
                 }
