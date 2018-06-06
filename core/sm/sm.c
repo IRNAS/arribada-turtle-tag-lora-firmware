@@ -166,10 +166,13 @@ static volatile sm_gps_state_t sm_gps_state; // The current operating state of t
 #define FS_FILE_ID_BLE_SOFT_IMAGE   (3) // BLE soft-device image
 #define FS_FILE_ID_LOG              (4) // Sensor log file
 
+#define LOG_FILE_FLUSH_PERIOD_SECONDS ( (24 * 60 * 60) - 60 ) // Period in seconds in which to flush the log file to FLASH
+
 // Timers
 #define TIMER_ID_GPS_INTERVAL             (0)
 #define TIMER_ID_GPS_NO_FIX               (1)
 #define TIMER_ID_GPS_MAXIMUM_ACQUISITION  (2)
+#define TIMER_ID_LOG_FLUSH                (3)
 
 // Size of logging buffer that is used to store sensor data before it it written to FLASH
 #define LOGGING_BUFFER_SIZE (32)
@@ -745,6 +748,15 @@ void syshal_timer_callback(uint32_t timer_id)
             {
                 sm_gps_state = SM_GPS_STATE_ASLEEP;
                 syshal_gps_shutdown();
+            }
+            break;
+
+        case TIMER_ID_LOG_FLUSH:
+            // Flush and log data to the FLASH
+            if (log_file_handle)
+            {
+                fs_flush(log_file_handle);
+                syshal_timer_set(TIMER_ID_LOG_FLUSH, LOG_FILE_FLUSH_PERIOD_SECONDS);
             }
             break;
 
@@ -2685,16 +2697,6 @@ void boot_state(void)
         return;
     }
 
-#ifndef DUMMY_BATTERY_MONITOR
-    // If the battery level is too low then the system shall transition to the BATTERY_LEVEL_LOW state
-    int level = syshal_batt_level();
-    if ( (level <= SYSHAL_BATT_LEVEL_LOW) && (level >= 0) )
-    {
-        sm_set_state(SM_STATE_STANDBY_BATTERY_LEVEL_LOW);
-        return;
-    }
-#endif
-
     if (check_configuration_tags_set() && log_file_created)
     {
         sm_set_state(SM_STATE_OPERATIONAL); // All systems go for standard operation
@@ -2723,10 +2725,11 @@ void standby_battery_charging_state()
     {
         config_if_term(); // Stop the configuration interface
         // If we're no longer charging, transition state
+
         int level = syshal_batt_level();
         if (level >= 0)
         {
-            if (level > SYSHAL_BATT_LEVEL_LOW)
+            if (level > sys_config.sys_config_battery_low_threshold.contents.threshold)
             {
                 // Our battery is in a good state
                 // But are we okay to enter an operational state?
@@ -2764,16 +2767,6 @@ void standby_log_file_full_state()
         sm_set_state(SM_STATE_STANDBY_BATTERY_CHARGING);
         return;
     }
-
-#ifndef DUMMY_BATTERY_MONITOR
-    // If the battery level is too low then the system shall transition to the BATTERY_LEVEL_LOW state
-    int level = syshal_batt_level();
-    if ( (level <= SYSHAL_BATT_LEVEL_LOW) && (level >= 0) )
-    {
-        sm_set_state(SM_STATE_STANDBY_BATTERY_LEVEL_LOW);
-        return;
-    }
-#endif
 }
 
 void standby_provisioning_needed_state()
@@ -2811,15 +2804,24 @@ void standby_provisioning_needed_state()
         return;
     }
 
-#ifndef DUMMY_BATTERY_MONITOR
     // If the battery level is too low then the system shall transition to the BATTERY_LEVEL_LOW state
     int level = syshal_batt_level();
-    if ( (level <= SYSHAL_BATT_LEVEL_LOW) && (level >= 0) )
+    if (level >= 0) // If we've read the battery level successfully
     {
-        sm_set_state(SM_STATE_STANDBY_BATTERY_LEVEL_LOW);
-        return;
+        if (sys_config.sys_config_battery_low_threshold.hdr.set)
+        {
+            if (level <= sys_config.sys_config_battery_low_threshold.contents.threshold)
+            {
+                if (log_file_handle)
+                {
+                    fs_close(log_file_handle);
+                    log_file_handle = NULL;
+                }
+                sm_set_state(SM_STATE_STANDBY_BATTERY_LEVEL_LOW);
+                return;
+            }
+        }
     }
-#endif
 }
 
 void standby_trigger_pending_state()
@@ -2882,6 +2884,9 @@ void operational_state(void)
                 syshal_timer_cancel(TIMER_ID_GPS_INTERVAL);
                 syshal_timer_cancel(TIMER_ID_GPS_NO_FIX);
                 syshal_timer_cancel(TIMER_ID_GPS_MAXIMUM_ACQUISITION);
+
+                // Start the log file flushing timer
+                syshal_timer_set(TIMER_ID_LOG_FLUSH, LOG_FILE_FLUSH_PERIOD_SECONDS);
 
                 gps_ttff_reading_logged = false; // Make sure we read the first TTFF reading
                 last_battery_reading = 0xFF; // Ensure the first battery reading is logged
@@ -3107,7 +3112,7 @@ void operational_state(void)
                     return;
                 }
             }
-            
+
             last_battery_reading = level;
         }
     }
