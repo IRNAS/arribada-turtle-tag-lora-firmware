@@ -21,13 +21,16 @@
 #include "syshal_rtc.h"
 #include "debug.h"
 
+#define SYSHAL_TIMER_NOT_SET (-1)
+
 #define SECONDS_IN_A_DAY (24 * 60 * 60)
 
 typedef struct
 {
-    bool running;       // Is this timer running?
-    uint32_t start;     // A timestamp of when this timer was started
-    uint32_t duration;  // How long this timer should run for before triggering
+    bool running;             // Is this timer running?
+    syshal_timer_mode_t mode; // Is this timer a one-shot or continuous
+    uint32_t start;           // A timestamp of when this timer was started
+    uint32_t duration;        // How long this timer should run for before triggering
 } syshal_timer_t;
 
 static syshal_timer_t timers_priv[SYSHAL_TIMER_NUMBER_OF_TIMERS];
@@ -52,7 +55,7 @@ int syshal_timer_init(void)
     return syshal_timer_cancel_all();
 }
 
-int syshal_timer_set(uint32_t timer_id, uint32_t seconds)
+int syshal_timer_set(uint32_t timer_id, syshal_timer_mode_t mode, uint32_t seconds)
 {
     if (timer_id > SYSHAL_TIMER_NUMBER_OF_TIMERS)
         return SYSHAL_TIMER_INVALID_TIMER_ID;
@@ -60,9 +63,10 @@ int syshal_timer_set(uint32_t timer_id, uint32_t seconds)
     if (seconds >= SECONDS_IN_A_DAY)
         return SYSHAL_TIMER_INVALID_TIME;
 
-    DEBUG_PR_SYS("%s(%lu, %lu);", __FUNCTION__, timer_id, seconds);
+    DEBUG_PR_SYS("%s(%lu, %d, %lu);", __FUNCTION__, timer_id, mode, seconds);
 
     timers_priv[timer_id].running = true;
+    timers_priv[timer_id].mode = mode;
     timers_priv[timer_id].start = syshal_timer_time_in_seconds_priv();
     timers_priv[timer_id].duration = seconds;
 
@@ -82,7 +86,12 @@ int syshal_timer_cancel(uint32_t timer_id)
     if (timer_id > SYSHAL_TIMER_NUMBER_OF_TIMERS)
         return SYSHAL_TIMER_INVALID_TIMER_ID;
 
-    DEBUG_PR_SYS("%s(%lu);", __FUNCTION__, timer_id);
+#ifndef DEBUG_DISABLED
+    if (timers_priv[timer_id].running)
+    {
+        DEBUG_PR_SYS("Cancelling timer: %lu", timer_id);
+    }
+#endif
 
     timers_priv[timer_id].running = false;
 
@@ -115,6 +124,10 @@ void syshal_timer_tick(void)
             {
                 syshal_timer_cancel(i);
                 syshal_timer_callback(i);
+
+                // If this is a periodic timer, then auto-reload it
+                if (periodic == timers_priv[i].mode)
+                    syshal_timer_set(i, timers_priv[i].mode, timers_priv[i].duration);
             }
         }
     }

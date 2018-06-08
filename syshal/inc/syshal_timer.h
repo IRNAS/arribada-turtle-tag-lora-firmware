@@ -27,11 +27,15 @@
 
 #define SYSHAL_TIMER_NUMBER_OF_TIMERS  (16)
 
-#define SYSHAL_TIMER_NOT_SET (-1)
+typedef enum
+{
+    one_shot,  // Only trigger the timer once
+    periodic   // Continuely reset the timer everytime it is triggered
+} syshal_timer_mode_t;
 
 int syshal_timer_init(void);
 
-int syshal_timer_set(uint32_t timer_id, uint32_t seconds);
+int syshal_timer_set(uint32_t timer_id, syshal_timer_mode_t mode, uint32_t seconds);
 int syshal_timer_running(uint32_t timer_id);
 int syshal_timer_cancel(uint32_t timer_id);
 int syshal_timer_cancel_all(void);
