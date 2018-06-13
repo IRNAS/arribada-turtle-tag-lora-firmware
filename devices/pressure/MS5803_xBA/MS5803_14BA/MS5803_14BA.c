@@ -22,7 +22,6 @@
 #include "syshal_pressure.h"
 #include "syshal_time.h"
 #include "bsp.h"
-#include "debug.h"
 
 static const uint8_t resolution_priv = CMD_ADC_4096; // The conversion resolution
 
@@ -104,8 +103,6 @@ int32_t syshal_pressure_get(void)
 
     // P = (D1 * SENS / 2^21 - OFF) / 2^15
     int32_t pressure = (((SENS * D1) >> 21 ) - OFF) >> 15;
-
-    DEBUG_PR_TRACE("Temperature = %ld", TEMP);
 
     return pressure;
 }
