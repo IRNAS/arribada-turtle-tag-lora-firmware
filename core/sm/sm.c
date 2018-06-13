@@ -3129,12 +3129,14 @@ void operational_state(void)
 
                 case FS_ERROR_FILESYSTEM_FULL: // Our log file is full
                     fs_close(log_file_handle);
+                    log_file_handle = NULL;
                     sm_set_state(SM_STATE_STANDBY_LOG_FILE_FULL);
                     break;
 
                 case FS_ERROR_FLASH_MEDIA:
                 default:
                     fs_close(log_file_handle);
+                    log_file_handle = NULL;
                     Throw(EXCEPTION_FS_ERROR);
                     break;
             }
@@ -3153,10 +3155,9 @@ void operational_state(void)
         syshal_timer_cancel(TIMER_ID_LOG_FLUSH);
 
         if (log_file_handle)
-        {
             fs_close(log_file_handle);
-            log_file_handle = NULL;
-        }
+        log_file_handle = NULL;
+
         config_if_init(CONFIG_IF_BACKEND_USB);
         sm_set_state(SM_STATE_STANDBY_BATTERY_CHARGING);
         return;
@@ -3187,11 +3188,11 @@ void operational_state(void)
                 {
                     syshal_timer_cancel(TIMER_ID_GPS_INTERVAL);
                     syshal_timer_cancel(TIMER_ID_LOG_FLUSH);
+
                     if (log_file_handle)
-                    {
                         fs_close(log_file_handle);
-                        log_file_handle = NULL;
-                    }
+                    log_file_handle = NULL;
+
                     sm_set_state(SM_STATE_STANDBY_BATTERY_LEVEL_LOW);
                     return;
                 }
