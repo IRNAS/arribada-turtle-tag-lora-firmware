@@ -28,6 +28,7 @@
 #define PRINTF_UART     UART_2 // This is used by debug.c/h
 #define I2C_AXL         I2C_2
 #define I2C_BATTERY     I2C_2
+#define I2C_PRESSURE    I2C_1
 #define SPI_BLE         SPI_1
 #define SPI_FLASH       SPI_2
 

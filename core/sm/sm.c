@@ -36,6 +36,7 @@
 #include "syshal_flash.h"
 #include "syshal_i2c.h"
 #include "syshal_pmu.h"
+#include "syshal_pressure.h"
 #include "syshal_rtc.h"
 #include "syshal_spi.h"
 #include "syshal_switch.h"
@@ -2688,7 +2689,7 @@ void boot_state(void)
 //    syshal_spi_init(SPI_1);
     syshal_spi_init(SPI_2);
 
-//    syshal_i2c_init(I2C_1);
+    syshal_i2c_init(I2C_1);
     syshal_i2c_init(I2C_2);
 
     syshal_flash_init(0, SPI_FLASH);

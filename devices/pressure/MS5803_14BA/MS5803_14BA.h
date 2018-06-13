@@ -19,7 +19,7 @@
 #ifndef _MS5803_14BA_H_
 #define _MS5803_14BA_H_
 
-#define MS5803_I2C_ADDRESS    (0x76)
+#define MS5803_I2C_ADDRESS    (0x77)
 
 #define CMD_RESET       (0x1E) // ADC reset command
 #define CMD_PROM        (0xA0) // PROM location
@@ -32,7 +32,5 @@
 #define CMD_ADC_1024    (0x04) // ADC resolution=1024
 #define CMD_ADC_2048    (0x06) // ADC resolution=2048
 #define CMD_ADC_4096    (0x08) // ADC resolution=4096
-
-#define I2C_INSTANCE (I2C_1)
 
 #endif /* _MS5803_14BA_H_ */

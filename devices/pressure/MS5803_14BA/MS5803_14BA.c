@@ -16,26 +16,32 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <math.h>
 #include "MS5803_14BA.h"
+#include "syshal_i2c.h"
+#include "syshal_pressure.h"
+#include "syshal_time.h"
+#include "bsp.h"
+#include "debug.h"
 
-static resolution_priv = CMD_ADC_4096; // The conversion resolution
+static const uint8_t resolution_priv = CMD_ADC_4096; // The conversion resolution
+static uint16_t coefficient[8];
 
-// Taken from document AN520
-static uint8_t MS_5803_CRC_priv(uint16_t * coefficients)
+static uint8_t calculate_crc4_priv(uint16_t prom[])
 {
-    uint16_t n_rem = 0; // crc reminder
-    uint16_t crc_read;  // original value of the CRC
+    uint8_t n_rem = 0; // crc reminder
 
-    crc_temp = coefficients[7]; // Save the end of the configuration data
+    uint8_t crc_temp = prom[7]; // Save the end of the configuration data
 
-    coefficients[7] = (0xFF00 & (coefficients[7])); // Replace the 4 bit CRC with 0s
-    for (uint32_t i = 0; i < 16; i++)
+    prom[7] &= 0xFF00; // Replace the 4 bit CRC with 0s
+    DEBUG_PR_TRACE("PROM[7]: 0x%04X", prom[7]);
+    for (uint32_t i = 0; i < 16; ++i)
     {
         // choose LSB or MSB
         if (i % 2 == 1)
-            n_rem ^= (coefficients[i >> 1]) & 0x00FF;
+            n_rem ^= (prom[i >> 1]) & 0x00FF;
         else
-            n_rem ^= (coefficients[i >> 1] >> 8);
+            n_rem ^= (prom[i >> 1] >> 8);
 
         for (uint32_t j = 8; j > 0; j--) // For each bit in a byte
         {
@@ -47,22 +53,63 @@ static uint8_t MS_5803_CRC_priv(uint16_t * coefficients)
     }
 
     n_rem = (0x000F & (n_rem >> 12)); // final 4-bit reminder is CRC code
-    coefficients[7] = crc_temp; // restore the crc_read to its original place
+    prom[7] = crc_temp; // restore the crc_read to its original place
 
     return (n_rem ^ 0x00);
+}
+
+void send_command_priv(uint8_t command)
+{
+    syshal_i2c_transfer(I2C_PRESSURE, MS5803_I2C_ADDRESS, &command, sizeof(command));
+}
+
+static void read_prom_priv(uint16_t prom[])
+{
+    for (uint32_t i = 0; i < 8; ++i)
+    {
+        send_command_priv(CMD_PROM | (i * 2));
+        syshal_i2c_receive(I2C_PRESSURE, MS5803_I2C_ADDRESS, (uint8_t *) &prom[i], 2);
+    }
+}
+
+// Retrieve ADC measurement from the device.
+// Select measurement type and precision
+static uint32_t get_adc_priv(uint8_t measurement, uint8_t precision)
+{
+    // Initiate a ADC read
+    send_command_priv(CMD_ADC_CONV | measurement | precision);
+
+    // Wait for conversion to complete
+    syshal_time_delay_ms(1); // general delay
+    switch (precision)
+    {
+        case CMD_ADC_256:  syshal_time_delay_ms(1); break;
+        case CMD_ADC_512:  syshal_time_delay_ms(3); break;
+        case CMD_ADC_1024: syshal_time_delay_ms(4); break;
+        case CMD_ADC_2048: syshal_time_delay_ms(6); break;
+        case CMD_ADC_4096: syshal_time_delay_ms(10); break;
+    }
+
+    // Issue an ADC read command
+    send_command_priv(CMD_ADC_READ);
+
+    // Read the ADC values
+    uint8_t buffer[3];
+    syshal_i2c_receive(I2C_PRESSURE, MS5803_I2C_ADDRESS, (uint8_t *) &buffer[0], sizeof(buffer));
+
+    return ((uint32_t)buffer[0] << 16) + ((uint32_t)buffer[1] << 8) + buffer[2];
 }
 
 int syshal_pressure_init(void)
 {
     // Read PROM contents
-    uint16_t coefficients[8];
-    syshal_i2c_read_reg(I2C_INSTANCE, MS5803_I2C_ADDRESS, CMD_PROM, &coefficients[0], sizeof(coefficients));
+    read_prom_priv(&coefficient[0]);
 
     // The last 4 bits of the 7th coefficient form a CRC error checking code.
-    uint8_t crc4_read = coefficients[7];
+    uint8_t crc4_read = coefficient[7];
 
     // Calculate the actual crc value
-    crc4_actual = MS_5803_CRC_priv(&coefficients[0]);
+    uint8_t crc4_actual = calculate_crc4_priv(&coefficient[0]);
 
     // Compare the calculated crc to the one read
     if (crc4_actual != crc4_read)
@@ -75,8 +122,8 @@ int syshal_pressure_init(void)
 int32_t syshal_pressure_get(void)
 {
     // Retrieve ADC result
-    int32_t D1 = getADCconversion(CMD_ADC_D1, resolution_priv);
-    int32_t D2 = getADCconversion(CMD_ADC_D2, resolution_priv);
+    int32_t D1 = get_adc_priv(CMD_ADC_D1, resolution_priv);
+    int32_t D2 = get_adc_priv(CMD_ADC_D2, resolution_priv);
 
     // working variables
     int32_t TEMP, dT;

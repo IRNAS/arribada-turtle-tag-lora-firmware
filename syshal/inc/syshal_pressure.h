@@ -25,6 +25,6 @@
 
 int syshal_pressure_init(void);
 int syshal_pressure_term(void);
-int syshal_pressure_get(void);
+int32_t syshal_pressure_get(void);
 
 #endif /* _SYSHAL_PRESSURE_H_ */
