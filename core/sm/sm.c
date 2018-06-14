@@ -175,6 +175,7 @@ static volatile sm_gps_state_t sm_gps_state; // The current operating state of t
 #define TIMER_ID_GPS_MAXIMUM_ACQUISITION  (2)
 #define TIMER_ID_LOG_FLUSH                (3)
 #define TIMER_ID_SWITCH_HYSTERESIS        (4)
+#define TIMER_ID_PRESSURE_INTERVAL        (5)
 
 // Size of logging buffer that is used to store sensor data before it it written to FLASH
 #define LOGGING_BUFFER_SIZE (32)
@@ -392,15 +393,18 @@ static bool check_configuration_tags_set(void)
             if (SYS_CONFIG_SALTWATER_SWITCH_LOG_ENABLE == tag)
                 continue;
         }
-
-        // If we're in switch only trigger mode, then ignore any options meant for SCHEDULED or HYBRID modes
-        if (SYS_CONFIG_GPS_TRIGGER_MODE_SWITCH_TRIGGERED == sys_config.sys_config_gps_trigger_mode.contents.mode)
+        else
         {
-            if (SYS_CONFIG_TAG_GPS_SCHEDULED_ACQUISITION_INTERVAL == tag ||
-                SYS_CONFIG_TAG_GPS_MAXIMUM_ACQUISITION_TIME == tag ||
-                SYS_CONFIG_TAG_GPS_SCHEDULED_ACQUISITION_NO_FIX_TIMEOUT == tag)
+            // If we're in switch only trigger mode, then ignore any options meant for SCHEDULED or HYBRID modes
+            if (sys_config.sys_config_gps_trigger_mode.hdr.set &&
+                SYS_CONFIG_GPS_TRIGGER_MODE_SWITCH_TRIGGERED == sys_config.sys_config_gps_trigger_mode.contents.mode)
             {
-                continue;
+                if (SYS_CONFIG_TAG_GPS_SCHEDULED_ACQUISITION_INTERVAL == tag ||
+                    SYS_CONFIG_TAG_GPS_MAXIMUM_ACQUISITION_TIME == tag ||
+                    SYS_CONFIG_TAG_GPS_SCHEDULED_ACQUISITION_NO_FIX_TIMEOUT == tag)
+                {
+                    continue;
+                }
             }
         }
 
@@ -437,6 +441,19 @@ static bool check_configuration_tags_set(void)
                 SYS_CONFIG_TAG_PRESSURE_MODE == tag)
             {
                 continue;
+            }
+        }
+        else
+        {
+            // If we're in periodic mode, then skip the low/high threshold tags
+            if (sys_config.sys_config_pressure_mode.hdr.set &&
+                SYS_CONFIG_PRESSURE_MODE_PERIODIC == sys_config.sys_config_pressure_mode.contents.mode)
+            {
+                if (SYS_CONFIG_TAG_PRESSURE_LOW_THRESHOLD == tag ||
+                    SYS_CONFIG_TAG_PRESSURE_HIGH_THRESHOLD == tag)
+                {
+                    continue;
+                }
             }
         }
 
@@ -806,7 +823,21 @@ void syshal_timer_callback(uint32_t timer_id)
                     }
                 }
             }
+            break;
 
+        case TIMER_ID_PRESSURE_INTERVAL:
+            DEBUG_PR_TRACE("TIMER_ID_PRESSURE_INTERVAL");
+
+            if ((SM_STATE_OPERATIONAL == sm_get_state()))
+            {
+                if (sys_config.sys_config_pressure_sensor_log_enable.contents.enable)
+                {
+                    logging_pressure_t pressure_data;
+                    LOGGING_SET_HDR(&pressure_data, LOGGING_PRESSURE);
+                    pressure_data.pressure = syshal_pressure_get();
+                    logging_add_to_buffer((uint8_t *) &pressure_data, sizeof(pressure_data));
+                }
+            }
             break;
 
         default:
@@ -2738,6 +2769,8 @@ void boot_state(void)
     syshal_switch_init();
     tracker_above_water = !syshal_switch_get();
 
+    syshal_pressure_init();
+
     if (FS_ERROR_FILE_VERSION_MISMATCH == ret)
     {
         // This configuration file is of an incorrect size or type
@@ -3076,6 +3109,11 @@ void operational_state(void)
 
                     sm_gps_state = SM_GPS_STATE_ASLEEP;
                 }
+
+                // Should we be logging
+                if (sys_config.sys_config_pressure_sensor_log_enable.contents.enable)
+                    syshal_timer_set(TIMER_ID_PRESSURE_INTERVAL, periodic, sys_config.sys_config_pressure_sample_rate.contents.sample_rate);
+
                 break;
 
             case FS_ERROR_FILE_NOT_FOUND:

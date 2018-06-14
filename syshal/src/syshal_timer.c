@@ -63,6 +63,9 @@ int syshal_timer_set(uint32_t timer_id, syshal_timer_mode_t mode, uint32_t secon
     if (seconds >= SECONDS_IN_A_DAY)
         return SYSHAL_TIMER_INVALID_TIME;
 
+    if (seconds == 0)
+        seconds = 1; // Our minimum duration is 1 second
+
     DEBUG_PR_SYS("%s(%lu, %d, %lu);", __FUNCTION__, timer_id, mode, seconds);
 
     timers_priv[timer_id].running = true;

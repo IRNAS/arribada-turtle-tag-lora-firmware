@@ -70,7 +70,7 @@ typedef struct __attribute__((__packed__))
 typedef struct __attribute__((__packed__))
 {
     logging_hdr_t h;
-    uint32_t pressure; // Pressure sensor reading
+    int32_t pressure; // Pressure sensor reading
 } logging_pressure_t;
 
 typedef struct __attribute__((__packed__))
