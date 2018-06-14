@@ -177,6 +177,7 @@ static volatile sm_gps_state_t sm_gps_state; // The current operating state of t
 #define TIMER_ID_LOG_FLUSH                (3)
 #define TIMER_ID_SWITCH_HYSTERESIS        (4)
 #define TIMER_ID_PRESSURE_INTERVAL        (5)
+#define TIMER_ID_AXL_INTERVAL             (6)
 
 // Size of logging buffer that is used to store sensor data before it it written to FLASH
 #define LOGGING_BUFFER_SIZE (32)
@@ -467,6 +468,18 @@ static bool check_configuration_tags_set(void)
                 SYS_CONFIG_TAG_AXL_MODE == tag)
             {
                 continue;
+            }
+        }
+        else
+        {
+            // If we're in periodic mode, then skip the high threshold tag
+            if (sys_config.sys_config_axl_mode.hdr.set &&
+                SYS_CONFIG_AXL_MODE_PERIODIC == sys_config.sys_config_axl_mode.contents.mode)
+            {
+                if (SYS_CONFIG_TAG_AXL_G_FORCE_HIGH_THRESHOLD == tag)
+                {
+                    continue;
+                }
             }
         }
 
@@ -3143,10 +3156,19 @@ void operational_state(void)
                     sm_gps_state = SM_GPS_STATE_ASLEEP;
                 }
 
-                // Should we be logging
+                // Should we be logging pressure data?
                 if (sys_config.sys_config_pressure_sensor_log_enable.contents.enable)
-                    syshal_timer_set(TIMER_ID_PRESSURE_INTERVAL, periodic, sys_config.sys_config_pressure_sample_rate.contents.sample_rate);
+                {
+                    if (SYS_CONFIG_PRESSURE_MODE_PERIODIC == sys_config.sys_config_pressure_mode.contents.mode)
+                        syshal_timer_set(TIMER_ID_PRESSURE_INTERVAL, periodic, sys_config.sys_config_pressure_sample_rate.contents.sample_rate);
+                }
 
+                // Should we be logging axl data?
+                //if (sys_config.sys_config_axl_log_enable.contents.enable)
+                //{
+                //    if (SYS_CONFIG_AXL_MODE_PERIODIC == sys_config.sys_config_axl_mode.contents.mode)
+                //        syshal_timer_set(TIMER_ID_AXL_INTERVAL, periodic, sys_config.sys_config_axl_sample_rate_t.contents.sample_rate);
+                //}
                 break;
 
             case FS_ERROR_FILE_NOT_FOUND:
