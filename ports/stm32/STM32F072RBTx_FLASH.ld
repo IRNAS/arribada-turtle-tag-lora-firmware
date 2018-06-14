@@ -120,11 +120,17 @@ SECTIONS
     _sdata = .;        /* create a global symbol at data start */
     *(.data)           /* .data sections */
     *(.data*)          /* .data* sections */
-
-    . = ALIGN(4);
-    _edata = .;        /* define a global symbol at data end */
   } >RAM AT> FLASH
 
+  /* RAM functions section */
+    .ramfunc :
+    {
+      . = ALIGN(4);
+      *(.ramfunc)
+      *(.ramfunc.*)
+      . = ALIGN(4);
+      _edata = .;      /* define a global symbol at data end */
+  } >RAM AT> FLASH
   
   /* Uninitialized data section */
   . = ALIGN(4);

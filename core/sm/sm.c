@@ -33,6 +33,7 @@
 #include "syshal_batt.h"
 #include "syshal_gpio.h"
 #include "syshal_gps.h"
+#include "syshal_firmware.h"
 #include "syshal_flash.h"
 #include "syshal_i2c.h"
 #include "syshal_pmu.h"
@@ -1909,11 +1910,11 @@ static void fw_send_image_req(cmd_t * req, uint16_t size)
             case FS_NO_ERROR:
                 __NOP(); // Instruct for switch case to jump to
                 int ret = fs_open(file_system, &sm_context.fw_send_image.file_handle, sm_context.fw_send_image.image_type, FS_MODE_CREATE, NULL);
-
                 if (FS_NO_ERROR != ret)
                     Throw(EXCEPTION_FS_ERROR); // An unrecoverable error has occured
 
                 // FIXME: Check to see if there is sufficient room for the firmware image
+                config_if_receive_priv(); // Queue a receive
                 resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
                 message_set_state(SM_MESSAGE_STATE_FW_SEND_IMAGE_NEXT);
                 break;
@@ -2003,10 +2004,34 @@ static void fw_send_image_next_state(void)
     }
 }
 
+__attribute__ ((section (".ramfunc"))) void execute_stm32_firmware_upgrade(void)
+{
+    fs_handle_t file_system_handle;
+    uint8_t read_buffer[4];
+    uint32_t bytes_actually_read;
+    int ret;
+
+    DEBUG_PR_WARN("Erasing and upgrading entire FLASH!");
+
+    fs_open(file_system, &file_system_handle, FS_FILE_ID_STM32_IMAGE, FS_MODE_READONLY, NULL);
+
+    syshal_firmware_prepare(); // Erase our FLASH
+
+    do
+    {
+        ret = fs_read(file_system_handle, &read_buffer, sizeof(read_buffer), &bytes_actually_read);
+        syshal_firmware_write(read_buffer, bytes_actually_read);
+    }
+    while (FS_ERROR_END_OF_FILE != ret);
+
+    syshal_firmware_flush();
+
+    for (;;)
+        syshal_pmu_reset();
+}
+
 static void fw_apply_image_req(cmd_t * req, uint16_t size)
 {
-    DEBUG_PR_WARN("%s NOT FULLY IMPLEMENTED", __FUNCTION__);
-
     fs_handle_t file_system_handle;
 
     // Check request size is correct
@@ -2032,7 +2057,43 @@ static void fw_apply_image_req(cmd_t * req, uint16_t size)
         switch (ret)
         {
             case FS_NO_ERROR:
+
+                switch (image_type)
+                {
+                    case FS_FILE_ID_STM32_IMAGE:
+                        fs_close(file_system_handle); // Close the file
+
+                        // Respond now as we're about to wipe our FLASH and reset
+                        resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
+                        buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_generic_resp_t));
+                        config_if_send_priv(&config_if_send_buffer);
+
+                        // Make sure our response is sent before we attempt any FLASH operations
+                        while (config_if_tx_pending)
+                        {}
+
+                        execute_stm32_firmware_upgrade();
+
+                        // Program will never reach this point as the firmware upgrade resets the MCU
+                        for (;;)
+                        {}
+                        break;
+
+                    case FS_FILE_ID_BLE_SOFT_IMAGE:
+                        DEBUG_PR_WARN("Apply FS_FILE_ID_BLE_SOFT_IMAGE not implemented");
+                        // FIXME: needs implementing
+                        break;
+
+                    case FS_FILE_ID_BLE_APP_IMAGE:
+                        DEBUG_PR_WARN("Apply FS_FILE_ID_BLE_APP_IMAGE not implemented");
+                        // FIXME: needs implementing
+                        break;
+                }
+
+                fs_close(file_system_handle); // Close the file
+
                 resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
+
                 break;
 
             case FS_ERROR_FILE_NOT_FOUND:
@@ -2043,6 +2104,7 @@ static void fw_apply_image_req(cmd_t * req, uint16_t size)
                 Throw(EXCEPTION_FS_ERROR);
                 break;
         }
+
     }
     else
     {
@@ -2051,33 +2113,6 @@ static void fw_apply_image_req(cmd_t * req, uint16_t size)
 
     buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_generic_resp_t));
     config_if_send_priv(&config_if_send_buffer);
-
-    if (CMD_NO_ERROR == resp->p.cmd_generic_resp.error_code)
-    {
-        // There was no error, so wait for the confirmation to be sent
-#ifndef GTEST // Prevent infinite loop in gtest
-        while (config_if_tx_pending)
-        {}
-#endif
-
-        // And then apply the firmware image
-        switch (image_type)
-        {
-            case FS_FILE_ID_STM32_IMAGE:
-                // FIXME: needs implementing
-                break;
-
-            case FS_FILE_ID_BLE_SOFT_IMAGE:
-                // FIXME: needs implementing
-                break;
-
-            case FS_FILE_ID_BLE_APP_IMAGE:
-                // FIXME: needs implementing
-                break;
-        }
-
-        fs_close(file_system_handle); // Close the file
-    }
 }
 
 static void reset_req(cmd_t * req, uint16_t size)
@@ -2391,7 +2426,7 @@ static void config_if_session_cleanup(void)
     buffer_reset(&config_if_send_buffer);
     buffer_reset(&config_if_receive_buffer);
     config_if_tx_pending = false;
-    config_if_rx_queued = false;
+    //config_if_rx_queued = false; // Setting this to false does not mean a receive is still not queued!
 }
 
 int config_if_event_handler(config_if_event_t * event)
@@ -2403,13 +2438,11 @@ int config_if_event_handler(config_if_event_t * event)
         case CONFIG_IF_EVENT_SEND_COMPLETE:
             buffer_read_advance(&config_if_send_buffer, event->send.size); // Remove it from the buffer
             config_if_tx_pending = false;
-            //DEBUG_PR_TRACE("Send, Size: %lu", event->send.size);
             break;
 
         case CONFIG_IF_EVENT_RECEIVE_COMPLETE:
             buffer_write_advance(&config_if_receive_buffer, event->receive.size); // Store it in the buffer
             config_if_rx_queued = false;
-            //DEBUG_PR_TRACE("Receive, Size: %lu", event->receive.size);
             break;
 
         case CONFIG_IF_EVENT_CONNECTED:

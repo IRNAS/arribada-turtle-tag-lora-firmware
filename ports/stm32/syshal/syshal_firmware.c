@@ -17,8 +17,11 @@
  */
 
 #include "syshal_firmware.h"
-#include "stm32f0xx_hal_flash.h"
-#include "stm32f0xx_hal_flash_ex.h"
+#include "stm32f0xx_hal.h"
+#include "bsp.h"
+#include "syshal_gpio.h"
+
+#define FLASH_START_ADDR (0x8000000)
 
 // HAL to SYSHAL error code mapping table
 static int hal_error_map[] =
@@ -40,14 +43,19 @@ static union
 
 __attribute__ ((section (".ramfunc"))) int syshal_firmware_prepare(void)
 {
-    writing_address = 0;
+    __disable_irq(); // Don't allow any interrupts to interrupt us
+
+    writing_address = FLASH_START_ADDR;
     bytes_remaining = 0;
 
     HAL_FLASH_Unlock(); // Unlock the Flash to enable the flash control register access
 
     // Erase entire flash
+    FLASH_EraseInitTypeDef EraseInitStruct;
+    uint32_t page_error;
     EraseInitStruct.TypeErase = FLASH_TYPEERASE_MASSERASE;
-    int ret = HAL_FLASHEx_Erase(&EraseInitStruct, NULL);
+
+    int ret = HAL_FLASHEx_Erase(&EraseInitStruct, &page_error);
 
     return hal_error_map[ret];
 }

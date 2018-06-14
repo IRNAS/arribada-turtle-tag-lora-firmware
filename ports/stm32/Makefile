@@ -76,6 +76,7 @@ usb/usbd_desc.c \
 usb/usbd_vendor.c \
 ../../syshal/src/syshal_switch.c \
 ../../syshal/src/syshal_timer.c \
+syshal/syshal_firmware.c \
 syshal/syshal_gpio.c \
 syshal/syshal_i2c.c \
 syshal/syshal_pmu.c \
