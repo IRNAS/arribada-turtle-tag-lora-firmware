@@ -26,6 +26,7 @@
 #include "syshal_flash.h"
 #include "syshal_gpio.h"
 #include "syshal_spi.h"
+#include "syshal_firmware.h"
 
 /* Constants */
 
@@ -313,14 +314,16 @@ int syshal_flash_write(uint32_t drive, const void *src, uint32_t address, uint32
  * \return SYSHAL_FLASH_ERROR_DEVICE on SPI error.
  * \return SYSHAL_FLASH_ERROR_INVALID_DRIVE if the drive number is invalid.
  */
-int syshal_flash_read(uint32_t drive, void *dest, uint32_t address, uint32_t size)
+__RAMFUNC int syshal_flash_read(uint32_t drive, void *dest, uint32_t address, uint32_t size)
 {
     int ret;
 
     if (drive >= S25FL128_MAX_DEVICES)
         return SYSHAL_FLASH_ERROR_INVALID_DRIVE;
 
-    memset(spi_tx_buf, 0, sizeof(spi_tx_buf));
+    //memset(spi_tx_buf, 0, sizeof(spi_tx_buf)); // Can't use as memset doesn't reside in RAM
+    for (uint32_t i = 0; i < sizeof(spi_tx_buf); ++i)
+        spi_tx_buf[i] = 0;
 
     spi_tx_buf[0] = READ;
 
@@ -336,12 +339,14 @@ int syshal_flash_read(uint32_t drive, void *dest, uint32_t address, uint32_t siz
         ret = syshal_spi_transfer(spi_devices[drive], spi_tx_buf, spi_rx_buf, rd_size + 4);
         syshal_gpio_set_output_high(GPIO_SPI2_CS_FLASH);
 
-        if (ret)
+        if (ret) 
             return SYSHAL_FLASH_ERROR_DEVICE;
 
         size -= rd_size;
         address += rd_size;
-        memcpy(dest, &spi_rx_buf[4], rd_size);
+        //memcpy(dest, &spi_rx_buf[4], rd_size); // Can't use as memcpy doesn't reside in RAM
+        for (uint32_t i = 0; i < rd_size; ++i)
+            ((uint8_t *) dest)[i] = spi_rx_buf[4 + i];
         dest += rd_size;
     }
 

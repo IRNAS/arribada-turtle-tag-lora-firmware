@@ -2017,14 +2017,12 @@ static void fw_send_image_next_state(void)
     }
 }
 
-__attribute__ ((section (".ramfunc"))) void execute_stm32_firmware_upgrade(void)
+__RAMFUNC void execute_stm32_firmware_upgrade(void)
 {
     fs_handle_t file_system_handle;
     uint8_t read_buffer[4];
     uint32_t bytes_actually_read;
     int ret;
-
-    DEBUG_PR_WARN("Erasing and upgrading entire FLASH!");
 
     fs_open(file_system, &file_system_handle, FS_FILE_ID_STM32_IMAGE, FS_MODE_READONLY, NULL);
 
@@ -2439,7 +2437,7 @@ static void config_if_session_cleanup(void)
     buffer_reset(&config_if_send_buffer);
     buffer_reset(&config_if_receive_buffer);
     config_if_tx_pending = false;
-    //config_if_rx_queued = false; // Setting this to false does not mean a receive is still not queued!
+    config_if_rx_queued = false; // Setting this to false does not mean a receive is still not queued!
 }
 
 int config_if_event_handler(config_if_event_t * event)

@@ -26,6 +26,11 @@
 #define SYSHAL_FIRMWARE_ERROR_BUSY              (-2)
 #define SYSHAL_FIRMWARE_ERROR_TIMEOUT           (-3)
 
+// Used for placing function into RAM
+// Enforce long calls so that we can jump directly from FLASH to RAM
+// Optimise for size to save RAM space
+#define __RAMFUNC __attribute__ ((long_call, optimize("Os"), section (".ramfunc")))
+
 int syshal_firmware_prepare(void);
 int syshal_firmware_write(uint8_t * data, uint32_t size);
 int syshal_firmware_flush(void);

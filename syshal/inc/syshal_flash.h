@@ -23,9 +23,9 @@
 
 /* Constants */
 
-#define SYSHAL_FLASH_NO_ERROR             0
-#define SYSHAL_FLASH_ERROR_INVALID_DRIVE -1
-#define SYSHAL_FLASH_ERROR_DEVICE        -2
+#define SYSHAL_FLASH_NO_ERROR            ( 0)
+#define SYSHAL_FLASH_ERROR_INVALID_DRIVE (-1)
+#define SYSHAL_FLASH_ERROR_DEVICE        (-2)
 
 /* Macros */
 

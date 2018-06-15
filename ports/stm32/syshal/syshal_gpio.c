@@ -24,6 +24,7 @@
   */
 
 #include "syshal_gpio.h"
+#include "syshal_firmware.h"
 #include "bsp.h"
 
 #define SYSHAL_GPIO_NUMBER_EXTI   (16)
@@ -111,7 +112,7 @@ void syshal_gpio_init(uint32_t pin)
  *
  * @param[in]  pin   The pin
  */
-void syshal_gpio_term(uint32_t pin)
+inline void syshal_gpio_term(uint32_t pin)
 {
     HAL_GPIO_DeInit(GPIO_Inits[pin].Port, GPIO_Inits[pin].Init.Pin);
 }
@@ -121,7 +122,7 @@ void syshal_gpio_term(uint32_t pin)
  *
  * @param[in]  pin   The pin
  */
-void syshal_gpio_set_output_toggle(uint32_t pin)
+inline void syshal_gpio_set_output_toggle(uint32_t pin)
 {
     HAL_GPIO_TogglePin(GPIO_Inits[pin].Port, GPIO_Inits[pin].Init.Pin);
 }
@@ -131,7 +132,7 @@ void syshal_gpio_set_output_toggle(uint32_t pin)
  *
  * @param[in]  pin   The pin
  */
-void syshal_gpio_set_output_low(uint32_t pin)
+__RAMFUNC inline void syshal_gpio_set_output_low(uint32_t pin)
 {
     HAL_GPIO_WritePin(GPIO_Inits[pin].Port, GPIO_Inits[pin].Init.Pin, GPIO_PIN_RESET);
 }
@@ -141,7 +142,7 @@ void syshal_gpio_set_output_low(uint32_t pin)
  *
  * @param[in]  pin   The pin
  */
-void syshal_gpio_set_output_high(uint32_t pin)
+__RAMFUNC inline void syshal_gpio_set_output_high(uint32_t pin)
 {
     HAL_GPIO_WritePin(GPIO_Inits[pin].Port, GPIO_Inits[pin].Init.Pin, GPIO_PIN_SET);
 }
@@ -153,7 +154,7 @@ void syshal_gpio_set_output_high(uint32_t pin)
  *
  * @return     true for high, false for low
  */
-bool syshal_gpio_get_input(uint32_t pin)
+inline bool syshal_gpio_get_input(uint32_t pin)
 {
     return ( (bool) HAL_GPIO_ReadPin(GPIO_Inits[pin].Port, GPIO_Inits[pin].Init.Pin) );
 }

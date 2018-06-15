@@ -25,6 +25,7 @@
 #include "fs_priv.h"
 #include "fs.h"
 #include "syshal_flash.h"
+#include "syshal_firmware.h"
 
 /* Constants */
 
@@ -386,7 +387,7 @@ static int check_file_flags(fs_priv_t *fs_priv, uint8_t root, fs_mode_t mode)
  * \return session write offset e.g., 0 means the first session entry.
  * \return \ref FS_PRIV_NOT_ALLOCATED if no session entry is free.
  */
-static uint8_t find_next_session_offset(fs_priv_t *fs_priv, uint8_t sector, uint32_t *data_offset)
+__RAMFUNC static uint8_t find_next_session_offset(fs_priv_t *fs_priv, uint8_t sector, uint32_t *data_offset)
 {
     uint32_t write_offset = (uint8_t)FS_PRIV_NOT_ALLOCATED;
     uint32_t write_offsets[FS_PRIV_NUM_WRITE_SESSIONS];
@@ -476,7 +477,7 @@ static uint8_t find_eof(fs_priv_t *fs_priv, uint8_t root, uint8_t *last_alloc_un
  * \param fs_priv_handle[in] pointer to private file handle
  * \return true if the handle is EOF, false otherwise
  */
-static bool is_eof(fs_priv_handle_t *fs_priv_handle)
+__RAMFUNC static bool is_eof(fs_priv_handle_t *fs_priv_handle)
 {
     fs_priv_t *fs_priv = fs_priv_handle->fs_priv;
 
@@ -1141,7 +1142,7 @@ int fs_write(fs_handle_t handle, const void *src, uint32_t size, uint32_t *writt
  * \return \ref FS_ERROR_INVALID_MODE if the file handle is not readable.
  * \return \ref FS_ERROR_END_OF_FILE if the end of file has already been reached.
  */
-int fs_read(fs_handle_t handle, void *dest, uint32_t size, uint32_t *read)
+__RAMFUNC int fs_read(fs_handle_t handle, void *dest, uint32_t size, uint32_t *read)
 {
     fs_priv_handle_t *fs_priv_handle = (fs_priv_handle_t *)handle;
     fs_priv_t *fs_priv = fs_priv_handle->fs_priv;

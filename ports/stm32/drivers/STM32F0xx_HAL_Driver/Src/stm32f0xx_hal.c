@@ -50,6 +50,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f0xx_hal.h"
+#include "syshal_firmware.h"
 
 /** @addtogroup STM32F0xx_HAL_Driver
   * @{
@@ -292,7 +293,7 @@ __weak void HAL_IncTick(void)
   *       implementations in user file.
   * @retval tick value
   */
-__weak uint32_t HAL_GetTick(void)
+__RAMFUNC __weak uint32_t HAL_GetTick(void)
 {
   return uwTick;
 }

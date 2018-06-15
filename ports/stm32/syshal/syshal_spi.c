@@ -26,6 +26,7 @@
 #include "stm32f0xx_hal.h"
 #include "syshal_gpio.h"
 #include "syshal_spi.h"
+#include "syshal_firmware.h"
 #include "debug.h"
 #include "bsp.h"
 
@@ -93,7 +94,7 @@ int syshal_spi_term(uint32_t instance)
  * @return SYSHAL_SPI_ERROR_BUSY if the HW is busy.
  * @return SYSHAL_SPI_ERROR_TIMEOUT if a timeout occurred.
  */
-int syshal_spi_transfer(uint32_t instance, uint8_t *tx_data, uint8_t *rx_data, uint16_t size)
+__RAMFUNC int syshal_spi_transfer(uint32_t instance, uint8_t *tx_data, uint8_t *rx_data, uint16_t size)
 {
     HAL_StatusTypeDef status = HAL_ERROR;
 

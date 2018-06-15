@@ -123,8 +123,8 @@ SECTIONS
   } >RAM AT> FLASH
 
   /* RAM functions section */
-    .ramfunc :
-    {
+  .ramfunc :
+  {
       . = ALIGN(4);
       *(.ramfunc)
       *(.ramfunc.*)

@@ -165,6 +165,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32f0xx_hal.h"
+#include "syshal_firmware.h"
 
 /** @addtogroup STM32F0xx_HAL_Driver
   * @{
@@ -202,9 +203,9 @@ static void SPI_DMAError(DMA_HandleTypeDef *hdma);
 static void SPI_DMAAbortOnError(DMA_HandleTypeDef *hdma);
 static void SPI_DMATxAbortCallback(DMA_HandleTypeDef *hdma);
 static void SPI_DMARxAbortCallback(DMA_HandleTypeDef *hdma);
-static HAL_StatusTypeDef SPI_WaitFlagStateUntilTimeout(SPI_HandleTypeDef *hspi, uint32_t Flag, uint32_t State,
+__RAMFUNC HAL_StatusTypeDef SPI_WaitFlagStateUntilTimeout(SPI_HandleTypeDef *hspi, uint32_t Flag, uint32_t State,
                                                        uint32_t Timeout, uint32_t Tickstart);
-static HAL_StatusTypeDef SPI_WaitFifoStateUntilTimeout(SPI_HandleTypeDef *hspi, uint32_t Fifo, uint32_t State,
+__RAMFUNC HAL_StatusTypeDef SPI_WaitFifoStateUntilTimeout(SPI_HandleTypeDef *hspi, uint32_t Fifo, uint32_t State,
                                                        uint32_t Timeout, uint32_t Tickstart);
 static void SPI_TxISR_8BIT(struct __SPI_HandleTypeDef *hspi);
 static void SPI_TxISR_16BIT(struct __SPI_HandleTypeDef *hspi);
@@ -226,7 +227,7 @@ static void SPI_CloseRxTx_ISR(SPI_HandleTypeDef *hspi);
 static void SPI_CloseRx_ISR(SPI_HandleTypeDef *hspi);
 static void SPI_CloseTx_ISR(SPI_HandleTypeDef *hspi);
 static HAL_StatusTypeDef SPI_EndRxTransaction(SPI_HandleTypeDef *hspi, uint32_t Timeout, uint32_t Tickstart);
-static HAL_StatusTypeDef SPI_EndRxTxTransaction(SPI_HandleTypeDef *hspi, uint32_t Timeout, uint32_t Tickstart);
+__RAMFUNC HAL_StatusTypeDef SPI_EndRxTxTransaction(SPI_HandleTypeDef *hspi, uint32_t Timeout, uint32_t Tickstart);
 /**
   * @}
   */
@@ -933,7 +934,7 @@ error :
   * @param  Timeout Timeout duration
   * @retval HAL status
   */
-HAL_StatusTypeDef HAL_SPI_TransmitReceive(SPI_HandleTypeDef *hspi, uint8_t *pTxData, uint8_t *pRxData, uint16_t Size,
+__RAMFUNC HAL_StatusTypeDef HAL_SPI_TransmitReceive(SPI_HandleTypeDef *hspi, uint8_t *pTxData, uint8_t *pRxData, uint16_t Size,
                                           uint32_t Timeout)
 {
   uint32_t tmp = 0U, tmp1 = 0U;
@@ -3496,7 +3497,7 @@ static void SPI_TxISR_16BIT(struct __SPI_HandleTypeDef *hspi)
   * @param Tickstart tick start value
   * @retval HAL status
   */
-static HAL_StatusTypeDef SPI_WaitFlagStateUntilTimeout(SPI_HandleTypeDef *hspi, uint32_t Flag, uint32_t State,
+__RAMFUNC HAL_StatusTypeDef SPI_WaitFlagStateUntilTimeout(SPI_HandleTypeDef *hspi, uint32_t Flag, uint32_t State,
                                                        uint32_t Timeout, uint32_t Tickstart)
 {
   while ((__HAL_SPI_GET_FLAG(hspi, Flag) ? SET : RESET) != State)
@@ -3548,7 +3549,7 @@ static HAL_StatusTypeDef SPI_WaitFlagStateUntilTimeout(SPI_HandleTypeDef *hspi, 
   * @param Tickstart tick start value
   * @retval HAL status
   */
-static HAL_StatusTypeDef SPI_WaitFifoStateUntilTimeout(SPI_HandleTypeDef *hspi, uint32_t Fifo, uint32_t State,
+__RAMFUNC HAL_StatusTypeDef SPI_WaitFifoStateUntilTimeout(SPI_HandleTypeDef *hspi, uint32_t Fifo, uint32_t State,
                                                        uint32_t Timeout, uint32_t Tickstart)
 {
   __IO uint8_t tmpreg;
@@ -3643,7 +3644,7 @@ static HAL_StatusTypeDef SPI_EndRxTransaction(SPI_HandleTypeDef *hspi,  uint32_t
   * @param  Tickstart tick start value
   * @retval HAL status
   */
-static HAL_StatusTypeDef SPI_EndRxTxTransaction(SPI_HandleTypeDef *hspi, uint32_t Timeout, uint32_t Tickstart)
+__RAMFUNC HAL_StatusTypeDef SPI_EndRxTxTransaction(SPI_HandleTypeDef *hspi, uint32_t Timeout, uint32_t Tickstart)
 {
   /* Control if the TX fifo is empty */
   if (SPI_WaitFifoStateUntilTimeout(hspi, SPI_FLAG_FTLVL, SPI_FTLVL_EMPTY, Timeout, Tickstart) != HAL_OK)

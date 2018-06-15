@@ -27,6 +27,7 @@
 #include "system_clock.h"
 #include "syshal_pmu.h"
 #include "syshal_gpio.h"
+#include "syshal_firmware.h"
 #include "stm32f0xx_hal_gpio.h"
 #include "debug.h"
 
@@ -72,7 +73,16 @@ void syshal_pmu_set_level(syshal_pmu_power_level_t level)
 /**
  * @brief      Causes a software reset of the MCU
  */
-void syshal_pmu_reset(void)
+__RAMFUNC void syshal_pmu_reset(void)
 {
-    NVIC_SystemReset();
+    // Ensure all outstanding memory accesses including buffered writes are completed before reset
+    __DSB();
+    SCB->AIRCR  = ((0x5FAUL << SCB_AIRCR_VECTKEY_Pos) |
+                   SCB_AIRCR_SYSRESETREQ_Msk);
+    __DSB(); // Ensure completion of memory access
+
+    for (;;) // Wait until reset
+    {
+        __NOP();
+    }
 }
