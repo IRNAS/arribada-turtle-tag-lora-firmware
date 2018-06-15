@@ -34,7 +34,7 @@
 static SPI_HandleTypeDef hspi[SPI_TOTAL_NUMBER];
 
 /* HAL to SYSHAL error code mapping table */
-static int hal_error_map[] =
+static volatile int hal_error_map[] =
 {
     SYSHAL_SPI_NO_ERROR,
     SYSHAL_SPI_ERROR_DEVICE,
