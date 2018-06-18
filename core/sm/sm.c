@@ -162,6 +162,8 @@ static volatile sm_gps_state_t sm_gps_state; // The current operating state of t
 ////////////////////////////////// GLOBALS /////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
+#define STM32_FIRMWARE_VERSION (2) // The current version of the firmware
+
 #define FS_FILE_ID_CONF             (0) // The File ID of the configuration data
 #define FS_FILE_ID_STM32_IMAGE      (1) // STM32 application image
 #define FS_FILE_ID_BLE_APP_IMAGE    (2) // BLE application image
@@ -440,7 +442,9 @@ static bool check_configuration_tags_set(void)
                 SYS_CONFIG_TAG_PRESSURE_SAMPLE_RATE == tag ||
                 SYS_CONFIG_TAG_PRESSURE_LOW_THRESHOLD == tag ||
                 SYS_CONFIG_TAG_PRESSURE_HIGH_THRESHOLD == tag ||
-                SYS_CONFIG_TAG_PRESSURE_MODE == tag)
+                SYS_CONFIG_TAG_PRESSURE_MODE == tag ||
+                SYS_CONFIG_TAG_PRESSURE_SCHEDULED_ACQUISITION_INTERVAL == tag ||
+                SYS_CONFIG_TAG_PRESSURE_MAXIMUM_ACQUISITION_TIME == tag)
             {
                 continue;
             }
@@ -465,7 +469,9 @@ static bool check_configuration_tags_set(void)
                 SYS_CONFIG_TAG_AXL_CONFIG == tag ||
                 SYS_CONFIG_TAG_AXL_G_FORCE_HIGH_THRESHOLD == tag ||
                 SYS_CONFIG_TAG_AXL_SAMPLE_RATE == tag ||
-                SYS_CONFIG_TAG_AXL_MODE == tag)
+                SYS_CONFIG_TAG_AXL_MODE == tag ||
+                SYS_CONFIG_TAG_AXL_SCHEDULED_ACQUISITION_INTERVAL == tag ||
+                SYS_CONFIG_TAG_AXL_MAXIMUM_ACQUISITION_TIME == tag)
             {
                 continue;
             }
@@ -1883,7 +1889,7 @@ static void status_req(cmd_t * req, uint16_t size)
     CMD_SET_HDR(resp, CMD_STATUS_RESP);
 
     resp->p.cmd_status_resp.error_code = CMD_NO_ERROR;
-    resp->p.cmd_status_resp.stm_firmware_version = 1;
+    resp->p.cmd_status_resp.stm_firmware_version = STM32_FIRMWARE_VERSION;
     resp->p.cmd_status_resp.ble_firmware_version = 0;
     resp->p.cmd_status_resp.configuration_format_version = SYS_CONFIG_FORMAT_VERSION;
 

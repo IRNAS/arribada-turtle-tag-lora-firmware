@@ -49,11 +49,15 @@ static const uint16_t sys_config_lookup_priv[SYS_CONFIG_TAG_TOTAL_NUMBER] =
     SYS_CONFIG_TAG_AXL_G_FORCE_HIGH_THRESHOLD,
     SYS_CONFIG_TAG_AXL_SAMPLE_RATE,
     SYS_CONFIG_TAG_AXL_MODE,
+    SYS_CONFIG_TAG_AXL_SCHEDULED_ACQUISITION_INTERVAL,
+    SYS_CONFIG_TAG_AXL_MAXIMUM_ACQUISITION_TIME,
     SYS_CONFIG_TAG_PRESSURE_SENSOR_LOG_ENABLE,
     SYS_CONFIG_TAG_PRESSURE_SAMPLE_RATE,
     SYS_CONFIG_TAG_PRESSURE_LOW_THRESHOLD,
     SYS_CONFIG_TAG_PRESSURE_HIGH_THRESHOLD,
     SYS_CONFIG_TAG_PRESSURE_MODE,
+    SYS_CONFIG_TAG_PRESSURE_SCHEDULED_ACQUISITION_INTERVAL,
+    SYS_CONFIG_TAG_PRESSURE_MAXIMUM_ACQUISITION_TIME,
     SYS_CONFIG_TAG_TEMP_SENSOR_LOG_ENABLE,
     SYS_CONFIG_TAG_TEMP_SENSOR_SAMPLE_RATE,
     SYS_CONFIG_TAG_TEMP_SENSOR_LOW_THRESHOLD,
@@ -199,6 +203,16 @@ int sys_config_get_data_ptr_priv(uint16_t tag, void ** data)
             *data = &sys_config.sys_config_axl_mode;
             break;
 
+        case SYS_CONFIG_TAG_AXL_SCHEDULED_ACQUISITION_INTERVAL:
+            len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_axl_scheduled_acquisition_interval_t);
+            *data = &sys_config.sys_config_axl_scheduled_acquisition_interval;
+            break;
+
+        case SYS_CONFIG_TAG_AXL_MAXIMUM_ACQUISITION_TIME:
+            len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_axl_maximum_acquisition_time_t);
+            *data = &sys_config.sys_config_axl_maximum_acquisition_time;
+            break;
+
         case SYS_CONFIG_TAG_PRESSURE_SENSOR_LOG_ENABLE:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_pressure_sensor_log_enable_t);
             *data = &sys_config.sys_config_pressure_sensor_log_enable;
@@ -222,6 +236,16 @@ int sys_config_get_data_ptr_priv(uint16_t tag, void ** data)
         case SYS_CONFIG_TAG_PRESSURE_MODE:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_pressure_mode_t);
             *data = &sys_config.sys_config_pressure_mode;
+            break;
+
+        case SYS_CONFIG_TAG_PRESSURE_SCHEDULED_ACQUISITION_INTERVAL:
+            len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_pressure_scheduled_acquisition_interval_t);
+            *data = &sys_config.sys_config_pressure_scheduled_acquisition_interval;
+            break;
+
+        case SYS_CONFIG_TAG_PRESSURE_MAXIMUM_ACQUISITION_TIME:
+            len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_pressure_maximum_acquisition_time_t);
+            *data = &sys_config.sys_config_pressure_maximum_acquisition_time;
             break;
 
         case SYS_CONFIG_TAG_TEMP_SENSOR_LOG_ENABLE:

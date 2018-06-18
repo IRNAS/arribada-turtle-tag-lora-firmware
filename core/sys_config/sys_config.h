@@ -26,14 +26,14 @@
 #define SYS_CONFIG_ERROR_NO_MORE_TAGS     (-3)
 #define SYS_CONFIG_ERROR_TAG_NOT_SET      (-4)
 
-#define SYS_CONFIG_FORMAT_VERSION (1) // This should be incremented if the sys_config layout is modified
+#define SYS_CONFIG_FORMAT_VERSION (2) // This should be incremented when/if the sys_config layout is modified
 
 #define SYS_CONFIG_MAX_DATA_SIZE (60) // Max size the configuration tag's data can be in bytes
 
 #define SYS_CONFIG_TAG_ID_SIZE (sizeof(uint16_t))
 #define SYS_CONFIG_TAG_DATA_SIZE(tag_type) (sizeof(((tag_type *)0)->contents)) // Size of data in tag. We exclude the set member
 
-#define SYS_CONFIG_TAG_TOTAL_NUMBER (41) // Number of configuration tags - WARN: This has to be manually updated
+#define SYS_CONFIG_TAG_TOTAL_NUMBER (45) // Number of configuration tags - WARN: This has to be manually updated
 
 #define SYS_CONFIG_GPS_TRIGGER_MODE_SWITCH_TRIGGERED (0)
 #define SYS_CONFIG_GPS_TRIGGER_MODE_SCHEDULED        (1)
@@ -81,18 +81,22 @@ enum
     SYS_CONFIG_TAG_LOGGING_HIGH_RESOLUTION_TIMER_ENABLE, // If set, the HRT shall be logged with each long entry.
 
     // Accelerometer
-    SYS_CONFIG_TAG_AXL_LOG_ENABLE = 0x0200,    // The AXL shall be enabled for logging.
-    SYS_CONFIG_TAG_AXL_CONFIG,                 // G-force setting, sensitivity mode, etc.
-    SYS_CONFIG_TAG_AXL_G_FORCE_HIGH_THRESHOLD, // The X2+Y2+Z2 vector magnitude threshold.
-    SYS_CONFIG_TAG_AXL_SAMPLE_RATE,            // Number of times per second to perform a reading of the AXL.
-    SYS_CONFIG_TAG_AXL_MODE,                   // 0=>PERIODIC, 3=>TRIGGER_ABOVE
+    SYS_CONFIG_TAG_AXL_LOG_ENABLE = 0x0200,             // The AXL shall be enabled for logging.
+    SYS_CONFIG_TAG_AXL_CONFIG,                          // G-force setting, sensitivity mode, etc.
+    SYS_CONFIG_TAG_AXL_G_FORCE_HIGH_THRESHOLD,          // The X2+Y2+Z2 vector magnitude threshold.
+    SYS_CONFIG_TAG_AXL_SAMPLE_RATE,                     // Number of times per second to perform a reading of the AXL.
+    SYS_CONFIG_TAG_AXL_MODE,                            // 0=>PERIODIC, 3=>TRIGGER_ABOVE
+    SYS_CONFIG_TAG_AXL_SCHEDULED_ACQUISITION_INTERVAL,  // Interval in seconds between AXL readings. Setting to zero means always on
+    SYS_CONFIG_TAG_AXL_MAXIMUM_ACQUISITION_TIME,        // How long to capture readings for per scheduled acquisition period, in seconds
 
     // Pressure sensor
-    SYS_CONFIG_TAG_PRESSURE_SENSOR_LOG_ENABLE = 0x0300,  // The pressure sensor shall be enabled for logging.
-    SYS_CONFIG_TAG_PRESSURE_SAMPLE_RATE,                 // Number of times per second to perform a reading of the pressure sensor.
-    SYS_CONFIG_TAG_PRESSURE_LOW_THRESHOLD,               // Low threshold setting.
-    SYS_CONFIG_TAG_PRESSURE_HIGH_THRESHOLD,              // High threshold setting.
-    SYS_CONFIG_TAG_PRESSURE_MODE,                        // 0=>PERIODIC, 1=>TRIGGER_BELOW, 2=>TRIGGER_BETWEEN, 3=>TRIGGER_ABOVE
+    SYS_CONFIG_TAG_PRESSURE_SENSOR_LOG_ENABLE = 0x0300,      // The pressure sensor shall be enabled for logging.
+    SYS_CONFIG_TAG_PRESSURE_SAMPLE_RATE,                     // Number of times per second to perform a reading of the pressure sensor.
+    SYS_CONFIG_TAG_PRESSURE_LOW_THRESHOLD,                   // Low threshold setting.
+    SYS_CONFIG_TAG_PRESSURE_HIGH_THRESHOLD,                  // High threshold setting.
+    SYS_CONFIG_TAG_PRESSURE_MODE,                            // 0=>PERIODIC, 1=>TRIGGER_BELOW, 2=>TRIGGER_BETWEEN, 3=>TRIGGER_ABOVE
+    SYS_CONFIG_TAG_PRESSURE_SCHEDULED_ACQUISITION_INTERVAL,  // Interval in seconds between pressure sensor readings. Setting to zero means always on
+    SYS_CONFIG_TAG_PRESSURE_MAXIMUM_ACQUISITION_TIME,        // How long to capture readings for per scheduled acquisition period, in seconds
 
     // Temperature sensor
     SYS_CONFIG_TAG_TEMP_SENSOR_LOG_ENABLE = 0x0700,  // The sensor shall be enabled for logging.
@@ -338,6 +342,24 @@ typedef struct __attribute__((__packed__))
     sys_config_hdr_t hdr;
     struct __attribute__((__packed__))
     {
+        uint16_t seconds;
+    } contents;
+} sys_config_axl_scheduled_acquisition_interval_t;
+
+typedef struct __attribute__((__packed__))
+{
+    sys_config_hdr_t hdr;
+    struct __attribute__((__packed__))
+    {
+        uint16_t seconds;
+    } contents;
+} sys_config_axl_maximum_acquisition_time_t;
+
+typedef struct __attribute__((__packed__))
+{
+    sys_config_hdr_t hdr;
+    struct __attribute__((__packed__))
+    {
         uint8_t enable;
     } contents;
 } sys_config_pressure_sensor_log_enable_t;
@@ -377,6 +399,24 @@ typedef struct __attribute__((__packed__))
         uint8_t mode;
     } contents;
 } sys_config_pressure_mode_t;
+
+typedef struct __attribute__((__packed__))
+{
+    sys_config_hdr_t hdr;
+    struct __attribute__((__packed__))
+    {
+        uint16_t seconds;
+    } contents;
+} sys_config_pressure_scheduled_acquisition_interval_t;
+
+typedef struct __attribute__((__packed__))
+{
+    sys_config_hdr_t hdr;
+    struct __attribute__((__packed__))
+    {
+        uint16_t seconds;
+    } contents;
+} sys_config_pressure_maximum_acquisition_time_t;
 
 typedef struct __attribute__((__packed__))
 {
@@ -498,7 +538,7 @@ typedef struct __attribute__((__packed__))
 typedef struct __attribute__((__packed__))
 {
     uint8_t                                                     format_version; // A version number to keep track of the format/contents of this struct
-    sys_config_system_device_identifier_t                       sys_config_system_device_identifier;    
+    sys_config_system_device_identifier_t                       sys_config_system_device_identifier;
     sys_config_gps_log_position_enable_t                        sys_config_gps_log_position_enable;
     sys_config_gps_log_ttff_enable_t                            sys_config_gps_log_ttff_enable;
     sys_config_gps_trigger_mode_t                               sys_config_gps_trigger_mode;
@@ -522,11 +562,15 @@ typedef struct __attribute__((__packed__))
     sys_config_axl_g_force_high_threshold_t                     sys_config_axl_g_force_high_threshold;
     sys_config_axl_sample_rate_t                                sys_config_axl_sample_rate;
     sys_config_axl_mode_t                                       sys_config_axl_mode;
+    sys_config_axl_scheduled_acquisition_interval_t             sys_config_axl_scheduled_acquisition_interval;
+    sys_config_axl_maximum_acquisition_time_t                   sys_config_axl_maximum_acquisition_time;
     sys_config_pressure_sensor_log_enable_t                     sys_config_pressure_sensor_log_enable;
     sys_config_pressure_sample_rate_t                           sys_config_pressure_sample_rate;
     sys_config_pressure_low_threshold_t                         sys_config_pressure_low_threshold;
     sys_config_pressure_high_threshold_t                        sys_config_pressure_high_threshold;
     sys_config_pressure_mode_t                                  sys_config_pressure_mode;
+    sys_config_pressure_scheduled_acquisition_interval_t        sys_config_pressure_scheduled_acquisition_interval;
+    sys_config_pressure_maximum_acquisition_time_t              sys_config_pressure_maximum_acquisition_time;
     sys_config_temp_sensor_log_enable_t                         sys_config_temp_sensor_log_enable;
     sys_config_temp_sensor_sample_rate_t                        sys_config_temp_sensor_sample_rate;
     sys_config_temp_sensor_low_threshold_t                      sys_config_temp_sensor_low_threshold;
