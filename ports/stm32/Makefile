@@ -104,7 +104,7 @@ OPENOCDSCRIPTS = "/../../../Toolchain/OpenOCD-20170821/share/openocd/scripts"
 BINPATH = "../../../Toolchain/gcc-arm-none-eabi-7-2017-q4-major/bin
 JLINK = "JLink"
 PREFIX = arm-none-eabi-
-CC = $(BINPATH)/$(PREFIX)gcc" -mlong-calls
+CC = $(BINPATH)/$(PREFIX)gcc" -pipe
 AS = $(BINPATH)/$(PREFIX)gcc" -x assembler-with-cpp
 CP = $(BINPATH)/$(PREFIX)objcopy"
 AR = $(BINPATH)/$(PREFIX)ar"
@@ -169,7 +169,7 @@ C_INCLUDES =  \
 # compile gcc flags
 ASFLAGS = $(MCU) $(AS_DEFS) $(AS_INCLUDES) $(OPT) -Wall -Werror -fdata-sections -ffunction-sections
 
-CFLAGS = $(MCU) $(C_DEFS) $(C_INCLUDES) $(OPT) -Wall -Werror -fdata-sections -ffunction-sections
+CFLAGS = $(MCU) $(C_DEFS) $(C_INCLUDES) $(OPT) -Wall -Werror -fdata-sections -ffunction-sections -mlong-calls
 
 ifeq ($(DEBUG), 1)
 CFLAGS += -g3
