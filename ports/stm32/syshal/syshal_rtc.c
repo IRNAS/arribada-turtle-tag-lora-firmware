@@ -40,8 +40,8 @@ int syshal_rtc_init(void)
 
     rtc_handle.Instance = RTC;
     rtc_handle.Init.HourFormat = RTC_HOURFORMAT_24;
-    rtc_handle.Init.AsynchPrediv = 127;
-    rtc_handle.Init.SynchPrediv = 255;
+    rtc_handle.Init.AsynchPrediv = 31;
+    rtc_handle.Init.SynchPrediv = 1023; // Set to generate a subsecond update every 0.976ms 
     rtc_handle.Init.OutPut = RTC_OUTPUT_DISABLE;
     rtc_handle.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
     rtc_handle.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
@@ -110,6 +110,7 @@ int syshal_rtc_get_date_and_time(syshal_rtc_data_and_time_t * date_time)
     date_time->hours = time.Hours;
     date_time->minutes = time.Minutes;
     date_time->seconds = time.Seconds;
+    date_time->milliseconds = 1000 * (time.SecondFraction - time.SubSeconds) / (time.SecondFraction + 1);
 
     RTC_DateTypeDef date;
     status = HAL_RTC_GetDate(&rtc_handle, &date, RTC_FORMAT_BIN);

@@ -36,6 +36,7 @@ typedef struct
     uint8_t hours;
     uint8_t minutes;
     uint8_t seconds;
+    uint16_t milliseconds;
 } syshal_rtc_data_and_time_t;
 
 int syshal_rtc_init(void);
