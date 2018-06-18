@@ -35,6 +35,8 @@ typedef struct
 int syshal_axl_init(void);
 int syshal_axl_sleep(void);
 int syshal_axl_wake(void);
+bool syshal_axl_awake(void);
+void syshal_axl_tick(void);
 
 __attribute__((weak)) void syshal_axl_callback(syshal_axl_data_t data);
 

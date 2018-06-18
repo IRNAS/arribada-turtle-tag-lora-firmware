@@ -183,6 +183,7 @@ static volatile sm_gps_state_t sm_gps_state; // The current operating state of t
 #define TIMER_ID_PRESSURE_SAMPLING            (6)
 #define TIMER_ID_PRESSURE_MAXIMUM_ACQUISITION (7)
 #define TIMER_ID_AXL_INTERVAL                 (8)
+#define TIMER_ID_AXL_MAXIMUM_ACQUISITION      (9)
 
 // Size of logging buffer that is used to store sensor data before it it written to FLASH
 #define LOGGING_BUFFER_SIZE (32)
@@ -582,7 +583,8 @@ void syshal_axl_callback(syshal_axl_data_t data)
     DEBUG_PR_TRACE("%s() called", __FUNCTION__);
 
     // If accelerometer data logging is disabled
-    if (!sys_config.sys_config_axl_log_enable.contents.enable)
+    if (!sys_config.sys_config_axl_log_enable.contents.enable ||
+        (SM_STATE_OPERATIONAL != sm_get_state()) )
     {
         syshal_axl_sleep(); // Sleep the accelerometer device
         return;
@@ -593,7 +595,13 @@ void syshal_axl_callback(syshal_axl_data_t data)
     switch (sys_config.sys_config_axl_mode.contents.mode)
     {
         case SYS_CONFIG_AXL_MODE_PERIODIC:
-            // FIXME: Log data!
+            __NOP(); // NOP required to give the switch case an instruction to jump to
+            logging_axl_xyz_t axl;
+            LOGGING_SET_HDR(&axl, LOGGING_AXL_XYZ);
+            axl.x = data.x;
+            axl.y = data.y;
+            axl.z = data.z;
+            logging_add_to_buffer((uint8_t *) &axl, sizeof(axl));
             break;
 
         case SYS_CONFIG_AXL_MODE_TRIGGER_ABOVE:
@@ -863,7 +871,7 @@ void syshal_timer_callback(uint32_t timer_id)
 
         case TIMER_ID_PRESSURE_MAXIMUM_ACQUISITION:
             DEBUG_PR_TRACE("TIMER_ID_PRESSURE_MAXIMUM_ACQUISITION");
-            
+
             syshal_timer_cancel(TIMER_ID_PRESSURE_SAMPLING); // Stop the sampling timer
             break;
 
@@ -879,6 +887,17 @@ void syshal_timer_callback(uint32_t timer_id)
                     logging_add_to_buffer((uint8_t *) &pressure_data, sizeof(pressure_data));
                 }
             }
+            break;
+
+        case TIMER_ID_AXL_INTERVAL:
+            DEBUG_PR_TRACE("TIMER_ID_AXL_INTERVAL");
+            syshal_timer_set(TIMER_ID_AXL_MAXIMUM_ACQUISITION, one_shot, sys_config.sys_config_axl_maximum_acquisition_time.contents.seconds);
+            syshal_axl_wake();
+            break;
+
+        case TIMER_ID_AXL_MAXIMUM_ACQUISITION:
+            DEBUG_PR_TRACE("TIMER_ID_AXL_MAXIMUM_ACQUISITION");
+            syshal_axl_sleep();
             break;
 
         default:
@@ -2395,8 +2414,6 @@ static void log_read_req(cmd_t * req, uint16_t size)
 
     resp->p.cmd_log_read_resp.length = sm_context.log_read.length;
 
-    DEBUG_PR_TRACE("responding with error code: %d, and length %lu", resp->p.cmd_log_read_resp.error_code, sm_context.log_read.length);
-
     buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_log_read_resp_t));
     config_if_send_priv(&config_if_send_buffer);
 }
@@ -2833,14 +2850,12 @@ void boot_state(void)
         Throw(EXCEPTION_FS_ERROR);
 
     // Init the peripheral devices after configuration data has been collected
-    //syshal_axl_init();
+
     syshal_gps_init();
     sm_gps_state = SM_GPS_STATE_ACQUIRING;
 
     syshal_switch_init();
     tracker_above_water = !syshal_switch_get();
-
-    syshal_pressure_init();
 
     if (FS_ERROR_FILE_VERSION_MISMATCH == ret)
     {
@@ -3184,6 +3199,7 @@ void operational_state(void)
                 // Should we be logging pressure data?
                 if (sys_config.sys_config_pressure_sensor_log_enable.contents.enable)
                 {
+                    syshal_pressure_init();
                     if (SYS_CONFIG_PRESSURE_MODE_PERIODIC == sys_config.sys_config_pressure_mode.contents.mode)
                     {
                         // If SYS_CONFIG_TAG_PRESSURE_SCHEDULED_ACQUISITION_INTERVAL = 0 then this is a special case meaning to always run the pressure sensor
@@ -3195,11 +3211,18 @@ void operational_state(void)
                 }
 
                 // Should we be logging axl data?
-                //if (sys_config.sys_config_axl_log_enable.contents.enable)
-                //{
-                //    if (SYS_CONFIG_AXL_MODE_PERIODIC == sys_config.sys_config_axl_mode.contents.mode)
-                //        syshal_timer_set(TIMER_ID_AXL_INTERVAL, periodic, sys_config.sys_config_axl_sample_rate_t.contents.sample_rate);
-                //}
+                if (sys_config.sys_config_axl_log_enable.contents.enable)
+                {
+                    syshal_axl_init();
+                    if (SYS_CONFIG_AXL_MODE_PERIODIC == sys_config.sys_config_axl_mode.contents.mode)
+                    {
+                        // If SYS_CONFIG_TAG_AXL_SCHEDULED_ACQUISITION_INTERVAL = 0 then this is a special case meaning to always run the AXL sensor
+                        if (sys_config.sys_config_axl_scheduled_acquisition_interval.contents.seconds)
+                            syshal_timer_set(TIMER_ID_AXL_INTERVAL, periodic, sys_config.sys_config_axl_scheduled_acquisition_interval.contents.seconds);
+                        else
+                            syshal_axl_wake();
+                    }
+                }
                 break;
 
             case FS_ERROR_FILE_NOT_FOUND:
@@ -3221,10 +3244,14 @@ void operational_state(void)
           sys_config.sys_config_gps_log_ttff_enable.contents.enable) )
         syshal_gps_tick(); // Process GPS messages
 
+    syshal_axl_tick();
+
     // Determine how deep a sleep we should take
     if (!syshal_timer_running(TIMER_ID_PRESSURE_SAMPLING))
     {
-        if (SM_GPS_STATE_ASLEEP == sm_gps_state)
+        if (SM_GPS_STATE_ASLEEP == sm_gps_state &&
+            sys_config.sys_config_axl_scheduled_acquisition_interval.contents.seconds &&
+            !syshal_axl_awake())
             syshal_pmu_set_level(POWER_STOP);
         else
             syshal_pmu_set_level(POWER_SLEEP);
@@ -3278,8 +3305,7 @@ void operational_state(void)
     // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
     if (syshal_gpio_get_input(GPIO_VUSB))
     {
-        syshal_timer_cancel(TIMER_ID_GPS_INTERVAL);
-        syshal_timer_cancel(TIMER_ID_LOG_FLUSH);
+        syshal_timer_cancel_all();
 
         if (log_file_handle)
             fs_close(log_file_handle);
@@ -3313,8 +3339,7 @@ void operational_state(void)
             {
                 if (level <= sys_config.sys_config_battery_low_threshold.contents.threshold)
                 {
-                    syshal_timer_cancel(TIMER_ID_GPS_INTERVAL);
-                    syshal_timer_cancel(TIMER_ID_LOG_FLUSH);
+                    syshal_timer_cancel_all();
 
                     if (log_file_handle)
                         fs_close(log_file_handle);

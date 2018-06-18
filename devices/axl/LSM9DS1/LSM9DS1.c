@@ -27,29 +27,16 @@
 // Internal variables used to sleep and wake the device
 static uint8_t LSM9D1_CTRL_REG6_XL_wake_state;
 static uint8_t LSM9D1_CTRL_REG6_XL_power_down_state;
+static volatile bool new_data_pending = false;
+static volatile bool device_awake = false;
 
 /**
  * @brief      Interrupt handler for when accelerometer data is ready
  */
 static void syshal_axl_int1_ag_interrupt_priv(void)
 {
-    // Read the avaliable data from the accelerometer
-    uint8_t temp[6];
-    syshal_axl_data_t accl_data;
-    uint32_t bytes_read = syshal_i2c_read_reg(I2C_AXL, LSM9D1_AG_ADDR, LSM9D1_OUT_X_L_XL, &temp[0], 6); // Read 6 bytes, beginning at OUT_X_L_XL
-    if (6 == bytes_read)
-    {
-        accl_data.x = (temp[1] << 8) | temp[0];
-        accl_data.y = (temp[3] << 8) | temp[2];
-        accl_data.z = (temp[5] << 8) | temp[4];
-    }
-    else
-    {
-        return; // Read failed
-    }
-
-    // Generate a callback event
-    syshal_axl_callback(accl_data);
+    // This flag is handled externally to the interrupt to ensure that the I2C device does not get used by two functions at once
+    new_data_pending = true;
 }
 
 /**
@@ -130,21 +117,27 @@ int syshal_axl_init(void)
     switch (sample_rate)
     {
         case 10:
+            DEBUG_PR_TRACE("AXL sample rate: 10 Hz");
             reg_value |= LSM9D1_CTRL_REG6_XL_ODR_XL_10HZ;
             break;
         case 50:
+            DEBUG_PR_TRACE("AXL sample rate: 50 Hz");
             reg_value |= LSM9D1_CTRL_REG6_XL_ODR_XL_50HZ;
             break;
         case 119:
+            DEBUG_PR_TRACE("AXL sample rate: 119 Hz");
             reg_value |= LSM9D1_CTRL_REG6_XL_ODR_XL_119HZ;
             break;
         case 238:
+            DEBUG_PR_TRACE("AXL sample rate: 238 Hz");
             reg_value |= LSM9D1_CTRL_REG6_XL_ODR_XL_238HZ;
             break;
         case 476:
+            DEBUG_PR_TRACE("AXL sample rate: 476 Hz");
             reg_value |= LSM9D1_CTRL_REG6_XL_ODR_XL_476HZ;
             break;
         case 952:
+            DEBUG_PR_TRACE("AXL sample rate: 952 Hz");
             reg_value |= LSM9D1_CTRL_REG6_XL_ODR_XL_952HZ;
             break;
     }
@@ -153,7 +146,7 @@ int syshal_axl_init(void)
 
     LSM9D1_CTRL_REG6_XL_wake_state = reg_value;
     LSM9D1_CTRL_REG6_XL_power_down_state = reg_value & (~LSM9D1_CTRL_REG6_XL_ODR_XL_MASK);
-    syshal_i2c_write_reg(I2C_AXL, LSM9D1_AG_ADDR, LSM9D1_CTRL_REG6_XL, &LSM9D1_CTRL_REG6_XL_wake_state, 1);
+    syshal_i2c_write_reg(I2C_AXL, LSM9D1_AG_ADDR, LSM9D1_CTRL_REG6_XL, &LSM9D1_CTRL_REG6_XL_power_down_state, 1);
 
     // Setup the INT1_A/G interrupt GPIO pin to generate interrupts
     syshal_gpio_init(GPIO_INT1_AG);
@@ -164,8 +157,8 @@ int syshal_axl_init(void)
     syshal_i2c_write_reg(I2C_AXL, LSM9D1_AG_ADDR, LSM9D1_INT1_CTRL, &LSM9D1_INT1_CTRL_register, 1);
 
     // Is there already data waiting to be read?
-    if (syshal_gpio_get_input(GPIO_INT1_AG))
-        syshal_axl_int1_ag_interrupt_priv();
+    new_data_pending = syshal_gpio_get_input(GPIO_INT1_AG);
+    device_awake = false;
 
     return SYSHAL_AXL_NO_ERROR;
 }
@@ -178,7 +171,9 @@ int syshal_axl_init(void)
  */
 int syshal_axl_sleep(void)
 {
+    DEBUG_PR_TRACE("Sleeping AXL");
     syshal_i2c_write_reg(I2C_AXL, LSM9D1_AG_ADDR, LSM9D1_CTRL_REG6_XL, &LSM9D1_CTRL_REG6_XL_power_down_state, 1);
+    device_awake = false;
 
     return SYSHAL_AXL_NO_ERROR;
 }
@@ -190,9 +185,35 @@ int syshal_axl_sleep(void)
  */
 int syshal_axl_wake(void)
 {
+    DEBUG_PR_TRACE("Waking AXL");
     syshal_i2c_write_reg(I2C_AXL, LSM9D1_AG_ADDR, LSM9D1_CTRL_REG6_XL, &LSM9D1_CTRL_REG6_XL_wake_state, 1);
+    device_awake = true;
 
     return SYSHAL_AXL_NO_ERROR;
+}
+
+bool syshal_axl_awake(void)
+{
+    return device_awake;
+}
+
+void syshal_axl_tick(void)
+{
+    if (new_data_pending)
+    {
+        // Read the avaliable data from the accelerometer
+        uint8_t temp[6];
+        syshal_axl_data_t accl_data;
+        uint32_t bytes_read = syshal_i2c_read_reg(I2C_AXL, LSM9D1_AG_ADDR, LSM9D1_OUT_X_L_XL, &temp[0], 6); // Read 6 bytes, beginning at OUT_X_L_XL
+        if (6 == bytes_read)
+        {
+            accl_data.x = (temp[1] << 8) | temp[0];
+            accl_data.y = (temp[3] << 8) | temp[2];
+            accl_data.z = (temp[5] << 8) | temp[4];
+            syshal_axl_callback(accl_data); // Generate a callback event
+        }
+        new_data_pending = false;
+    }
 }
 
 /**

@@ -87,7 +87,7 @@ void syshal_i2c_transfer(uint32_t instance, uint8_t slaveAddress, uint8_t * data
 
     if (HAL_OK != status)
     {
-        DEBUG_PR_ERROR("%s failed with %d", __FUNCTION__, status);
+        DEBUG_PR_ERROR("%s(%lu, 0x%02X, *data, %lu) failed with %d", __FUNCTION__, instance, slaveAddress, size, status);
     }
 }
 
@@ -110,7 +110,7 @@ uint32_t syshal_i2c_receive(uint32_t instance, uint8_t slaveAddress, uint8_t * d
     // return number of bytes read as best we can tell
     if (HAL_OK != status)
     {
-        DEBUG_PR_ERROR("%s failed with %d", __FUNCTION__, status);
+        DEBUG_PR_ERROR("%s(%lu, 0x%02X, *data, %lu) failed with %d", __FUNCTION__, instance, slaveAddress, size, status);
         return 0;
     }
 

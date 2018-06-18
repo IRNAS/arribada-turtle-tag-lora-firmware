@@ -75,7 +75,7 @@ int syshal_timer_set_ms(uint32_t timer_id, syshal_timer_mode_t mode, uint32_t mi
     timers_priv[timer_id].start = syshal_timer_time_in_milliseconds_priv();
     timers_priv[timer_id].duration = milliseconds;
 
-    DEBUG_PR_SYS("%s(%lu, %d, %lu) start time: %lu", __FUNCTION__, timer_id, mode, milliseconds, timers_priv[timer_id].start);
+    DEBUG_PR_SYS("%s(%lu, %d, %lu)", __FUNCTION__, timer_id, mode, milliseconds);
 
     return SYSHAL_TIMER_NO_ERROR;
 }
