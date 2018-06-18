@@ -36,6 +36,7 @@ typedef enum
 int syshal_timer_init(void);
 
 int syshal_timer_set(uint32_t timer_id, syshal_timer_mode_t mode, uint32_t seconds);
+int syshal_timer_set_ms(uint32_t timer_id, syshal_timer_mode_t mode, uint32_t milliseconds);
 int syshal_timer_running(uint32_t timer_id);
 int syshal_timer_cancel(uint32_t timer_id);
 int syshal_timer_cancel_all(void);

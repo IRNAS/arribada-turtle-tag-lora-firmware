@@ -21,33 +21,32 @@
 #include "syshal_rtc.h"
 #include "debug.h"
 
-#define SYSHAL_TIMER_NOT_SET (-1)
-
-#define SECONDS_IN_A_DAY (24 * 60 * 60)
+#define MILLISECONDS_IN_A_DAY (24 * 60 * 60 * 1000)
 
 typedef struct
 {
     bool running;             // Is this timer running?
     syshal_timer_mode_t mode; // Is this timer a one-shot or continuous
     uint32_t start;           // A timestamp of when this timer was started
-    uint32_t duration;        // How long this timer should run for before triggering
+    uint32_t duration;        // How long this timer should run for before triggering (in ms)
 } syshal_timer_t;
 
 static syshal_timer_t timers_priv[SYSHAL_TIMER_NUMBER_OF_TIMERS];
 
-uint32_t syshal_timer_time_in_seconds_priv(void)
+uint32_t syshal_timer_time_in_milliseconds_priv(void)
 {
-    // Get the current time of day in seconds
+    // Get the current time of day in milliseconds
     syshal_rtc_data_and_time_t current_date_time;
     syshal_rtc_get_date_and_time(&current_date_time);
 
-    uint32_t seconds = 0;
+    uint32_t milliseconds = 0;
 
-    seconds += current_date_time.seconds;
-    seconds += current_date_time.minutes * 60;
-    seconds += current_date_time.hours * 60 * 60;
+    milliseconds += current_date_time.milliseconds;
+    milliseconds += current_date_time.seconds * 1000;
+    milliseconds += current_date_time.minutes * 60 * 1000;
+    milliseconds += current_date_time.hours * 60 * 60 * 1000;
 
-    return seconds;
+    return milliseconds;
 }
 
 int syshal_timer_init(void)
@@ -57,21 +56,26 @@ int syshal_timer_init(void)
 
 int syshal_timer_set(uint32_t timer_id, syshal_timer_mode_t mode, uint32_t seconds)
 {
+    return syshal_timer_set_ms(timer_id, mode, seconds * 1000);
+}
+
+int syshal_timer_set_ms(uint32_t timer_id, syshal_timer_mode_t mode, uint32_t milliseconds)
+{
     if (timer_id > SYSHAL_TIMER_NUMBER_OF_TIMERS)
         return SYSHAL_TIMER_INVALID_TIMER_ID;
 
-    if (seconds >= SECONDS_IN_A_DAY)
+    if (milliseconds >= MILLISECONDS_IN_A_DAY)
         return SYSHAL_TIMER_INVALID_TIME;
 
-    if (seconds == 0)
-        seconds = 1; // Our minimum duration is 1 second
-
-    DEBUG_PR_SYS("%s(%lu, %d, %lu);", __FUNCTION__, timer_id, mode, seconds);
+    if (milliseconds == 0)
+        milliseconds = 1; // Our minimum duration is 1 millisecond
 
     timers_priv[timer_id].running = true;
     timers_priv[timer_id].mode = mode;
-    timers_priv[timer_id].start = syshal_timer_time_in_seconds_priv();
-    timers_priv[timer_id].duration = seconds;
+    timers_priv[timer_id].start = syshal_timer_time_in_milliseconds_priv();
+    timers_priv[timer_id].duration = milliseconds;
+
+    DEBUG_PR_SYS("%s(%lu, %d, %lu) start time: %lu", __FUNCTION__, timer_id, mode, milliseconds, timers_priv[timer_id].start);
 
     return SYSHAL_TIMER_NO_ERROR;
 }
@@ -111,7 +115,7 @@ int syshal_timer_cancel_all(void)
 
 void syshal_timer_tick(void)
 {
-    uint32_t current_time_seconds = syshal_timer_time_in_seconds_priv();
+    uint32_t current_time_seconds = syshal_timer_time_in_milliseconds_priv();
 
     for (uint32_t i = 0; i < SYSHAL_TIMER_NUMBER_OF_TIMERS; ++i)
     {
@@ -119,18 +123,19 @@ void syshal_timer_tick(void)
         {
             uint32_t elapsed;
             if (current_time_seconds < timers_priv[i].start)
-                elapsed = SECONDS_IN_A_DAY + (current_time_seconds - timers_priv[i].start);
+                elapsed = MILLISECONDS_IN_A_DAY + (current_time_seconds - timers_priv[i].start);
             else
                 elapsed = current_time_seconds - timers_priv[i].start;
 
             if (elapsed >= timers_priv[i].duration)
             {
-                syshal_timer_cancel(i);
-                syshal_timer_callback(i);
-
                 // If this is a periodic timer, then auto-reload it
                 if (periodic == timers_priv[i].mode)
-                    syshal_timer_set(i, timers_priv[i].mode, timers_priv[i].duration);
+                    syshal_timer_set_ms(i, timers_priv[i].mode, timers_priv[i].duration);
+                else
+                    syshal_timer_cancel(i); // Else cancel it
+
+                syshal_timer_callback(i);
             }
         }
     }
