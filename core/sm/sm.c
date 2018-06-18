@@ -17,6 +17,7 @@
  */
 
 #include <string.h>
+#include <math.h>
 #include "bsp.h"
 #include "buffer.h"
 #include "cexception.h"
@@ -173,13 +174,15 @@ static volatile sm_gps_state_t sm_gps_state; // The current operating state of t
 #define LOG_FILE_FLUSH_PERIOD_SECONDS ( (24 * 60 * 60) - 60 ) // Period in seconds in which to flush the log file to FLASH
 
 // Timers
-#define TIMER_ID_GPS_INTERVAL             (0)
-#define TIMER_ID_GPS_NO_FIX               (1)
-#define TIMER_ID_GPS_MAXIMUM_ACQUISITION  (2)
-#define TIMER_ID_LOG_FLUSH                (3)
-#define TIMER_ID_SWITCH_HYSTERESIS        (4)
-#define TIMER_ID_PRESSURE_INTERVAL        (5)
-#define TIMER_ID_AXL_INTERVAL             (6)
+#define TIMER_ID_GPS_INTERVAL                 (0)
+#define TIMER_ID_GPS_NO_FIX                   (1)
+#define TIMER_ID_GPS_MAXIMUM_ACQUISITION      (2)
+#define TIMER_ID_LOG_FLUSH                    (3)
+#define TIMER_ID_SWITCH_HYSTERESIS            (4)
+#define TIMER_ID_PRESSURE_INTERVAL            (5)
+#define TIMER_ID_PRESSURE_SAMPLING            (6)
+#define TIMER_ID_PRESSURE_MAXIMUM_ACQUISITION (7)
+#define TIMER_ID_AXL_INTERVAL                 (8)
 
 // Size of logging buffer that is used to store sensor data before it it written to FLASH
 #define LOGGING_BUFFER_SIZE (32)
@@ -848,6 +851,24 @@ void syshal_timer_callback(uint32_t timer_id)
         case TIMER_ID_PRESSURE_INTERVAL:
             DEBUG_PR_TRACE("TIMER_ID_PRESSURE_INTERVAL");
 
+            // Start the max acquisition timer
+            syshal_timer_set(TIMER_ID_PRESSURE_MAXIMUM_ACQUISITION, one_shot, sys_config.sys_config_pressure_maximum_acquisition_time.contents.seconds);
+
+            // Start the sampling timer
+            syshal_timer_set_ms(TIMER_ID_PRESSURE_SAMPLING, periodic, round((float) 1000.0f / sys_config.sys_config_pressure_sample_rate.contents.sample_rate));
+
+            // Manually trigger the timer now so we get a first reading straight away
+            syshal_timer_callback(TIMER_ID_PRESSURE_SAMPLING);
+            break;
+
+        case TIMER_ID_PRESSURE_MAXIMUM_ACQUISITION:
+            DEBUG_PR_TRACE("TIMER_ID_PRESSURE_MAXIMUM_ACQUISITION");
+            
+            syshal_timer_cancel(TIMER_ID_PRESSURE_SAMPLING); // Stop the sampling timer
+            break;
+
+        case TIMER_ID_PRESSURE_SAMPLING:
+            DEBUG_PR_TRACE("TIMER_ID_PRESSURE_SAMPLING");
             if ((SM_STATE_OPERATIONAL == sm_get_state()))
             {
                 if (sys_config.sys_config_pressure_sensor_log_enable.contents.enable)
@@ -3164,7 +3185,13 @@ void operational_state(void)
                 if (sys_config.sys_config_pressure_sensor_log_enable.contents.enable)
                 {
                     if (SYS_CONFIG_PRESSURE_MODE_PERIODIC == sys_config.sys_config_pressure_mode.contents.mode)
-                        syshal_timer_set(TIMER_ID_PRESSURE_INTERVAL, periodic, sys_config.sys_config_pressure_sample_rate.contents.sample_rate);
+                    {
+                        // If SYS_CONFIG_TAG_PRESSURE_SCHEDULED_ACQUISITION_INTERVAL = 0 then this is a special case meaning to always run the pressure sensor
+                        if (sys_config.sys_config_pressure_scheduled_acquisition_interval.contents.seconds)
+                            syshal_timer_set(TIMER_ID_PRESSURE_INTERVAL, periodic, sys_config.sys_config_pressure_scheduled_acquisition_interval.contents.seconds);
+                        else
+                            syshal_timer_set_ms(TIMER_ID_PRESSURE_SAMPLING, periodic, round((float) 1000.0f / sys_config.sys_config_pressure_sample_rate.contents.sample_rate));
+                    }
                 }
 
                 // Should we be logging axl data?
@@ -3195,10 +3222,13 @@ void operational_state(void)
         syshal_gps_tick(); // Process GPS messages
 
     // Determine how deep a sleep we should take
-    if (SM_GPS_STATE_ASLEEP == sm_gps_state)
-        syshal_pmu_set_level(POWER_STOP);
-    else
-        syshal_pmu_set_level(POWER_SLEEP);
+    if (!syshal_timer_running(TIMER_ID_PRESSURE_SAMPLING))
+    {
+        if (SM_GPS_STATE_ASLEEP == sm_gps_state)
+            syshal_pmu_set_level(POWER_STOP);
+        else
+            syshal_pmu_set_level(POWER_SLEEP);
+    }
 
     // Is global logging enabled?
     if (sys_config.sys_config_logging_enable.contents.enable)

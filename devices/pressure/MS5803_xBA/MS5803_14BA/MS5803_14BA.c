@@ -23,7 +23,7 @@
 #include "syshal_time.h"
 #include "bsp.h"
 
-static const uint8_t resolution_priv = CMD_ADC_4096; // The conversion resolution
+static const uint8_t resolution_priv = CMD_ADC_256; // The conversion resolution
 
 // See datasheet for details
 int32_t syshal_pressure_get(void)
