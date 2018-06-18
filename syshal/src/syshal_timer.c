@@ -115,17 +115,17 @@ int syshal_timer_cancel_all(void)
 
 void syshal_timer_tick(void)
 {
-    uint32_t current_time_seconds = syshal_timer_time_in_milliseconds_priv();
-
     for (uint32_t i = 0; i < SYSHAL_TIMER_NUMBER_OF_TIMERS; ++i)
     {
+        uint32_t current_time_milliseconds = syshal_timer_time_in_milliseconds_priv();
+        
         if (timers_priv[i].running)
         {
             uint32_t elapsed;
-            if (current_time_seconds < timers_priv[i].start)
-                elapsed = MILLISECONDS_IN_A_DAY + (current_time_seconds - timers_priv[i].start);
+            if (current_time_milliseconds < timers_priv[i].start)
+                elapsed = MILLISECONDS_IN_A_DAY + (current_time_milliseconds - timers_priv[i].start);
             else
-                elapsed = current_time_seconds - timers_priv[i].start;
+                elapsed = current_time_milliseconds - timers_priv[i].start;
 
             if (elapsed >= timers_priv[i].duration)
             {
