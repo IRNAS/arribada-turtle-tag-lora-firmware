@@ -21,9 +21,10 @@
 
 #include <stdint.h>
 
-#define SYSHAL_TIMER_NO_ERROR          ( 0)
-#define SYSHAL_TIMER_INVALID_TIMER_ID  (-1)
-#define SYSHAL_TIMER_INVALID_TIME      (-2)
+#define SYSHAL_TIMER_NO_ERROR                    ( 0)
+#define SYSHAL_TIMER_ERROR_NO_FREE_TIMER         (-1)
+#define SYSHAL_TIMER_ERROR_INVALID_TIMER_HANDLE  (-2)
+#define SYSHAL_TIMER_ERROR_INVALID_TIME          (-3)
 
 #define SYSHAL_TIMER_NUMBER_OF_TIMERS  (16)
 
@@ -33,15 +34,16 @@ typedef enum
     periodic   // Continuely reset the timer everytime it is triggered
 } syshal_timer_mode_t;
 
-int syshal_timer_init(void);
+typedef uint32_t timer_handle_t;
 
-int syshal_timer_set(uint32_t timer_id, syshal_timer_mode_t mode, uint32_t seconds);
-int syshal_timer_set_ms(uint32_t timer_id, syshal_timer_mode_t mode, uint32_t milliseconds);
-int syshal_timer_running(uint32_t timer_id);
-int syshal_timer_cancel(uint32_t timer_id);
+int syshal_timer_init(timer_handle_t *handle, void (*callback)(void));
+int syshal_timer_term(timer_handle_t handle);
+int syshal_timer_set(timer_handle_t handle, syshal_timer_mode_t mode, uint32_t seconds);
+int syshal_timer_set_ms(timer_handle_t handle, syshal_timer_mode_t mode, uint32_t milliseconds);
+int syshal_timer_running(timer_handle_t handle);
+int syshal_timer_cancel(timer_handle_t handle);
 int syshal_timer_cancel_all(void);
 
 void syshal_timer_tick(void);
-void syshal_timer_callback(uint32_t timer_id);
 
 #endif /* _SYSHAL_TIMER_H_ */

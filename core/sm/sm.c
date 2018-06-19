@@ -173,18 +173,6 @@ static volatile sm_gps_state_t sm_gps_state; // The current operating state of t
 
 #define LOG_FILE_FLUSH_PERIOD_SECONDS ( (24 * 60 * 60) - 60 ) // Period in seconds in which to flush the log file to FLASH
 
-// Timers
-#define TIMER_ID_GPS_INTERVAL                 (0)
-#define TIMER_ID_GPS_NO_FIX                   (1)
-#define TIMER_ID_GPS_MAXIMUM_ACQUISITION      (2)
-#define TIMER_ID_LOG_FLUSH                    (3)
-#define TIMER_ID_SWITCH_HYSTERESIS            (4)
-#define TIMER_ID_PRESSURE_INTERVAL            (5)
-#define TIMER_ID_PRESSURE_SAMPLING            (6)
-#define TIMER_ID_PRESSURE_MAXIMUM_ACQUISITION (7)
-#define TIMER_ID_AXL_INTERVAL                 (8)
-#define TIMER_ID_AXL_MAXIMUM_ACQUISITION      (9)
-
 // Size of logging buffer that is used to store sensor data before it it written to FLASH
 #define LOGGING_BUFFER_SIZE (32)
 #define LOGGING_FIFO_DEPTH  (8) // Maximum number of readings that can be stored before a write to the FLASH log must be done
@@ -208,6 +196,30 @@ static volatile bool     tracker_above_water = true; // Is the device above wate
 static volatile bool     log_file_created = false; // Does a log file exist?
 static volatile bool     gps_ttff_reading_logged = false; // Have we read the most recent gps ttff reading?
 static uint8_t           last_battery_reading;
+
+// Timer handles
+static timer_handle_t timer_gps_interval;
+static timer_handle_t timer_gps_no_fix;
+static timer_handle_t timer_gps_maximum_acquisition;
+static timer_handle_t timer_log_flush;
+static timer_handle_t timer_switch_hysteresis;
+static timer_handle_t timer_pressure_interval;
+static timer_handle_t timer_pressure_sampling;
+static timer_handle_t timer_pressure_maximum_acquisition;
+static timer_handle_t timer_axl_interval;
+static timer_handle_t timer_axl_maximum_acquisition;
+
+// Timer callbacks
+static void timer_gps_interval_callback(void);
+static void timer_gps_no_fix_callback(void);
+static void timer_gps_maximum_acquisition_callback(void);
+static void timer_log_flush_callback(void);
+static void timer_switch_hysteresis_callback(void);
+static void timer_pressure_interval_callback(void);
+static void timer_pressure_sampling_callback(void);
+static void timer_pressure_maximum_acquisition_callback(void);
+static void timer_axl_interval_callback(void);
+static void timer_axl_maximum_acquisition_callback(void);
 
 ////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////// PROTOTYPES ///////////////////////////////////
@@ -636,7 +648,7 @@ void syshal_gps_callback(syshal_gps_event_t event)
 
                 if (SM_GPS_STATE_ASLEEP != sm_gps_state) // If we haven't already slept the GPS
                 {
-                    syshal_timer_cancel(TIMER_ID_GPS_NO_FIX); // Clear any no fix timer
+                    syshal_timer_cancel(timer_gps_interval); // Clear any no fix timer
                     sm_gps_state = SM_GPS_STATE_FIXED;
                 }
 
@@ -669,7 +681,7 @@ void syshal_gps_callback(syshal_gps_event_t event)
                                 ((SYS_CONFIG_GPS_TRIGGER_MODE_HYBRID == sys_config.sys_config_gps_trigger_mode.contents.mode) && (!tracker_above_water)))
                             {
                                 if (sys_config.sys_config_gps_scheduled_acquisition_no_fix_timeout.contents.seconds) // Don't set a no fix timeout if it's zero as this is a special case
-                                    syshal_timer_set(TIMER_ID_GPS_NO_FIX, one_shot, sys_config.sys_config_gps_scheduled_acquisition_no_fix_timeout.contents.seconds);
+                                    syshal_timer_set(timer_gps_no_fix, one_shot, sys_config.sys_config_gps_scheduled_acquisition_no_fix_timeout.contents.seconds);
                             }
                         }
                     }
@@ -709,7 +721,7 @@ void syshal_switch_callback(syshal_switch_event_id_t event)
     switch (event)
     {
         case SYSHAL_SWITCH_EVENT_OPEN:
-            syshal_timer_cancel(TIMER_ID_SWITCH_HYSTERESIS);
+            syshal_timer_cancel(timer_switch_hysteresis);
 
             // If we're in the operational state and we were previously underwater
             if ((SM_STATE_OPERATIONAL == sm_get_state()) && !tracker_above_water)
@@ -734,10 +746,10 @@ void syshal_switch_callback(syshal_switch_event_id_t event)
 
                     // If our maximum acquisition time is not set to forever (0)
                     if (sys_config.sys_config_gps_maximum_acquisition_time.contents.seconds)
-                        syshal_timer_set(TIMER_ID_GPS_MAXIMUM_ACQUISITION, one_shot, sys_config.sys_config_gps_maximum_acquisition_time.contents.seconds);
+                        syshal_timer_set(timer_gps_maximum_acquisition, one_shot, sys_config.sys_config_gps_maximum_acquisition_time.contents.seconds);
                 }
 
-                syshal_timer_cancel(TIMER_ID_GPS_NO_FIX); // We ignore the no fix timeout when on the surface
+                syshal_timer_cancel(timer_gps_no_fix); // We ignore the no fix timeout when on the surface
             }
 
             tracker_above_water = true;
@@ -747,9 +759,9 @@ void syshal_switch_callback(syshal_switch_event_id_t event)
             if (sys_config.sys_config_saltwater_switch_hysteresis_period.contents.seconds &&
                 sys_config.sys_config_saltwater_switch_hysteresis_period.hdr.set &&
                 SM_STATE_OPERATIONAL == sm_get_state())
-                syshal_timer_set(TIMER_ID_SWITCH_HYSTERESIS, one_shot, sys_config.sys_config_saltwater_switch_hysteresis_period.contents.seconds);
+                syshal_timer_set(timer_switch_hysteresis, one_shot, sys_config.sys_config_saltwater_switch_hysteresis_period.contents.seconds);
             else
-                syshal_timer_callback(TIMER_ID_SWITCH_HYSTERESIS); // Trigger an instant switch timeout
+                timer_switch_hysteresis_callback(); // Trigger an instant switch timeout
 
             break;
 
@@ -759,6 +771,158 @@ void syshal_switch_callback(syshal_switch_event_id_t event)
     }
 }
 
+static void timer_gps_interval_callback(void)
+{
+    DEBUG_PR_TRACE("%s() called", __FUNCTION__);
+
+    // If we are and we are either in scheduled mode or hybrid + underwater
+    if ((SYS_CONFIG_GPS_TRIGGER_MODE_SCHEDULED == sys_config.sys_config_gps_trigger_mode.contents.mode) ||
+        ((SYS_CONFIG_GPS_TRIGGER_MODE_HYBRID == sys_config.sys_config_gps_trigger_mode.contents.mode) && (!tracker_above_water)))
+    {
+        // Our scheduled interval has elapsed
+        // So wake up the GPS
+        if (SM_GPS_STATE_ASLEEP == sm_gps_state)
+        {
+            sm_gps_state = SM_GPS_STATE_ACQUIRING;
+            gps_ttff_reading_logged = false;
+            syshal_gps_wake_up();
+        }
+
+        syshal_timer_set(timer_gps_maximum_acquisition, one_shot, sys_config.sys_config_gps_maximum_acquisition_time.contents.seconds);
+
+        if (sys_config.sys_config_gps_scheduled_acquisition_no_fix_timeout.contents.seconds) // Don't set a no fix timeout if it's zero as this is a special case
+            syshal_timer_set(timer_gps_no_fix, one_shot, sys_config.sys_config_gps_scheduled_acquisition_no_fix_timeout.contents.seconds);
+    }
+}
+
+static void timer_gps_no_fix_callback(void)
+{
+    DEBUG_PR_TRACE("%s() called", __FUNCTION__);
+
+    // If we are and we are either in scheduled mode or hybrid + underwater
+    if ((SYS_CONFIG_GPS_TRIGGER_MODE_SCHEDULED == sys_config.sys_config_gps_trigger_mode.contents.mode) ||
+        ((SYS_CONFIG_GPS_TRIGGER_MODE_HYBRID == sys_config.sys_config_gps_trigger_mode.contents.mode) && (!tracker_above_water)))
+    {
+        syshal_timer_cancel(timer_gps_maximum_acquisition);
+        // We have been unable to achieve a GPS fix
+        // So shutdown the GPS
+        if (SM_GPS_STATE_ASLEEP != sm_gps_state)
+        {
+            sm_gps_state = SM_GPS_STATE_ASLEEP;
+            syshal_gps_shutdown();
+        }
+    }
+}
+
+static void timer_gps_maximum_acquisition_callback(void)
+{
+    DEBUG_PR_TRACE("%s() called", __FUNCTION__);
+
+    syshal_timer_cancel(timer_gps_no_fix);
+
+    // We have been GPS logging for our maximum allowed time
+    // So shutdown the GPS
+    if (SM_GPS_STATE_ASLEEP != sm_gps_state)
+    {
+        sm_gps_state = SM_GPS_STATE_ASLEEP;
+        syshal_gps_shutdown();
+    }
+}
+
+static void timer_log_flush_callback(void)
+{
+    DEBUG_PR_TRACE("%s() called", __FUNCTION__);
+
+    // Flush and log data to the FLASH
+    if (log_file_handle)
+        fs_flush(log_file_handle);
+}
+
+static void timer_switch_hysteresis_callback(void)
+{
+    DEBUG_PR_TRACE("%s() called", __FUNCTION__);
+
+    // The tracker has been underwater for the configured amount of time
+    tracker_above_water = false;
+
+    if ((SM_STATE_OPERATIONAL == sm_get_state()))
+    {
+        if (sys_config.sys_config_saltwater_switch_log_enable.contents.enable)
+        {
+            logging_submerged_t submerged;
+            LOGGING_SET_HDR(&submerged, LOGGING_SUBMERGED);
+            logging_add_to_buffer((uint8_t *) &submerged, sizeof(submerged));
+        }
+
+        // Are we supposed to be sleeping the GPS?
+        if (SYS_CONFIG_GPS_TRIGGER_MODE_SWITCH_TRIGGERED == sys_config.sys_config_gps_trigger_mode.contents.mode
+            || SYS_CONFIG_GPS_TRIGGER_MODE_HYBRID == sys_config.sys_config_gps_trigger_mode.contents.mode)
+        {
+            if (SM_GPS_STATE_ASLEEP != sm_gps_state)
+            {
+                // We are no longer aquiring GPS data so cancel any timer for this
+                syshal_timer_cancel(timer_gps_maximum_acquisition);
+
+                sm_gps_state = SM_GPS_STATE_ASLEEP;
+                syshal_gps_shutdown();
+            }
+        }
+    }
+}
+
+static void timer_pressure_interval_callback(void)
+{
+    DEBUG_PR_TRACE("%s() called", __FUNCTION__);
+
+    // Start the max acquisition timer
+    syshal_timer_set(timer_pressure_maximum_acquisition, one_shot, sys_config.sys_config_pressure_maximum_acquisition_time.contents.seconds);
+
+    // Start the sampling timer
+    syshal_timer_set_ms(timer_pressure_sampling, periodic, round((float) 1000.0f / sys_config.sys_config_pressure_sample_rate.contents.sample_rate));
+
+    // Manually trigger the timer now so we get a first reading straight away
+    timer_pressure_sampling_callback();
+}
+
+static void timer_pressure_sampling_callback(void)
+{
+    DEBUG_PR_TRACE("%s() called", __FUNCTION__);
+
+    if ((SM_STATE_OPERATIONAL == sm_get_state()))
+    {
+        if (sys_config.sys_config_pressure_sensor_log_enable.contents.enable)
+        {
+            logging_pressure_t pressure_data;
+            LOGGING_SET_HDR(&pressure_data, LOGGING_PRESSURE);
+            pressure_data.pressure = syshal_pressure_get();
+            logging_add_to_buffer((uint8_t *) &pressure_data, sizeof(pressure_data));
+        }
+    }
+}
+
+static void timer_pressure_maximum_acquisition_callback(void)
+{
+    DEBUG_PR_TRACE("%s() called", __FUNCTION__);
+
+    syshal_timer_cancel(timer_pressure_sampling); // Stop the sampling timer
+}
+
+static void timer_axl_interval_callback(void)
+{
+    DEBUG_PR_TRACE("%s() called", __FUNCTION__);
+
+    syshal_timer_set(timer_axl_maximum_acquisition, one_shot, sys_config.sys_config_axl_maximum_acquisition_time.contents.seconds);
+    syshal_axl_wake();
+}
+
+static void timer_axl_maximum_acquisition_callback(void)
+{
+    DEBUG_PR_TRACE("%s() called", __FUNCTION__);
+
+    syshal_axl_sleep();
+}
+
+/*
 void syshal_timer_callback(uint32_t timer_id)
 {
     switch (timer_id)
@@ -905,6 +1069,7 @@ void syshal_timer_callback(uint32_t timer_id)
             break;
     }
 }
+*/
 
 static void populate_log_file_size_tag(void)
 {
@@ -2803,7 +2968,17 @@ void boot_state(void)
     syshal_uart_init(UART_2);
 //    syshal_uart_init(UART_3);
 
-    syshal_timer_init();
+    // Init timers
+    syshal_timer_init(&timer_gps_interval, timer_gps_interval_callback);
+    syshal_timer_init(&timer_gps_no_fix, timer_gps_no_fix_callback);
+    syshal_timer_init(&timer_gps_maximum_acquisition, timer_gps_maximum_acquisition_callback);
+    syshal_timer_init(&timer_log_flush, timer_log_flush_callback);
+    syshal_timer_init(&timer_switch_hysteresis, timer_switch_hysteresis_callback);
+    syshal_timer_init(&timer_pressure_interval, timer_pressure_interval_callback);
+    syshal_timer_init(&timer_pressure_sampling, timer_pressure_sampling_callback);
+    syshal_timer_init(&timer_pressure_maximum_acquisition, timer_pressure_maximum_acquisition_callback);
+    syshal_timer_init(&timer_axl_interval, timer_axl_interval_callback);
+    syshal_timer_init(&timer_axl_maximum_acquisition, timer_axl_maximum_acquisition_callback);
 
 //    syshal_spi_init(SPI_1);
     syshal_spi_init(SPI_2);
@@ -3055,12 +3230,8 @@ void operational_state(void)
                 // Flush any data that we previously may have in the buffers and start fresh
                 buffer_reset(&logging_buffer);
 
-                // Clear any GPS timers
-                syshal_timer_cancel(TIMER_ID_GPS_INTERVAL);
-                syshal_timer_cancel(TIMER_ID_GPS_NO_FIX);
-                syshal_timer_cancel(TIMER_ID_GPS_MAXIMUM_ACQUISITION);
-
-                syshal_timer_cancel(TIMER_ID_LOG_FLUSH);
+                // Clear any current timers
+                syshal_timer_cancel_all();
 
                 // Ensure the GPS module is off
                 if (SM_GPS_STATE_ASLEEP != sm_gps_state)
@@ -3068,7 +3239,7 @@ void operational_state(void)
                 sm_gps_state = SM_GPS_STATE_ASLEEP;
 
                 // Start the log file flushing timer
-                syshal_timer_set(TIMER_ID_LOG_FLUSH, periodic, LOG_FILE_FLUSH_PERIOD_SECONDS);
+                syshal_timer_set(timer_log_flush, periodic, LOG_FILE_FLUSH_PERIOD_SECONDS);
 
                 gps_ttff_reading_logged = false; // Make sure we read/log the first TTFF reading
                 last_battery_reading = 0xFF; // Ensure the first battery reading is logged
@@ -3108,7 +3279,7 @@ void operational_state(void)
 
                             // Do we have a maximum acquisition time to adhere to?
                             if (sys_config.sys_config_gps_maximum_acquisition_time.contents.seconds)
-                                syshal_timer_set(TIMER_ID_GPS_MAXIMUM_ACQUISITION, one_shot, sys_config.sys_config_gps_maximum_acquisition_time.contents.seconds);
+                                syshal_timer_set(timer_gps_maximum_acquisition, one_shot, sys_config.sys_config_gps_maximum_acquisition_time.contents.seconds);
                         }
                         else
                         {
@@ -3130,7 +3301,7 @@ void operational_state(void)
 
                             sm_gps_state = SM_GPS_STATE_ASLEEP;
 
-                            syshal_timer_set(TIMER_ID_GPS_INTERVAL, periodic, sys_config.sys_config_gps_scheduled_acquisition_interval.contents.seconds);
+                            syshal_timer_set(timer_gps_interval, periodic, sys_config.sys_config_gps_scheduled_acquisition_interval.contents.seconds);
                         }
                         else
                         {
@@ -3161,7 +3332,7 @@ void operational_state(void)
 
                                 // Do we have a maximum acquisition time to adhere to?
                                 if (sys_config.sys_config_gps_maximum_acquisition_time.contents.seconds)
-                                    syshal_timer_set(TIMER_ID_GPS_MAXIMUM_ACQUISITION, one_shot, sys_config.sys_config_gps_maximum_acquisition_time.contents.seconds);
+                                    syshal_timer_set(timer_gps_maximum_acquisition, one_shot, sys_config.sys_config_gps_maximum_acquisition_time.contents.seconds);
                             }
                             else
                             {
@@ -3173,7 +3344,7 @@ void operational_state(void)
                             }
 
                             // Start our interval timer
-                            syshal_timer_set(TIMER_ID_GPS_INTERVAL, periodic, sys_config.sys_config_gps_scheduled_acquisition_interval.contents.seconds);
+                            syshal_timer_set(timer_gps_interval, periodic, sys_config.sys_config_gps_scheduled_acquisition_interval.contents.seconds);
                         }
                         else
                         {
@@ -3204,9 +3375,9 @@ void operational_state(void)
                     {
                         // If SYS_CONFIG_TAG_PRESSURE_SCHEDULED_ACQUISITION_INTERVAL = 0 then this is a special case meaning to always run the pressure sensor
                         if (sys_config.sys_config_pressure_scheduled_acquisition_interval.contents.seconds)
-                            syshal_timer_set(TIMER_ID_PRESSURE_INTERVAL, periodic, sys_config.sys_config_pressure_scheduled_acquisition_interval.contents.seconds);
+                            syshal_timer_set(timer_pressure_interval, periodic, sys_config.sys_config_pressure_scheduled_acquisition_interval.contents.seconds);
                         else
-                            syshal_timer_set_ms(TIMER_ID_PRESSURE_SAMPLING, periodic, round((float) 1000.0f / sys_config.sys_config_pressure_sample_rate.contents.sample_rate));
+                            syshal_timer_set_ms(timer_pressure_sampling, periodic, round((float) 1000.0f / sys_config.sys_config_pressure_sample_rate.contents.sample_rate));
                     }
                 }
 
@@ -3218,7 +3389,7 @@ void operational_state(void)
                     {
                         // If SYS_CONFIG_TAG_AXL_SCHEDULED_ACQUISITION_INTERVAL = 0 then this is a special case meaning to always run the AXL sensor
                         if (sys_config.sys_config_axl_scheduled_acquisition_interval.contents.seconds)
-                            syshal_timer_set(TIMER_ID_AXL_INTERVAL, periodic, sys_config.sys_config_axl_scheduled_acquisition_interval.contents.seconds);
+                            syshal_timer_set(timer_axl_interval, periodic, sys_config.sys_config_axl_scheduled_acquisition_interval.contents.seconds);
                         else
                             syshal_axl_wake();
                     }
@@ -3247,7 +3418,7 @@ void operational_state(void)
     syshal_axl_tick();
 
     // Determine how deep a sleep we should take
-    if (!syshal_timer_running(TIMER_ID_PRESSURE_SAMPLING))
+    if (!syshal_timer_running(timer_pressure_sampling))
     {
         if (SM_GPS_STATE_ASLEEP == sm_gps_state &&
             sys_config.sys_config_axl_scheduled_acquisition_interval.contents.seconds &&
