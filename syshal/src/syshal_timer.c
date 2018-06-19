@@ -68,7 +68,7 @@ int syshal_timer_init(timer_handle_t *handle, void (*callback)(void))
 
 int syshal_timer_term(timer_handle_t handle)
 {
-    if (handle > SYSHAL_TIMER_NUMBER_OF_TIMERS)
+    if (handle >= SYSHAL_TIMER_NUMBER_OF_TIMERS)
         return SYSHAL_TIMER_ERROR_INVALID_TIMER_HANDLE;
 
     timers_priv[handle].callback = NULL;
@@ -82,7 +82,7 @@ int syshal_timer_set(timer_handle_t handle, syshal_timer_mode_t mode, uint32_t s
 
 int syshal_timer_set_ms(timer_handle_t handle, syshal_timer_mode_t mode, uint32_t milliseconds)
 {
-    if (handle > SYSHAL_TIMER_NUMBER_OF_TIMERS)
+    if (handle >= SYSHAL_TIMER_NUMBER_OF_TIMERS)
         return SYSHAL_TIMER_ERROR_INVALID_TIMER_HANDLE;
 
     if (milliseconds >= MILLISECONDS_IN_A_DAY)
@@ -103,7 +103,7 @@ int syshal_timer_set_ms(timer_handle_t handle, syshal_timer_mode_t mode, uint32_
 
 int syshal_timer_running(timer_handle_t handle)
 {
-    if (handle > SYSHAL_TIMER_NUMBER_OF_TIMERS)
+    if (handle >= SYSHAL_TIMER_NUMBER_OF_TIMERS)
         return SYSHAL_TIMER_ERROR_INVALID_TIMER_HANDLE;
 
     return timers_priv[handle].running;
@@ -111,7 +111,7 @@ int syshal_timer_running(timer_handle_t handle)
 
 int syshal_timer_cancel(timer_handle_t handle)
 {
-    if (handle > SYSHAL_TIMER_NUMBER_OF_TIMERS)
+    if (handle >= SYSHAL_TIMER_NUMBER_OF_TIMERS)
         return SYSHAL_TIMER_ERROR_INVALID_TIMER_HANDLE;
 
 #ifndef DEBUG_DISABLED
