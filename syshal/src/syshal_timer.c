@@ -72,6 +72,7 @@ int syshal_timer_term(timer_handle_t handle)
         return SYSHAL_TIMER_ERROR_INVALID_TIMER_HANDLE;
 
     timers_priv[handle].callback = NULL;
+    timers_priv[handle].running = false;
     return SYSHAL_TIMER_NO_ERROR;
 }
 

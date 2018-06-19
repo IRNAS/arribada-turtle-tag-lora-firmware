@@ -16,14 +16,21 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <math.h>
 #include "MS5803_xBA.h"
 #include "syshal_i2c.h"
 #include "syshal_time.h"
 #include "syshal_pressure.h"
+#include "syshal_timer.h"
+#include "sys_config.h"
 #include "bsp.h"
 #include "debug.h"
 
 uint16_t MS5803_xBA_coefficient[8];
+const uint8_t resolution_priv = CMD_ADC_256; // The conversion resolution
+static timer_handle_t MS5803_sampling_timer_priv;
+
+static void MS5803_timer_callback(void);
 
 int syshal_pressure_init(void)
 {
@@ -43,7 +50,40 @@ int syshal_pressure_init(void)
         return SYSHAL_PRESSURE_ERROR_CRC_MISMATCH;
     }
 
+    // Create timer for sampling with
+    syshal_timer_init(&MS5803_sampling_timer_priv, MS5803_timer_callback);
+
     return SYSHAL_PRESSURE_NO_ERROR;
+}
+
+int syshal_pressure_term(void)
+{
+    // Delete sampling timer
+    syshal_timer_term(MS5803_sampling_timer_priv);
+
+    return SYSHAL_PRESSURE_NO_ERROR;
+}
+
+int syshal_pressure_sleep(void)
+{
+    syshal_timer_cancel(MS5803_sampling_timer_priv);
+
+    return SYSHAL_PRESSURE_NO_ERROR;
+}
+
+int syshal_pressure_wake(void)
+{
+    // Start the sampling timer
+    syshal_timer_set_ms(MS5803_sampling_timer_priv, periodic, round((float) 1000.0f / sys_config.sys_config_pressure_sample_rate.contents.sample_rate));
+
+    MS5803_timer_callback(); // Manually trigger a reading now so we get a first reading straight away
+
+    return SYSHAL_PRESSURE_NO_ERROR;
+}
+
+bool syshal_pressure_awake(void)
+{
+    return syshal_timer_running(MS5803_sampling_timer_priv);
 }
 
 uint8_t MS5803_xBA_calculate_crc4(uint16_t prom[])
@@ -122,4 +162,20 @@ uint32_t MS5803_xBA_get_adc(uint8_t measurement, uint8_t precision)
     syshal_i2c_receive(I2C_PRESSURE, MS5803_I2C_ADDRESS, (uint8_t *) &buffer[0], sizeof(buffer));
 
     return ((uint32_t)buffer[0] << 16) + ((uint32_t)buffer[1] << 8) + buffer[2];
+}
+
+void MS5803_timer_callback(void)
+{
+    syshal_pressure_callback(MS5803_get_pressure());
+}
+
+/**
+ * @brief      Pressure callback stub, should be overriden by the user application
+ *
+ * @param[in]  data  The data that was read
+ */
+__attribute__((weak)) void syshal_pressure_callback(int32_t pressure)
+{
+    UNUSED(pressure);
+    DEBUG_PR_WARN("%s Not implemented", __FUNCTION__);
 }

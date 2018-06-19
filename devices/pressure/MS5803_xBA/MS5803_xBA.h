@@ -36,10 +36,12 @@
 #define CMD_ADC_4096    (0x08) // ADC resolution=4096
 
 extern uint16_t MS5803_xBA_coefficient[8];
+extern const uint8_t resolution_priv; // The conversion resolution
 
 void MS5803_xBA_send_command(uint8_t command);
 void MS5803_xBA_read_prom(uint16_t prom[]);
 uint8_t MS5803_xBA_calculate_crc4(uint16_t prom[]);
 uint32_t MS5803_xBA_get_adc(uint8_t measurement, uint8_t precision);
+int32_t MS5803_get_pressure(void);
 
 #endif /* _MS5803_XBA_H_ */

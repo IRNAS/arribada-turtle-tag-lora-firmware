@@ -20,11 +20,18 @@
 #define _SYSHAL_PRESSURE_H_
 
 // Constants
-#define SYSHAL_PRESSURE_NO_ERROR               ( 0)
-#define SYSHAL_PRESSURE_ERROR_CRC_MISMATCH     (-1)
+#define SYSHAL_PRESSURE_NO_ERROR            ( 0)
+#define SYSHAL_PRESSURE_ERROR_CRC_MISMATCH  (-1)
+
+#include <stdbool.h>
 
 int syshal_pressure_init(void);
 int syshal_pressure_term(void);
-int32_t syshal_pressure_get(void);
+int syshal_pressure_sleep(void);
+int syshal_pressure_wake(void);
+bool syshal_pressure_awake(void);
+int syshal_pressure_tick(void);
+
+__attribute__((weak)) void syshal_pressure_callback(int32_t pressure);
 
 #endif /* _SYSHAL_PRESSURE_H_ */

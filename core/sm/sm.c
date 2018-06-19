@@ -216,7 +216,6 @@ static void timer_gps_maximum_acquisition_callback(void);
 static void timer_log_flush_callback(void);
 static void timer_switch_hysteresis_callback(void);
 static void timer_pressure_interval_callback(void);
-static void timer_pressure_sampling_callback(void);
 static void timer_pressure_maximum_acquisition_callback(void);
 static void timer_axl_interval_callback(void);
 static void timer_axl_maximum_acquisition_callback(void);
@@ -627,6 +626,20 @@ void syshal_axl_callback(syshal_axl_data_t data)
     }
 }
 
+void syshal_pressure_callback(int32_t pressure)
+{
+    if ((SM_STATE_OPERATIONAL == sm_get_state()))
+    {
+        if (sys_config.sys_config_pressure_sensor_log_enable.contents.enable)
+        {
+            logging_pressure_t pressure_data;
+            LOGGING_SET_HDR(&pressure_data, LOGGING_PRESSURE);
+            pressure_data.pressure = pressure;
+            logging_add_to_buffer((uint8_t *) &pressure_data, sizeof(pressure_data));
+        }
+    }
+}
+
 void syshal_gps_callback(syshal_gps_event_t event)
 {
     // If gps data logging is disabled
@@ -878,33 +891,14 @@ static void timer_pressure_interval_callback(void)
     syshal_timer_set(timer_pressure_maximum_acquisition, one_shot, sys_config.sys_config_pressure_maximum_acquisition_time.contents.seconds);
 
     // Start the sampling timer
-    syshal_timer_set_ms(timer_pressure_sampling, periodic, round((float) 1000.0f / sys_config.sys_config_pressure_sample_rate.contents.sample_rate));
-
-    // Manually trigger the timer now so we get a first reading straight away
-    timer_pressure_sampling_callback();
-}
-
-static void timer_pressure_sampling_callback(void)
-{
-    DEBUG_PR_TRACE("%s() called", __FUNCTION__);
-
-    if ((SM_STATE_OPERATIONAL == sm_get_state()))
-    {
-        if (sys_config.sys_config_pressure_sensor_log_enable.contents.enable)
-        {
-            logging_pressure_t pressure_data;
-            LOGGING_SET_HDR(&pressure_data, LOGGING_PRESSURE);
-            pressure_data.pressure = syshal_pressure_get();
-            logging_add_to_buffer((uint8_t *) &pressure_data, sizeof(pressure_data));
-        }
-    }
+    syshal_pressure_wake();
 }
 
 static void timer_pressure_maximum_acquisition_callback(void)
 {
     DEBUG_PR_TRACE("%s() called", __FUNCTION__);
 
-    syshal_timer_cancel(timer_pressure_sampling); // Stop the sampling timer
+    syshal_pressure_sleep(); // Stop the pressure sensor
 }
 
 static void timer_axl_interval_callback(void)
@@ -2975,7 +2969,6 @@ void boot_state(void)
     syshal_timer_init(&timer_log_flush, timer_log_flush_callback);
     syshal_timer_init(&timer_switch_hysteresis, timer_switch_hysteresis_callback);
     syshal_timer_init(&timer_pressure_interval, timer_pressure_interval_callback);
-    syshal_timer_init(&timer_pressure_sampling, timer_pressure_sampling_callback);
     syshal_timer_init(&timer_pressure_maximum_acquisition, timer_pressure_maximum_acquisition_callback);
     syshal_timer_init(&timer_axl_interval, timer_axl_interval_callback);
     syshal_timer_init(&timer_axl_maximum_acquisition, timer_axl_maximum_acquisition_callback);
@@ -3418,7 +3411,7 @@ void operational_state(void)
     syshal_axl_tick();
 
     // Determine how deep a sleep we should take
-    if (!syshal_timer_running(timer_pressure_sampling))
+    if (!syshal_pressure_awake())
     {
         if (SM_GPS_STATE_ASLEEP == sm_gps_state &&
             sys_config.sys_config_axl_scheduled_acquisition_interval.contents.seconds &&
@@ -3482,6 +3475,9 @@ void operational_state(void)
             fs_close(log_file_handle);
         log_file_handle = NULL;
 
+        syshal_axl_term();
+        syshal_pressure_term();
+
         config_if_init(CONFIG_IF_BACKEND_USB);
         sm_set_state(SM_STATE_STANDBY_BATTERY_CHARGING);
         return;
@@ -3515,6 +3511,9 @@ void operational_state(void)
                     if (log_file_handle)
                         fs_close(log_file_handle);
                     log_file_handle = NULL;
+
+                    syshal_axl_term();
+                    syshal_pressure_term();
 
                     sm_set_state(SM_STATE_STANDBY_BATTERY_LEVEL_LOW);
                     return;

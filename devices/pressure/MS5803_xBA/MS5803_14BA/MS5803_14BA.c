@@ -19,14 +19,9 @@
 #include <math.h>
 #include "MS5803_xBA.h"
 #include "syshal_i2c.h"
-#include "syshal_pressure.h"
-#include "syshal_time.h"
-#include "bsp.h"
-
-static const uint8_t resolution_priv = CMD_ADC_256; // The conversion resolution
 
 // See datasheet for details
-int32_t syshal_pressure_get(void)
+int32_t MS5803_get_pressure(void)
 {
     // Retrieve ADC result
     int32_t D1 = MS5803_xBA_get_adc(CMD_ADC_D1, resolution_priv);

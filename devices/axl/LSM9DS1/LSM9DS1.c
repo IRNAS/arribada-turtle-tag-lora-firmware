@@ -163,6 +163,14 @@ int syshal_axl_init(void)
     return SYSHAL_AXL_NO_ERROR;
 }
 
+int syshal_axl_term(void)
+{
+    if (device_awake)
+        syshal_axl_sleep();
+
+    return SYSHAL_AXL_NO_ERROR;
+}
+
 /**
  * @brief      Sleeps the accelerometer, halting reading and lowering power
  *             consumption
@@ -197,7 +205,7 @@ bool syshal_axl_awake(void)
     return device_awake;
 }
 
-void syshal_axl_tick(void)
+int syshal_axl_tick(void)
 {
     if (new_data_pending)
     {
@@ -214,6 +222,8 @@ void syshal_axl_tick(void)
         }
         new_data_pending = false;
     }
+
+    return SYSHAL_AXL_NO_ERROR;
 }
 
 /**
