@@ -148,7 +148,7 @@ typedef struct
 extern const UART_InitTypeDefAndInst_t UART_Inits[UART_TOTAL_NUMBER];
 
 ///////////////////////////////// USB definitions /////////////////////////////////
-#define USB_RX_BUF_SIZE 512
+
 
 //////////////////////////////// FLASH definitions ////////////////////////////////
 #define FS_DEVICE (0)

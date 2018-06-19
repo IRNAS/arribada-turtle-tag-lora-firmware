@@ -41,9 +41,6 @@ static int hal_error_map[] =
 
 static USBD_HandleTypeDef hUsbDeviceFS; // USB Device Core handle declaration
 
-static ring_buffer_t rx_buffer;
-static uint8_t rx_data[USB_RX_BUF_SIZE];
-
 /**
  * @brief      Initialise the USB instance
  *
@@ -52,9 +49,6 @@ static uint8_t rx_data[USB_RX_BUF_SIZE];
 int syshal_usb_init(void)
 {
     __HAL_RCC_GPIOA_CLK_ENABLE(); // Enable GPIO pins for USB
-
-    // Setup rx buffer
-    rb_init(&rx_buffer, USB_RX_BUF_SIZE, &rx_data[0]);
 
     USBD_StatusTypeDef retVal = USBD_OK;
 
