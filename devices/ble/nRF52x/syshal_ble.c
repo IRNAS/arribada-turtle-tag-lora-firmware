@@ -22,17 +22,22 @@
 #include "syshal_ble.h"
 #include "syshal_spi.h"
 #include "nRF52x_regs.h"
+#include "syshal_time.h"
+#include "bsp.h"
+#include "syshal_gpio.h"
+#include "debug.h"
 
 /* Macros */
 
 #define MIN(x, y)  (x) < (y) ? (x) : (y)
+#define SPI_BUS_DELAY_MS (1)
 
 /* Private variables */
 
 static uint8_t      int_enable = 0x00;
 static uint8_t      xfer_buffer[SYSHAL_BLE_MAX_BUFFER_SIZE + 1];
 static uint32_t     spi_device;
-static uint8_t     *rx_buffer_pending = NULL;
+static uint8_t   *  rx_buffer_pending = NULL;
 static uint16_t     rx_buffer_pending_size = 0;
 static uint16_t     tx_buffer_pending_size = 0;
 static bool         gatt_connected = false;
@@ -40,22 +45,63 @@ static bool         fw_update_pending = false;
 
 /* Private functions */
 
-static int read_register(uint16_t address, uint8_t *data, uint16_t size)
+static int read_register(uint16_t address, uint8_t * data, uint16_t size)
 {
+    int ret;
+
+    // Request a read of len, at given addr as follows:
+    // Byte 0 = address
+    // Byte 1 = len[1]
+    // Byte 2 = len[0]
+
     memset(xfer_buffer, 0, sizeof(xfer_buffer));
     xfer_buffer[0] = address;
-    if (syshal_spi_transfer(spi_device, xfer_buffer, xfer_buffer, size + 1))
+
+    xfer_buffer[1] = (size >> 8) & 0x00FF;
+    xfer_buffer[2] = size & 0x00FF;
+
+    DEBUG_PR_TRACE("Transfering to nRF52: %02X %02X %02X", xfer_buffer[0], xfer_buffer[1], xfer_buffer[2]);
+
+    syshal_gpio_set_output_low(GPIO_SPI1_CS_BT);
+    ret = syshal_spi_transfer(spi_device, xfer_buffer, xfer_buffer, 3);
+    syshal_gpio_set_output_high(GPIO_SPI1_CS_BT);
+
+    if (ret)
         return SYSHAL_BLE_ERROR_COMMS;
-    memcpy(data, &xfer_buffer[1], size);
+
+    // Wait for the BLE device to populate it's read buffer
+    syshal_time_delay_ms(SPI_BUS_DELAY_MS);
+
+    syshal_gpio_set_output_low(GPIO_SPI1_CS_BT);
+    ret = syshal_spi_transfer(spi_device, xfer_buffer, xfer_buffer, size);
+    syshal_gpio_set_output_high(GPIO_SPI1_CS_BT);
+
+    if (ret)
+        return SYSHAL_BLE_ERROR_COMMS;
+
+    DEBUG_PR_TRACE("Received from nRF52");
+    for (uint32_t i = 0; i < size; ++i)
+        printf("%02X ", xfer_buffer[i]);
+    printf("\r\n");
+
+    memcpy(data, &xfer_buffer[0], size);
     return SYSHAL_BLE_NO_ERROR;
 }
 
-static int write_register(uint16_t address, uint8_t *data, uint16_t size)
+static int write_register(uint16_t address, uint8_t * data, uint16_t size)
 {
+    int ret;
+
     xfer_buffer[0] = address | NRF52_SPI_WRITE_NOT_READ_ADDR;
     memcpy(&xfer_buffer[1], data, size);
-    if (syshal_spi_transfer(spi_device, xfer_buffer, xfer_buffer, size + 1))
+
+    syshal_gpio_set_output_low(GPIO_SPI1_CS_BT);
+    ret = syshal_spi_transfer(spi_device, xfer_buffer, xfer_buffer, size + 1);
+    syshal_gpio_set_output_high(GPIO_SPI1_CS_BT);
+
+    if (ret)
         return SYSHAL_BLE_ERROR_COMMS;
+
     return SYSHAL_BLE_NO_ERROR;
 }
 
@@ -64,14 +110,16 @@ static int write_register(uint16_t address, uint8_t *data, uint16_t size)
 int syshal_ble_init(uint32_t comms_device)
 {
     spi_device = comms_device;
-    uint16_t app_version;
+    uint32_t version;
 
-    if (syshal_spi_init(comms_device))
-        return SYSHAL_BLE_ERROR_DEVICE;
+    syshal_gpio_init(GPIO_SPI1_CS_BT);
+    syshal_gpio_set_output_high(GPIO_SPI1_CS_BT);
 
-    /* Read version register to make sure the device is present */
-    if (read_register(NRF52_REG_ADDR_APP_VERSION, (uint8_t *)&app_version, sizeof(app_version)))
+    /* Read version to make sure the device is present */
+    if (syshal_ble_get_version(&version))
         return SYSHAL_BLE_ERROR_NOT_DETECTED;
+
+    DEBUG_PR_TRACE("NRF52 version = %08lX", version);
 
     /* Enable data port related interrupts */
     int_enable = NRF52_INT_TX_DATA_SENT | NRF52_INT_RX_DATA_READY;
@@ -82,9 +130,6 @@ int syshal_ble_init(uint32_t comms_device)
 
 int syshal_ble_term(void)
 {
-    if (syshal_spi_term(spi_device))
-        return SYSHAL_BLE_ERROR_DEVICE;
-
     return SYSHAL_BLE_NO_ERROR;
 }
 
@@ -105,7 +150,7 @@ int syshal_ble_set_mode(syshal_ble_mode_t mode)
     return ret;
 }
 
-int syshal_ble_get_mode(syshal_ble_mode_t *mode)
+int syshal_ble_get_mode(syshal_ble_mode_t * mode)
 {
     uint8_t rd_mode;
     int ret;
@@ -116,14 +161,14 @@ int syshal_ble_get_mode(syshal_ble_mode_t *mode)
     return ret;
 }
 
-int syshal_ble_get_version(uint32_t *version)
+int syshal_ble_get_version(uint32_t * version)
 {
     int ret;
     uint16_t app_version, soft_dev_version;
 
     ret = read_register(NRF52_REG_ADDR_APP_VERSION, (uint8_t *)&app_version, sizeof(app_version));
     ret |= read_register(NRF52_REG_ADDR_SOFT_DEV_VERSION, (uint8_t *)&soft_dev_version, sizeof(soft_dev_version));
-    *version = ((uint32_t)soft_dev_version << 16) | app_version;
+    *version = ((uint32_t) app_version << 16) | soft_dev_version;
 
     return ret;
 }
@@ -171,7 +216,7 @@ int syshal_ble_reset(void)
     return write_register(NRF52_REG_ADDR_MODE, &mode, sizeof(mode));
 }
 
-int syshal_ble_send(uint8_t *buffer, uint32_t size)
+int syshal_ble_send(uint8_t * buffer, uint32_t size)
 {
     int ret;
 
@@ -192,7 +237,7 @@ int syshal_ble_send(uint8_t *buffer, uint32_t size)
     return ret;
 }
 
-int syshal_ble_receive(uint8_t *buffer, uint32_t size)
+int syshal_ble_receive(uint8_t * buffer, uint32_t size)
 {
     /* Don't allow a receive if there is already one pending */
     if (rx_buffer_pending)
@@ -220,7 +265,8 @@ int syshal_ble_tick(void)
     if ((int_status & NRF52_INT_GATT_CONNECTED) && !gatt_connected)
     {
         gatt_connected = true;
-        syshal_ble_event_t event = {
+        syshal_ble_event_t event =
+        {
             .error = SYSHAL_BLE_NO_ERROR,
             .event_id = SYSHAL_BLE_EVENT_CONNECTED
         };
@@ -229,7 +275,8 @@ int syshal_ble_tick(void)
     else if ((int_status & NRF52_INT_GATT_CONNECTED) == 0 && gatt_connected)
     {
         gatt_connected = false;
-        syshal_ble_event_t event = {
+        syshal_ble_event_t event =
+        {
             .error = SYSHAL_BLE_NO_ERROR,
             .event_id = SYSHAL_BLE_EVENT_DISCONNECTED
         };
@@ -245,8 +292,9 @@ int syshal_ble_tick(void)
 
         /* This will abort any pending FW update */
         fw_update_pending = false;
-        syshal_ble_event_t event = {
-            .error = (uint32_t)-error_indication,
+        syshal_ble_event_t event =
+        {
+            .error = (uint32_t) - error_indication,
             .event_id = SYSHAL_BLE_EVENT_ERROR_INDICATION
         };
         syshal_ble_event_handler(&event);
@@ -255,7 +303,8 @@ int syshal_ble_tick(void)
     if ((int_status & NRF52_INT_FLASH_PROGRAMMING_DONE) && fw_update_pending)
     {
         fw_update_pending = false;
-        syshal_ble_event_t event = {
+        syshal_ble_event_t event =
+        {
             .error = SYSHAL_BLE_NO_ERROR,
             .event_id = SYSHAL_BLE_EVENT_FW_UPGRADE_COMPLETE
         };
@@ -280,7 +329,8 @@ int syshal_ble_tick(void)
             ret = read_register(NRF52_REG_ADDR_RX_DATA_PORT, rx_buffer_pending, actual_length);
             if (ret)
                 goto done;
-            syshal_ble_event_t event = {
+            syshal_ble_event_t event =
+            {
                 .error = SYSHAL_BLE_NO_ERROR,
                 .event_id = SYSHAL_BLE_EVENT_RECEIVE_COMPLETE,
                 .receive_complete = {
@@ -306,7 +356,8 @@ int syshal_ble_tick(void)
             tx_buffer_pending_size -= length;
 
             /* Signal send complete */
-            syshal_ble_event_t event = {
+            syshal_ble_event_t event =
+            {
                 .error = SYSHAL_BLE_NO_ERROR,
                 .event_id = SYSHAL_BLE_EVENT_SEND_COMPLETE,
                 .send_complete = {
@@ -328,7 +379,7 @@ done:
     return ret;
 }
 
-__attribute__((weak)) void syshal_ble_event_handler(syshal_ble_event_t *event)
+__attribute__((weak)) void syshal_ble_event_handler(syshal_ble_event_t * event)
 {
     (void)event;
 }

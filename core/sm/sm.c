@@ -45,6 +45,7 @@
 #include "syshal_timer.h"
 #include "syshal_uart.h"
 #include "syshal_usb.h"
+#include "syshal_ble.h"
 #include "version.h"
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2089,7 +2090,7 @@ static void status_req(cmd_t * req, uint16_t size)
 
     resp->p.cmd_status_resp.error_code = CMD_NO_ERROR;
     resp->p.cmd_status_resp.stm_firmware_version = STM32_FIRMWARE_VERSION;
-    resp->p.cmd_status_resp.ble_firmware_version = 0;
+    syshal_ble_get_version(&resp->p.cmd_status_resp.ble_firmware_version); // Get BLE version via spi
     resp->p.cmd_status_resp.configuration_format_version = SYS_CONFIG_FORMAT_VERSION;
 
     buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_status_resp_t));
@@ -2973,7 +2974,7 @@ void boot_state(void)
     syshal_timer_init(&timer_axl_interval, timer_axl_interval_callback);
     syshal_timer_init(&timer_axl_maximum_acquisition, timer_axl_maximum_acquisition_callback);
 
-//    syshal_spi_init(SPI_1);
+    syshal_spi_init(SPI_1);
     syshal_spi_init(SPI_2);
 
     syshal_i2c_init(I2C_1);
