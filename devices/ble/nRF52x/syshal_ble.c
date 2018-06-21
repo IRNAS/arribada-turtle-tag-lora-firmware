@@ -40,6 +40,8 @@ static uint32_t     spi_device;
 static uint8_t   *  rx_buffer_pending = NULL;
 static uint16_t     rx_buffer_pending_size = 0;
 static uint16_t     tx_buffer_pending_size = 0;
+static uint16_t     tx_fifo_size = 0;
+static uint16_t     rx_fifo_size = 0;
 static bool         gatt_connected = false;
 static bool         fw_update_pending = false;
 
@@ -118,8 +120,17 @@ int syshal_ble_init(uint32_t comms_device)
     /* Read version to make sure the device is present */
     if (syshal_ble_get_version(&version))
         return SYSHAL_BLE_ERROR_NOT_DETECTED;
-
     DEBUG_PR_TRACE("NRF52 version = %08lX", version);
+
+    /* Get the TX FIFO size */
+    if (read_register(NRF52_REG_ADDR_TX_FIFO_SIZE, (uint8_t *)&tx_fifo_size, sizeof(tx_fifo_size)))
+        return SYSHAL_BLE_ERROR_NOT_DETECTED;
+    DEBUG_PR_TRACE("NRF52 TX FIFO Size = %u bytes", tx_fifo_size);
+
+    /* Get the RX FIFO size */
+    if (read_register(NRF52_REG_ADDR_RX_FIFO_SIZE, (uint8_t *)&rx_fifo_size, sizeof(rx_fifo_size)))
+        return SYSHAL_BLE_ERROR_NOT_DETECTED;
+    DEBUG_PR_TRACE("NRF52 RX FIFO Size = %u bytes", rx_fifo_size);
 
     /* Enable data port related interrupts */
     int_enable = NRF52_INT_TX_DATA_SENT | NRF52_INT_RX_DATA_READY;
