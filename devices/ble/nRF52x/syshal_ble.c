@@ -125,11 +125,19 @@ int syshal_ble_init(uint32_t comms_device)
     int_enable = NRF52_INT_TX_DATA_SENT | NRF52_INT_RX_DATA_READY;
     int ret = write_register(NRF52_REG_ADDR_INT_ENABLE, &int_enable, sizeof(int_enable));
 
+    /* Start the nRF52 GATT Server */
+    uint8_t mode = NRF52_MODE_GATT_SERVER;
+    write_register(NRF52_REG_ADDR_MODE, &mode, sizeof(mode));
+
     return ret;
 }
 
 int syshal_ble_term(void)
 {
+    /* Deep sleep the nRF52 device */
+    uint8_t mode = NRF52_MODE_DEEP_SLEEP;
+    write_register(NRF52_REG_ADDR_MODE, &mode, sizeof(mode));
+
     return SYSHAL_BLE_NO_ERROR;
 }
 
@@ -173,21 +181,6 @@ int syshal_ble_get_version(uint32_t * version)
     return ret;
 }
 
-int syshal_ble_set_own_uuid(uint8_t uuid[SYSHAL_BLE_UUID_SIZE])
-{
-    return write_register(NRF52_REG_ADDR_OWN_UUID, uuid, SYSHAL_BLE_UUID_SIZE);
-}
-
-int syshal_ble_get_target_uuid(uint8_t uuid[SYSHAL_BLE_UUID_SIZE])
-{
-    return read_register(NRF52_REG_ADDR_TARGET_UUID, uuid, SYSHAL_BLE_UUID_SIZE);
-}
-
-int syshal_ble_set_target_uuid(uint8_t uuid[SYSHAL_BLE_UUID_SIZE])
-{
-    return write_register(NRF52_REG_ADDR_TARGET_UUID, uuid, SYSHAL_BLE_UUID_SIZE);
-}
-
 int syshal_ble_config_fw_upgrade(syshal_ble_fw_upgrade_type_t type, uint32_t size, uint32_t crc)
 {
     int ret;
@@ -195,19 +188,6 @@ int syshal_ble_config_fw_upgrade(syshal_ble_fw_upgrade_type_t type, uint32_t siz
     ret |= write_register(NRF52_REG_ADDR_FW_UPGRADE_TYPE, (uint8_t *)&type, sizeof(uint8_t));
     ret |= write_register(NRF52_REG_ADDR_FW_UPGRADE_CRC, (uint8_t *)&crc, sizeof(crc));
     return ret;
-}
-
-int syshal_ble_config_beacon(uint16_t interval_ms, uint8_t beacon_payload[SYSHAL_BLE_ADVERTISING_SIZE])
-{
-    int ret;
-    ret = write_register(NRF52_REG_ADDR_BEACON_INTERVAL, (uint8_t *)&interval_ms, sizeof(interval_ms));
-    ret |= write_register(NRF52_REG_ADDR_BEACON_PAYLOAD, beacon_payload, SYSHAL_BLE_ADVERTISING_SIZE);
-    return ret;
-}
-
-int syshal_ble_config_scan_response(uint8_t scan_payload[SYSHAL_BLE_ADVERTISING_SIZE])
-{
-    return write_register(NRF52_REG_ADDR_SCAN_RESPONSE, scan_payload, SYSHAL_BLE_ADVERTISING_SIZE);
 }
 
 int syshal_ble_reset(void)

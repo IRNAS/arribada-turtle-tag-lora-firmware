@@ -56,9 +56,9 @@ typedef struct __attribute__((__packed__))
 {
     logging_hdr_t h;
     uint32_t iTOW;   // Time since navigation epoch in ms
-    uint32_t lon;    // Longitude (10^-7)
-    uint32_t lat;    // Latitude (10^-7)
-    uint32_t height; // Height in mm
+    int32_t lon;     // Longitude (10^-7)
+    int32_t lat;     // Latitude (10^-7)
+    int32_t height;  // Height in mm
 } logging_gps_position_t;
 
 typedef struct __attribute__((__packed__))

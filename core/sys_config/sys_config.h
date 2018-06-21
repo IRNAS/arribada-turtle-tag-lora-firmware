@@ -26,14 +26,14 @@
 #define SYS_CONFIG_ERROR_NO_MORE_TAGS     (-3)
 #define SYS_CONFIG_ERROR_TAG_NOT_SET      (-4)
 
-#define SYS_CONFIG_FORMAT_VERSION (2) // This should be incremented when/if the sys_config layout is modified
+#define SYS_CONFIG_FORMAT_VERSION (3) // This should be incremented when/if the sys_config layout is modified
 
 #define SYS_CONFIG_MAX_DATA_SIZE (60) // Max size the configuration tag's data can be in bytes
 
 #define SYS_CONFIG_TAG_ID_SIZE (sizeof(uint16_t))
 #define SYS_CONFIG_TAG_DATA_SIZE(tag_type) (sizeof(((tag_type *)0)->contents)) // Size of data in tag. We exclude the set member
 
-#define SYS_CONFIG_TAG_TOTAL_NUMBER (45) // Number of configuration tags - WARN: This has to be manually updated
+#define SYS_CONFIG_TAG_TOTAL_NUMBER (50) // Number of configuration tags - WARN: This has to be manually updated
 
 #define SYS_CONFIG_GPS_TRIGGER_MODE_SWITCH_TRIGGERED (0)
 #define SYS_CONFIG_GPS_TRIGGER_MODE_SCHEDULED        (1)
@@ -52,6 +52,13 @@
 #define SYS_CONFIG_TEMP_MODE_TRIGGER_BETWEEN (2)
 #define SYS_CONFIG_TEMP_MODE_TRIGGER_ABOVE   (3)
 
+#define SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_REED_SWITCH    (1 << 0)
+#define SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_REED_SCHEDULED (1 << 1)
+#define SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_REED_GEOFENCE  (1 << 2)
+
+#define SYS_CONFIG_TAG_BLUETOOTH_PHY_MODE_1_MBPS  (0)
+#define SYS_CONFIG_TAG_BLUETOOTH_PHY_MODE_2_MBPS  (1)
+
 enum
 {
     // GPS
@@ -62,6 +69,7 @@ enum
     SYS_CONFIG_TAG_GPS_SCHEDULED_ACQUISITION_INTERVAL,       // Interval in seconds between GPS acquisition attempts. Setting to zero means always on
     SYS_CONFIG_TAG_GPS_MAXIMUM_ACQUISITION_TIME,             // Maximum time period, in seconds, to allow for GPS fixes. Setting to zero means no upper limit
     SYS_CONFIG_TAG_GPS_SCHEDULED_ACQUISITION_NO_FIX_TIMEOUT, // When triggered by a scheduled acquisition, this is the timeout period in seconds during acquisition after which to shutdown the GPS if no fix is found
+    SYS_CONFIG_TAG_GPS_LAST_KNOWN_POSITION,                  // Shall contain the last fix position before provisioning mode was entered. If no fix was found since powered on, then the field shall be set to all 0x00 bytes
 
     // Saltwater Switch
     SYS_CONFIG_SALTWATER_SWITCH_LOG_ENABLE = 0x0800, // Controls whether switch change states should be logged
@@ -109,15 +117,19 @@ enum
     SYS_CONFIG_TAG_SYSTEM_DEVICE_IDENTIFIER = 0x0400, // Unique device identifier.
 
     // Bluetooth
-    SYS_CONFIG_TAG_BLUETOOTH_UUID = 0x0500,                      // The UUID should uniquely identify the bluetooth function.
-    SYS_CONFIG_TAG_BLUETOOTH_BEACON_ENABLE,                      // Beacon function is enabled.
-    SYS_CONFIG_TAG_BLUETOOTH_BEACON_GEO_FENCE_TRIGGER_LOCATION,  // Beacon function is only enabled at the specified geo-fence location.
-    SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_INTERVAL,        // The beacon advertising interval expressed in milliseconds.
-    SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_CONFIGURATION,   // TBD - for future expansion of the advertising payload to convey in the beacon.
+    SYS_CONFIG_TAG_BLUETOOTH_DEVICE_ADDRESS = 0x0500,        // The device address is a 6 byte address that uniquely identifies a bluetooth device
+    SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL,                // Control what triggers the bluetooth de/activation
+    SYS_CONFIG_TAG_BLUETOOTH_SCHEDULED_INTERVAL,             // Bluetooth shall be enabled periodically every N seconds as specified
+    SYS_CONFIG_TAG_BLUETOOTH_SCHEDULED_DURATION,             // Bluetooth shall remain on for the specified number of seconds when waiting for a connection to be made. If no connection is made during the scheduled duration then bluetooth shall be switched off
+    SYS_CONFIG_TAG_BLUETOOTH_ADVERTISING_INTERVAL,           // The bluetooth advertising interval expressed in units of 0.625 ms
+    SYS_CONFIG_TAG_BLUETOOTH_CONNECTION_INTERVAL,            // The bluetooth connection interval expressed in units of 1.25 ms
+    SYS_CONFIG_TAG_BLUETOOTH_CONNECTION_INACTIVITY_TIMEOUT,  // When a bluetooth connection is established if no activity occurs on the connection then the connection shall be forcibly terminated after the specified of inactivity period in seconds
+    SYS_CONFIG_TAG_BLUETOOTH_PHY_MODE,                       // The PHY mode to use for GATT connections
+    SYS_CONFIG_TAG_BLUETOOTH_LOG_ENABLE,                     // Log all bluetooth events if enabled
 
     // Battery
-    SYS_CONFIG_BATTERY_LOG_ENABLE = 0x0900, // The battery charge state shall be enabled for logging.
-    SYS_CONFIG_BATTERY_LOW_THRESHOLD        // If set, the device will enter the low battery state and preserve any data when the battery charge goes below this threshold
+    SYS_CONFIG_TAG_BATTERY_LOG_ENABLE = 0x0900, // The battery charge state shall be enabled for logging.
+    SYS_CONFIG_TAG_BATTERY_LOW_THRESHOLD        // If set, the device will enter the low battery state and preserve any data when the battery charge goes below this threshold
 };
 
 typedef struct __attribute__((__packed__))
@@ -187,6 +199,18 @@ typedef struct __attribute__((__packed__))
         uint16_t seconds;
     } contents;
 } sys_config_gps_scheduled_acquisition_no_fix_timeout_t;
+
+typedef struct __attribute__((__packed__))
+{
+    sys_config_hdr_t hdr;
+    struct __attribute__((__packed__))
+    {
+        uint32_t iTOW;   // Time since navigation epoch in ms
+        int32_t lon;     // Longitude (10^-7)
+        int32_t lat;     // Latitude (10^-7)
+        int32_t height;  // Height in mm
+    } contents;
+} sys_config_gps_last_known_position_t;
 
 typedef struct __attribute__((__packed__))
 {
@@ -477,27 +501,36 @@ typedef struct __attribute__((__packed__))
     sys_config_hdr_t hdr;
     struct __attribute__((__packed__))
     {
-        uint8_t uuid[16];
+        uint8_t address[6];
     } contents;
-} sys_config_bluetooth_uuid_t;
+} sys_config_tag_bluetooth_device_address_t;
 
 typedef struct __attribute__((__packed__))
 {
     sys_config_hdr_t hdr;
     struct __attribute__((__packed__))
     {
-        uint8_t enable;
+        uint8_t flags;
     } contents;
-} sys_config_bluetooth_beacon_enable_t;
+} sys_config_tag_bluetooth_trigger_control_t;
 
 typedef struct __attribute__((__packed__))
 {
     sys_config_hdr_t hdr;
     struct __attribute__((__packed__))
     {
-        uint8_t location[12];
+        uint16_t seconds;
     } contents;
-} sys_config_bluetooth_beacon_geo_fence_trigger_location_t;
+} sys_config_tag_bluetooth_scheduled_interval_t;
+
+typedef struct __attribute__((__packed__))
+{
+    sys_config_hdr_t hdr;
+    struct __attribute__((__packed__))
+    {
+        uint16_t seconds;
+    } contents;
+} sys_config_tag_bluetooth_scheduled_duration_t;
 
 typedef struct __attribute__((__packed__))
 {
@@ -506,16 +539,43 @@ typedef struct __attribute__((__packed__))
     {
         uint16_t interval;
     } contents;
-} sys_config_bluetooth_beacon_advertising_interval_t;
+} sys_config_tag_bluetooth_advertising_interval_t;
 
 typedef struct __attribute__((__packed__))
 {
     sys_config_hdr_t hdr;
     struct __attribute__((__packed__))
     {
-        uint8_t configuration;
+        uint16_t interval;
     } contents;
-} sys_config_bluetooth_beacon_advertising_configuration_t;
+} sys_config_tag_bluetooth_connection_interval_t;
+
+typedef struct __attribute__((__packed__))
+{
+    sys_config_hdr_t hdr;
+    struct __attribute__((__packed__))
+    {
+        uint16_t seconds;
+    } contents;
+} sys_config_tag_bluetooth_connection_inactivity_timeout_t;
+
+typedef struct __attribute__((__packed__))
+{
+    sys_config_hdr_t hdr;
+    struct __attribute__((__packed__))
+    {
+        uint8_t mode;
+    } contents;
+} sys_config_tag_bluetooth_phy_mode_t;
+
+typedef struct __attribute__((__packed__))
+{
+    sys_config_hdr_t hdr;
+    struct __attribute__((__packed__))
+    {
+        uint8_t enable;
+    } contents;
+} sys_config_tag_bluetooth_log_enable_t;
 
 typedef struct __attribute__((__packed__))
 {
@@ -546,6 +606,7 @@ typedef struct __attribute__((__packed__))
     sys_config_gps_scheduled_acquisition_interval_t             sys_config_gps_scheduled_acquisition_interval;
     sys_config_gps_maximum_acquisition_time_t                   sys_config_gps_maximum_acquisition_time;
     sys_config_gps_scheduled_acquisition_no_fix_timeout_t       sys_config_gps_scheduled_acquisition_no_fix_timeout;
+    sys_config_gps_last_known_position_t                        sys_config_gps_last_known_position;
     sys_config_saltwater_switch_log_enable_t                    sys_config_saltwater_switch_log_enable;
     sys_config_saltwater_switch_hysteresis_period_t             sys_config_saltwater_switch_hysteresis_period;
     sys_config_rtc_sync_to_gps_enable_t                         sys_config_rtc_sync_to_gps_enable;
@@ -576,11 +637,15 @@ typedef struct __attribute__((__packed__))
     sys_config_temp_sensor_low_threshold_t                      sys_config_temp_sensor_low_threshold;
     sys_config_temp_sensor_high_threshold_t                     sys_config_temp_sensor_high_threshold;
     sys_config_temp_sensor_mode_t                               sys_config_temp_sensor_mode;
-    sys_config_bluetooth_uuid_t                                 sys_config_bluetooth_uuid;
-    sys_config_bluetooth_beacon_enable_t                        sys_config_bluetooth_beacon_enable;
-    sys_config_bluetooth_beacon_geo_fence_trigger_location_t    sys_config_bluetooth_beacon_geo_fence_trigger_location;
-    sys_config_bluetooth_beacon_advertising_interval_t          sys_config_bluetooth_beacon_advertising_interval;
-    sys_config_bluetooth_beacon_advertising_configuration_t     sys_config_bluetooth_beacon_advertising_configuration;
+    sys_config_tag_bluetooth_device_address_t                   sys_config_tag_bluetooth_device_address;
+    sys_config_tag_bluetooth_trigger_control_t                  sys_config_tag_bluetooth_trigger_control;
+    sys_config_tag_bluetooth_scheduled_interval_t               sys_config_tag_bluetooth_scheduled_interval;
+    sys_config_tag_bluetooth_scheduled_duration_t               sys_config_tag_bluetooth_scheduled_duration;
+    sys_config_tag_bluetooth_advertising_interval_t             sys_config_tag_bluetooth_advertising_interval;
+    sys_config_tag_bluetooth_connection_interval_t              sys_config_tag_bluetooth_connection_interval;
+    sys_config_tag_bluetooth_connection_inactivity_timeout_t    sys_config_tag_bluetooth_connection_inactivity_timeout;
+    sys_config_tag_bluetooth_phy_mode_t                         sys_config_tag_bluetooth_phy_mode;
+    sys_config_tag_bluetooth_log_enable_t                       sys_config_tag_bluetooth_log_enable;
     sys_config_battery_log_enable_t                             sys_config_battery_log_enable;
     sys_config_battery_low_threshold_t                          sys_config_battery_low_threshold;
 } sys_config_t;

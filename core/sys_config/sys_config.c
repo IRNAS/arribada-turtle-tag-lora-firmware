@@ -33,6 +33,7 @@ static const uint16_t sys_config_lookup_priv[SYS_CONFIG_TAG_TOTAL_NUMBER] =
     SYS_CONFIG_TAG_GPS_SCHEDULED_ACQUISITION_INTERVAL,
     SYS_CONFIG_TAG_GPS_MAXIMUM_ACQUISITION_TIME,
     SYS_CONFIG_TAG_GPS_SCHEDULED_ACQUISITION_NO_FIX_TIMEOUT,
+    SYS_CONFIG_TAG_GPS_LAST_KNOWN_POSITION,
     SYS_CONFIG_SALTWATER_SWITCH_LOG_ENABLE,
     SYS_CONFIG_SALTWATER_SWITCH_HYSTERESIS_PERIOD,
     SYS_CONFIG_TAG_RTC_SYNC_TO_GPS_ENABLE,
@@ -64,13 +65,17 @@ static const uint16_t sys_config_lookup_priv[SYS_CONFIG_TAG_TOTAL_NUMBER] =
     SYS_CONFIG_TAG_TEMP_SENSOR_HIGH_THRESHOLD,
     SYS_CONFIG_TAG_TEMP_SENSOR_MODE,
     SYS_CONFIG_TAG_SYSTEM_DEVICE_IDENTIFIER,
-    SYS_CONFIG_TAG_BLUETOOTH_UUID,
-    SYS_CONFIG_TAG_BLUETOOTH_BEACON_ENABLE,
-    SYS_CONFIG_TAG_BLUETOOTH_BEACON_GEO_FENCE_TRIGGER_LOCATION,
-    SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_INTERVAL,
-    SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_CONFIGURATION,
-    SYS_CONFIG_BATTERY_LOG_ENABLE,
-    SYS_CONFIG_BATTERY_LOW_THRESHOLD,
+    SYS_CONFIG_TAG_BLUETOOTH_DEVICE_ADDRESS,
+    SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL,
+    SYS_CONFIG_TAG_BLUETOOTH_SCHEDULED_INTERVAL,
+    SYS_CONFIG_TAG_BLUETOOTH_SCHEDULED_DURATION,
+    SYS_CONFIG_TAG_BLUETOOTH_ADVERTISING_INTERVAL,
+    SYS_CONFIG_TAG_BLUETOOTH_CONNECTION_INTERVAL,
+    SYS_CONFIG_TAG_BLUETOOTH_CONNECTION_INACTIVITY_TIMEOUT,
+    SYS_CONFIG_TAG_BLUETOOTH_PHY_MODE,
+    SYS_CONFIG_TAG_BLUETOOTH_LOG_ENABLE,
+    SYS_CONFIG_TAG_BATTERY_LOG_ENABLE,
+    SYS_CONFIG_TAG_BATTERY_LOW_THRESHOLD,
 };
 
 /**
@@ -121,6 +126,11 @@ int sys_config_get_data_ptr_priv(uint16_t tag, void ** data)
         case SYS_CONFIG_TAG_GPS_SCHEDULED_ACQUISITION_NO_FIX_TIMEOUT:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_gps_scheduled_acquisition_no_fix_timeout_t);
             *data = &sys_config.sys_config_gps_scheduled_acquisition_no_fix_timeout;
+            break;
+
+        case SYS_CONFIG_TAG_GPS_LAST_KNOWN_POSITION:
+            len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_gps_last_known_position_t);
+            *data = &sys_config.sys_config_gps_last_known_position;
             break;
 
         case SYS_CONFIG_SALTWATER_SWITCH_LOG_ENABLE:
@@ -278,37 +288,57 @@ int sys_config_get_data_ptr_priv(uint16_t tag, void ** data)
             *data = &sys_config.sys_config_system_device_identifier;
             break;
 
-        case SYS_CONFIG_TAG_BLUETOOTH_UUID:
-            len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_bluetooth_uuid_t);
-            *data = &sys_config.sys_config_bluetooth_uuid;
+        case SYS_CONFIG_TAG_BLUETOOTH_DEVICE_ADDRESS:
+            len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_tag_bluetooth_device_address_t);
+            *data = &sys_config.sys_config_tag_bluetooth_device_address;
             break;
 
-        case SYS_CONFIG_TAG_BLUETOOTH_BEACON_ENABLE:
-            len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_bluetooth_beacon_enable_t);
-            *data = &sys_config.sys_config_bluetooth_beacon_enable;
+        case SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL:
+            len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_tag_bluetooth_trigger_control_t);
+            *data = &sys_config.sys_config_tag_bluetooth_trigger_control;
             break;
 
-        case SYS_CONFIG_TAG_BLUETOOTH_BEACON_GEO_FENCE_TRIGGER_LOCATION:
-            len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_bluetooth_beacon_geo_fence_trigger_location_t);
-            *data = &sys_config.sys_config_bluetooth_beacon_geo_fence_trigger_location;
+        case SYS_CONFIG_TAG_BLUETOOTH_SCHEDULED_INTERVAL:
+            len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_tag_bluetooth_scheduled_interval_t);
+            *data = &sys_config.sys_config_tag_bluetooth_scheduled_interval;
             break;
 
-        case SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_INTERVAL:
-            len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_bluetooth_beacon_advertising_interval_t);
-            *data = &sys_config.sys_config_bluetooth_beacon_advertising_interval;
+        case SYS_CONFIG_TAG_BLUETOOTH_SCHEDULED_DURATION:
+            len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_tag_bluetooth_scheduled_duration_t);
+            *data = &sys_config.sys_config_tag_bluetooth_scheduled_duration;
             break;
 
-        case SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_CONFIGURATION:
-            len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_bluetooth_beacon_advertising_configuration_t);
-            *data = &sys_config.sys_config_bluetooth_beacon_advertising_configuration;
+        case SYS_CONFIG_TAG_BLUETOOTH_ADVERTISING_INTERVAL:
+            len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_tag_bluetooth_advertising_interval_t);
+            *data = &sys_config.sys_config_tag_bluetooth_advertising_interval;
             break;
 
-        case SYS_CONFIG_BATTERY_LOG_ENABLE:
+        case SYS_CONFIG_TAG_BLUETOOTH_CONNECTION_INTERVAL:
+            len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_tag_bluetooth_connection_interval_t);
+            *data = &sys_config.sys_config_tag_bluetooth_connection_interval;
+            break;
+
+        case SYS_CONFIG_TAG_BLUETOOTH_CONNECTION_INACTIVITY_TIMEOUT:
+            len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_tag_bluetooth_connection_inactivity_timeout_t);
+            *data = &sys_config.sys_config_tag_bluetooth_connection_inactivity_timeout;
+            break;
+
+        case SYS_CONFIG_TAG_BLUETOOTH_PHY_MODE:
+            len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_tag_bluetooth_phy_mode_t);
+            *data = &sys_config.sys_config_tag_bluetooth_phy_mode;
+            break;
+
+        case SYS_CONFIG_TAG_BLUETOOTH_LOG_ENABLE:
+            len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_tag_bluetooth_log_enable_t);
+            *data = &sys_config.sys_config_tag_bluetooth_log_enable;
+            break;
+
+        case SYS_CONFIG_TAG_BATTERY_LOG_ENABLE:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_battery_log_enable_t);
             *data = &sys_config.sys_config_battery_log_enable;
             break;
 
-        case SYS_CONFIG_BATTERY_LOW_THRESHOLD:
+        case SYS_CONFIG_TAG_BATTERY_LOW_THRESHOLD:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_battery_low_threshold_t);
             *data = &sys_config.sys_config_battery_low_threshold;
             break;

@@ -331,9 +331,6 @@ static bool check_configuration_tags_set(void)
     if (SYS_CONFIG_ERROR_TAG_NOT_SET == sys_config_get(SYS_CONFIG_SALTWATER_SWITCH_LOG_ENABLE, NULL))
         sys_config.sys_config_saltwater_switch_log_enable.contents.enable = false;
 
-    if (SYS_CONFIG_ERROR_TAG_NOT_SET == sys_config_get(SYS_CONFIG_TAG_BLUETOOTH_BEACON_ENABLE, NULL))
-        sys_config.sys_config_bluetooth_beacon_enable.contents.enable = false;
-
     if (SYS_CONFIG_ERROR_TAG_NOT_SET == sys_config_get(SYS_CONFIG_TAG_TEMP_SENSOR_LOG_ENABLE, NULL))
         sys_config.sys_config_temp_sensor_log_enable.contents.enable = false;
 
@@ -346,7 +343,7 @@ static bool check_configuration_tags_set(void)
     if (SYS_CONFIG_ERROR_TAG_NOT_SET == sys_config_get(SYS_CONFIG_TAG_RTC_SYNC_TO_GPS_ENABLE, NULL))
         sys_config.sys_config_rtc_sync_to_gps_enable.contents.enable = false;
 
-    if (SYS_CONFIG_ERROR_TAG_NOT_SET == sys_config_get(SYS_CONFIG_BATTERY_LOG_ENABLE, NULL))
+    if (SYS_CONFIG_ERROR_TAG_NOT_SET == sys_config_get(SYS_CONFIG_TAG_BATTERY_LOG_ENABLE, NULL))
         sys_config.sys_config_battery_log_enable.contents.enable = false;
 
     while (!sys_config_iterate(&tag, &last_index))
@@ -428,17 +425,9 @@ static bool check_configuration_tags_set(void)
             }
         }
 
-        if (!sys_config.sys_config_bluetooth_beacon_enable.contents.enable)
-        {
-            // Then don't check the beacon tags
-            if (SYS_CONFIG_TAG_BLUETOOTH_BEACON_ENABLE == tag ||
-                SYS_CONFIG_TAG_BLUETOOTH_BEACON_GEO_FENCE_TRIGGER_LOCATION == tag ||
-                SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_INTERVAL == tag ||
-                SYS_CONFIG_TAG_BLUETOOTH_BEACON_ADVERTISING_CONFIGURATION == tag)
-            {
-                continue;
-            }
-        }
+        // We don't care about our last GPS location
+        if (SYS_CONFIG_TAG_GPS_LAST_KNOWN_POSITION == tag)
+            continue;
 
         if (!sys_config.sys_config_temp_sensor_log_enable.contents.enable)
         {
@@ -523,15 +512,27 @@ static bool check_configuration_tags_set(void)
         if (SYS_CONFIG_TAG_LOGGING_HIGH_RESOLUTION_TIMER_ENABLE == tag)
             continue;
 
-        if (SYS_CONFIG_BATTERY_LOG_ENABLE == tag)
+        if (SYS_CONFIG_TAG_BATTERY_LOG_ENABLE == tag)
             continue;
 
         // It does not matter if the low battery threshold is set or not
-        if (SYS_CONFIG_BATTERY_LOW_THRESHOLD == tag)
+        if (SYS_CONFIG_TAG_BATTERY_LOW_THRESHOLD == tag)
             continue;
 
-        // We don't care about the bluetooth UUID
-        if (SYS_CONFIG_TAG_BLUETOOTH_UUID == tag)
+        // We don't care about the bluetooth device address
+        if (SYS_CONFIG_TAG_BLUETOOTH_DEVICE_ADDRESS == tag)
+            continue;
+
+        // We let the BLE device choose advertising interval if not set
+        if (SYS_CONFIG_TAG_BLUETOOTH_ADVERTISING_INTERVAL == tag)
+            continue;
+
+        // We let the BLE device choose connection interval if not set
+        if (SYS_CONFIG_TAG_BLUETOOTH_CONNECTION_INTERVAL == tag)
+            continue;
+
+        // We let the BLE device choose PHY if not set
+        if (SYS_CONFIG_TAG_BLUETOOTH_PHY_MODE == tag)
             continue;
 
         ret = sys_config_get(tag, NULL);
@@ -707,6 +708,13 @@ void syshal_gps_callback(syshal_gps_event_t event)
 
         case SYSHAL_GPS_EVENT_POSLLH:
             DEBUG_PR_TRACE("SYSHAL_GPS_EVENT_POSLLH - lat,long: %ld,%ld", event.event_data.location.lat, event.event_data.location.lon);
+
+            // Store this value into our last known location configuration interface tag
+            sys_config.sys_config_gps_last_known_position.hdr.set = true;
+            sys_config.sys_config_gps_last_known_position.contents.iTOW = event.event_data.location.iTOW;
+            sys_config.sys_config_gps_last_known_position.contents.lon = event.event_data.location.lon;
+            sys_config.sys_config_gps_last_known_position.contents.lat = event.event_data.location.lat;
+            sys_config.sys_config_gps_last_known_position.contents.height = event.event_data.location.height;
 
             // Add data to be logged
             if ( (SM_GPS_STATE_FIXED == sm_gps_state) && (SM_STATE_OPERATIONAL == sm_get_state()) )
