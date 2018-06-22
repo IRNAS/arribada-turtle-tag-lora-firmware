@@ -59,8 +59,8 @@ static int read_register(uint16_t address, uint8_t * data, uint16_t size)
     memset(xfer_buffer, 0, sizeof(xfer_buffer));
     xfer_buffer[0] = address;
 
-    xfer_buffer[1] = (size >> 8) & 0x00FF;
-    xfer_buffer[2] = size & 0x00FF;
+    xfer_buffer[1] = size & 0x00FF;
+    xfer_buffer[2] = (size >> 8) & 0x00FF;
 
     DEBUG_PR_TRACE("Transfering to nRF52: %02X %02X %02X", xfer_buffer[0], xfer_buffer[1], xfer_buffer[2]);
 
@@ -117,6 +117,12 @@ int syshal_ble_init(uint32_t comms_device)
     syshal_gpio_init(GPIO_SPI1_CS_BT);
     syshal_gpio_set_output_high(GPIO_SPI1_CS_BT);
 
+    tx_buffer_pending_size = 0; // WARN: this assumes the device has nothing in it's FIFO buffers at start-up
+    rx_buffer_pending_size = 0; // WARN: this assumes the device has nothing in it's FIFO buffers at start-up
+
+    /* Wait for the device to have booted */
+    // FIXME: IMPLEMENTATION NEEDED
+
     /* Read version to make sure the device is present */
     if (syshal_ble_get_version(&version))
         return SYSHAL_BLE_ERROR_NOT_DETECTED;
@@ -135,10 +141,12 @@ int syshal_ble_init(uint32_t comms_device)
     /* Enable data port related interrupts */
     int_enable = NRF52_INT_TX_DATA_SENT | NRF52_INT_RX_DATA_READY;
     int ret = write_register(NRF52_REG_ADDR_INT_ENABLE, &int_enable, sizeof(int_enable));
+    DEBUG_PR_TRACE("NRF52 Enabling interrupt on TX sent and RX data ready");
 
     /* Start the nRF52 GATT Server */
     uint8_t mode = NRF52_MODE_GATT_SERVER;
     write_register(NRF52_REG_ADDR_MODE, &mode, sizeof(mode));
+    DEBUG_PR_TRACE("NRF52 start GATT server");
 
     return ret;
 }
