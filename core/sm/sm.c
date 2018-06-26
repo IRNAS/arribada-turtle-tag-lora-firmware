@@ -1345,6 +1345,7 @@ void cfg_read_req(cmd_t * req, uint16_t size)
             }
             else
             {
+                DEBUG_PR_ERROR("Failed to retrieve tag 0x%04X, with error: %d", req->p.cmd_cfg_read_req.configuration_tag, ret);
                 Throw(EXCEPTION_BAD_SYS_CONFIG_ERROR_CONDITION);
             }
         }
@@ -1456,6 +1457,7 @@ static void cfg_write_next_state(void)
         if (tag_size < 0)
         {
             // If it is not we should exit out and return an error
+            DEBUG_PR_ERROR("sys_config_size(0x%04X) returned: %d()", tag, tag_size);
             sm_context.cfg_write.error_code = CMD_ERROR_INVALID_CONFIG_TAG;
             message_set_state(SM_MESSAGE_STATE_CFG_WRITE_ERROR);
             Throw(EXCEPTION_BAD_SYS_CONFIG_ERROR_CONDITION);
@@ -1465,7 +1467,7 @@ static void cfg_write_next_state(void)
 
         if (ret < 0)
         {
-            DEBUG_PR_TRACE("sys_config_set() returned: %d()", ret);
+            DEBUG_PR_ERROR("sys_config_set(0x%04X) returned: %d()", tag, ret);
             message_set_state(SM_MESSAGE_STATE_IDLE);
             Throw(EXCEPTION_BAD_SYS_CONFIG_ERROR_CONDITION); // Exit and fail silent
         }
@@ -2098,7 +2100,9 @@ static void status_req(cmd_t * req, uint16_t size)
 
     resp->p.cmd_status_resp.error_code = CMD_NO_ERROR;
     resp->p.cmd_status_resp.stm_firmware_version = STM32_FIRMWARE_VERSION;
-    syshal_ble_get_version(&resp->p.cmd_status_resp.ble_firmware_version); // Get BLE version via spi
+    uint32_t version;
+    syshal_ble_get_version(&version); // Get BLE version via spi
+    resp->p.cmd_status_resp.ble_firmware_version = version;
     resp->p.cmd_status_resp.configuration_format_version = SYS_CONFIG_FORMAT_VERSION;
 
     buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_status_resp_t));
@@ -2295,7 +2299,9 @@ static void fw_apply_image_req(cmd_t * req, uint16_t size)
 
                         // Make sure our response is sent before we attempt any FLASH operations
                         while (config_if_tx_pending)
-                        {}
+                        {
+                            config_if_tick();
+                        }
 
                         execute_stm32_firmware_upgrade();
 
@@ -2359,7 +2365,9 @@ static void reset_req(cmd_t * req, uint16_t size)
 
     // Wait for response to have been sent
     while (config_if_tx_pending)
-    {}
+    {
+        config_if_tick();
+    }
 
     syshal_pmu_reset();
 

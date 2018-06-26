@@ -202,7 +202,7 @@ void syshal_ble_event_handler(syshal_ble_event_t * event)
 
         case SYSHAL_BLE_EVENT_ERROR_INDICATION:
             // FIXME: Implement
-            DEBUG_PR_WARN("%s() SYSHAL_BLE_EVENT_ERROR_INDICATION Not implemented", __FUNCTION__);
+            DEBUG_PR_WARN("%s() SYSHAL_BLE_EVENT_ERROR_INDICATION Not implemented. Error: %d", __FUNCTION__, event->error);
             break;
 
         default:
