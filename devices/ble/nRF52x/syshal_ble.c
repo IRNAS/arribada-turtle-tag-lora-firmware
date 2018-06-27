@@ -30,7 +30,7 @@
 /* Macros */
 
 #define MIN(x, y)  (x) < (y) ? (x) : (y)
-#define SPI_BUS_DELAY_MS (20)
+#define SPI_BUS_DELAY_MS (4)
 
 /* Private variables */
 
@@ -71,7 +71,7 @@ static int read_register(uint16_t address, uint8_t * data, uint16_t size)
     xfer_buffer[1] = size & 0x00FF;
     xfer_buffer[2] = (size >> 8) & 0x00FF;
 
-    DEBUG_PR_TRACE("Transfering to nRF52: 0x%02X %d", xfer_buffer[0], size);
+    //DEBUG_PR_TRACE("Transfering to nRF52: 0x%02X %d", xfer_buffer[0], size);
 
     while (syshal_time_get_ticks_ms() - time_of_last_transfer < SPI_BUS_DELAY_MS)
     {}
@@ -96,10 +96,10 @@ static int read_register(uint16_t address, uint8_t * data, uint16_t size)
     if (ret)
         return SYSHAL_BLE_ERROR_COMMS;
 
-    DEBUG_PR_TRACE("Received from nRF52");
-    for (uint32_t i = 0; i < size; ++i)
-        printf("%02X ", xfer_buffer[i]);
-    printf("\r\n");
+//    DEBUG_PR_TRACE("Received from nRF52");
+//    for (uint32_t i = 0; i < size; ++i)
+//        printf("%02X ", xfer_buffer[i]);
+//    printf("\r\n");
 
     memcpy(data, &xfer_buffer[0], size);
     return SYSHAL_BLE_NO_ERROR;
@@ -112,10 +112,10 @@ static int write_register(uint16_t address, uint8_t * data, uint16_t size)
     xfer_buffer[0] = address | NRF52_SPI_WRITE_NOT_READ_ADDR;
     memcpy(&xfer_buffer[1], data, size);
 
-    DEBUG_PR_TRACE("write_register(0x%02X, *data, %d)", address, size);
-    for (uint32_t i = 0; i < size + 1; ++i)
-        printf("%02X ", xfer_buffer[i]);
-    printf("\r\n");
+//    DEBUG_PR_TRACE("write_register(0x%02X, *data, %d)", address, size);
+//    for (uint32_t i = 0; i < size + 1; ++i)
+//        printf("%02X ", xfer_buffer[i]);
+//    printf("\r\n");
 
     while (syshal_time_get_ticks_ms() - time_of_last_transfer < SPI_BUS_DELAY_MS)
     {}
@@ -339,7 +339,7 @@ int syshal_ble_tick(void)
         fw_update_pending = false;
         syshal_ble_event_t event =
         {
-            .error = (uint32_t) - error_indication,
+            .error = (int) error_indication,
             .event_id = SYSHAL_BLE_EVENT_ERROR_INDICATION
         };
         syshal_ble_event_handler(&event);
@@ -431,9 +431,9 @@ int syshal_ble_tick(void)
                 /* Do we have room in the TX FIFO? */
                 uint16_t tx_buffer_free_space = tx_fifo_size - length;
 
-                DEBUG_PR_TRACE("tx_buffer_free_space: %u", tx_buffer_free_space);
-                DEBUG_PR_TRACE("tx_fifo_size: %u", tx_fifo_size);
-                DEBUG_PR_TRACE("length: %u", length);
+                //DEBUG_PR_TRACE("tx_buffer_free_space: %u", tx_buffer_free_space);
+                //DEBUG_PR_TRACE("tx_fifo_size: %u", tx_fifo_size);
+                //DEBUG_PR_TRACE("length: %u", length);
 
                 while (tx_bytes_sent_to_nrf < tx_bytes_to_transmit)
                 {

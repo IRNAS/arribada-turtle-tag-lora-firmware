@@ -32,6 +32,7 @@
 
 #define SYS_CONFIG_TAG_ID_SIZE (sizeof(uint16_t))
 #define SYS_CONFIG_TAG_DATA_SIZE(tag_type) (sizeof(((tag_type *)0)->contents)) // Size of data in tag. We exclude the set member
+#define SYS_CONFIG_TAG_MAX_SIZE (SYS_CONFIG_MAX_DATA_SIZE + SYS_CONFIG_TAG_ID_SIZE) // Max size the configuration tag can be
 
 #define SYS_CONFIG_TAG_TOTAL_NUMBER (50) // Number of configuration tags - WARN: This has to be manually updated
 

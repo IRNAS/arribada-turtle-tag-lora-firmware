@@ -101,7 +101,7 @@ startup_stm32f072xb.s
 #######################################
 OPENOCD = "../../../Toolchain/OpenOCD-20170821/bin/openocd"
 OPENOCDSCRIPTS = "/../../../Toolchain/OpenOCD-20170821/share/openocd/scripts"
-BINPATH = "../../../Toolchain/gcc-arm-none-eabi-7-2017-q4-major/bin
+BINPATH = "../../../Toolchain/gcc-arm-none-eabi-7-2018-q2-update-win32/bin
 JLINK = "JLink"
 PREFIX = arm-none-eabi-
 CC = $(BINPATH)/$(PREFIX)gcc" -pipe
