@@ -71,8 +71,6 @@ static int read_register(uint16_t address, uint8_t * data, uint16_t size)
     xfer_buffer[1] = size & 0x00FF;
     xfer_buffer[2] = (size >> 8) & 0x00FF;
 
-    //DEBUG_PR_TRACE("Transfering to nRF52: 0x%02X %d", xfer_buffer[0], size);
-
     while (syshal_time_get_ticks_ms() - time_of_last_transfer < SPI_BUS_DELAY_MS)
     {}
 
@@ -96,10 +94,10 @@ static int read_register(uint16_t address, uint8_t * data, uint16_t size)
     if (ret)
         return SYSHAL_BLE_ERROR_COMMS;
 
-//    DEBUG_PR_TRACE("Received from nRF52");
-//    for (uint32_t i = 0; i < size; ++i)
-//        printf("%02X ", xfer_buffer[i]);
-//    printf("\r\n");
+    //DEBUG_PR_TRACE("Received from nRF52, addr(0x%02X), %d", address, size);
+    //for (uint32_t i = 0; i < size; ++i)
+    //    printf("%02X ", xfer_buffer[i]);
+    //printf("\r\n");
 
     memcpy(data, &xfer_buffer[0], size);
     return SYSHAL_BLE_NO_ERROR;
@@ -112,10 +110,10 @@ static int write_register(uint16_t address, uint8_t * data, uint16_t size)
     xfer_buffer[0] = address | NRF52_SPI_WRITE_NOT_READ_ADDR;
     memcpy(&xfer_buffer[1], data, size);
 
-//    DEBUG_PR_TRACE("write_register(0x%02X, *data, %d)", address, size);
-//    for (uint32_t i = 0; i < size + 1; ++i)
-//        printf("%02X ", xfer_buffer[i]);
-//    printf("\r\n");
+    //DEBUG_PR_TRACE("write_register(0x%02X, *data, %d)", address, size);
+    //for (uint32_t i = 1; i < size + 1; ++i)
+    //    printf("%02X ", xfer_buffer[i]);
+    //printf("\r\n");
 
     while (syshal_time_get_ticks_ms() - time_of_last_transfer < SPI_BUS_DELAY_MS)
     {}
@@ -449,6 +447,7 @@ int syshal_ble_tick(void)
                     if (ret)
                         goto done;
     
+                    tx_buffer_pending += bytes_to_send;
                     tx_last_data_length += bytes_to_send;
                     tx_bytes_sent_to_nrf += bytes_to_send;
                     tx_buffer_free_space -= bytes_to_send;
