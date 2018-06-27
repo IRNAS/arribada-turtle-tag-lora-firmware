@@ -30,7 +30,7 @@
 /* Macros */
 
 #define MIN(x, y)  (x) < (y) ? (x) : (y)
-#define SPI_BUS_DELAY_MS (1)
+#define SPI_BUS_DELAY_MS (20)
 
 /* Private variables */
 
@@ -38,10 +38,19 @@ static uint8_t      int_enable = 0x00;
 static uint8_t      xfer_buffer[SYSHAL_BLE_MAX_BUFFER_SIZE + 1];
 static uint32_t     spi_device;
 static uint8_t   *  rx_buffer_pending = NULL;
+
+static uint32_t     time_of_last_transfer = 0;
+
 static uint16_t     rx_buffer_pending_size = 0;
-static uint16_t     tx_buffer_pending_size = 0;
-static uint16_t     tx_fifo_size = 0;
+
+static uint8_t   *  tx_buffer_pending = NULL;
+static uint16_t     tx_bytes_to_transmit;
+static uint16_t     tx_bytes_sent_to_nrf;
+static uint16_t     tx_bytes_transmitted_over_ble;
+static uint16_t     tx_last_data_length;
+
 static uint16_t     rx_fifo_size = 0;
+static uint16_t     tx_fifo_size = 0;
 static bool         gatt_connected = false;
 static bool         fw_update_pending = false;
 
@@ -62,21 +71,27 @@ static int read_register(uint16_t address, uint8_t * data, uint16_t size)
     xfer_buffer[1] = size & 0x00FF;
     xfer_buffer[2] = (size >> 8) & 0x00FF;
 
-    DEBUG_PR_TRACE("Transfering to nRF52: %02X %02X %02X", xfer_buffer[0], xfer_buffer[1], xfer_buffer[2]);
+    DEBUG_PR_TRACE("Transfering to nRF52: 0x%02X %d", xfer_buffer[0], size);
+
+    while (syshal_time_get_ticks_ms() - time_of_last_transfer < SPI_BUS_DELAY_MS)
+    {}
 
     syshal_gpio_set_output_low(GPIO_SPI1_CS_BT);
     ret = syshal_spi_transfer(spi_device, xfer_buffer, xfer_buffer, 3);
     syshal_gpio_set_output_high(GPIO_SPI1_CS_BT);
+    time_of_last_transfer = syshal_time_get_ticks_ms();
 
     if (ret)
         return SYSHAL_BLE_ERROR_COMMS;
 
     // Wait for the BLE device to populate it's read buffer
-    syshal_time_delay_ms(SPI_BUS_DELAY_MS);
+    while (syshal_time_get_ticks_ms() - time_of_last_transfer < SPI_BUS_DELAY_MS)
+    {}
 
     syshal_gpio_set_output_low(GPIO_SPI1_CS_BT);
     ret = syshal_spi_transfer(spi_device, xfer_buffer, xfer_buffer, size);
     syshal_gpio_set_output_high(GPIO_SPI1_CS_BT);
+    time_of_last_transfer = syshal_time_get_ticks_ms();
 
     if (ret)
         return SYSHAL_BLE_ERROR_COMMS;
@@ -97,9 +112,19 @@ static int write_register(uint16_t address, uint8_t * data, uint16_t size)
     xfer_buffer[0] = address | NRF52_SPI_WRITE_NOT_READ_ADDR;
     memcpy(&xfer_buffer[1], data, size);
 
+    DEBUG_PR_TRACE("write_register(0x%02X, *data, %d)", address, size);
+    for (uint32_t i = 0; i < size + 1; ++i)
+        printf("%02X ", xfer_buffer[i]);
+    printf("\r\n");
+
+    while (syshal_time_get_ticks_ms() - time_of_last_transfer < SPI_BUS_DELAY_MS)
+    {}
+
     syshal_gpio_set_output_low(GPIO_SPI1_CS_BT);
     ret = syshal_spi_transfer(spi_device, xfer_buffer, xfer_buffer, size + 1);
     syshal_gpio_set_output_high(GPIO_SPI1_CS_BT);
+
+    time_of_last_transfer = syshal_time_get_ticks_ms();
 
     if (ret)
         return SYSHAL_BLE_ERROR_COMMS;
@@ -117,11 +142,18 @@ int syshal_ble_init(uint32_t comms_device)
     syshal_gpio_init(GPIO_SPI1_CS_BT);
     syshal_gpio_set_output_high(GPIO_SPI1_CS_BT);
 
-    tx_buffer_pending_size = 0; // WARN: this assumes the device has nothing in it's FIFO buffers at start-up
-    rx_buffer_pending_size = 0; // WARN: this assumes the device has nothing in it's FIFO buffers at start-up
+    time_of_last_transfer = syshal_time_get_ticks_ms();
 
-    /* Wait for the device to have booted */
-    // FIXME: IMPLEMENTATION NEEDED
+    /* Keep attempting to read the softdevice version until we either timeout or get the correct version */
+    /* This is used to determine whether or not our bluetooth device has booted */
+    // TODO: implement timeout
+    uint16_t soft_dev_version = 0;
+    while (soft_dev_version == 0x0000 ||
+           soft_dev_version == 0xFFFF)
+    {
+        if (read_register(NRF52_REG_ADDR_SOFT_DEV_VERSION, (uint8_t *)&soft_dev_version, sizeof(soft_dev_version)))
+            return SYSHAL_BLE_ERROR_NOT_DETECTED;
+    }
 
     /* Read version to make sure the device is present */
     if (syshal_ble_get_version(&version))
@@ -137,6 +169,19 @@ int syshal_ble_init(uint32_t comms_device)
     if (read_register(NRF52_REG_ADDR_RX_FIFO_SIZE, (uint8_t *)&rx_fifo_size, sizeof(rx_fifo_size)))
         return SYSHAL_BLE_ERROR_NOT_DETECTED;
     DEBUG_PR_TRACE("NRF52 RX FIFO Size = %u bytes", rx_fifo_size);
+
+    /* Get the TX data length */
+    uint16_t tx_buffer_pending_size;
+    if (read_register(NRF52_REG_ADDR_TX_DATA_LENGTH, (uint8_t *)&tx_buffer_pending_size, sizeof(tx_buffer_pending_size)))
+        return SYSHAL_BLE_ERROR_NOT_DETECTED;
+    DEBUG_PR_TRACE("NRF52 TX data length = %u bytes", tx_buffer_pending_size);
+
+    /* Get the RX data length */
+    if (read_register(NRF52_REG_ADDR_RX_DATA_LENGTH, (uint8_t *)&rx_buffer_pending_size, sizeof(rx_buffer_pending_size)))
+        return SYSHAL_BLE_ERROR_NOT_DETECTED;
+    DEBUG_PR_TRACE("NRF52 RX data length = %u bytes", rx_buffer_pending_size);
+
+    rx_buffer_pending_size = 0;
 
     /* Enable data port related interrupts */
     int_enable = NRF52_INT_TX_DATA_SENT | NRF52_INT_RX_DATA_READY;
@@ -156,6 +201,10 @@ int syshal_ble_term(void)
     /* Deep sleep the nRF52 device */
     uint8_t mode = NRF52_MODE_DEEP_SLEEP;
     write_register(NRF52_REG_ADDR_MODE, &mode, sizeof(mode));
+
+    // Clear any pending transfers
+    rx_buffer_pending = NULL;
+    tx_buffer_pending = NULL;
 
     return SYSHAL_BLE_NO_ERROR;
 }
@@ -192,7 +241,6 @@ int syshal_ble_get_version(uint32_t * version)
 {
     int ret;
     uint16_t app_version, soft_dev_version;
-
     ret = read_register(NRF52_REG_ADDR_APP_VERSION, (uint8_t *)&app_version, sizeof(app_version));
     ret |= read_register(NRF52_REG_ADDR_SOFT_DEV_VERSION, (uint8_t *)&soft_dev_version, sizeof(soft_dev_version));
     *version = ((uint32_t) app_version << 16) | soft_dev_version;
@@ -217,23 +265,21 @@ int syshal_ble_reset(void)
 
 int syshal_ble_send(uint8_t * buffer, uint32_t size)
 {
-    int ret;
+    /* Don't allow a transmit if there is already one pending */
+    if (tx_buffer_pending)
+        return SYSHAL_BLE_ERROR_TRANSMIT_PENDING;
 
-    /* Make sure the buffer would not overflow the nRF52x internal FIFO */
-    if ((tx_buffer_pending_size + size) > NRF52_SPI_DATA_PORT_SIZE)
-        return SYSHAL_BLE_ERROR_BUFFER_FULL;
+    /* Just keep track of the user buffer, the actual transmit will
+     * happen as part of the "tick" function.
+     */
+    tx_bytes_to_transmit = size;
+    tx_bytes_sent_to_nrf = 0;
+    tx_bytes_transmitted_over_ble = 0;
+    tx_last_data_length = 0;
 
-    /* Keep track of pending bytes written into nRF52x's FIFO */
-    tx_buffer_pending_size += size;
+    tx_buffer_pending = buffer;
 
-    ret = write_register(NRF52_REG_ADDR_TX_DATA_PORT, buffer, size);
-    if (ret)
-    {
-        /* Transmission was unsuccessful */
-        tx_buffer_pending_size -= size;
-    }
-
-    return ret;
+    return SYSHAL_BLE_NO_ERROR;
 }
 
 int syshal_ble_receive(uint8_t * buffer, uint32_t size)
@@ -324,16 +370,17 @@ int syshal_ble_tick(void)
             /* Copy as many bytes as are available upto the limit of the user's
              * pending buffer size.
              */
-            uint16_t actual_length = MIN(length, rx_buffer_pending_size);
-            ret = read_register(NRF52_REG_ADDR_RX_DATA_PORT, rx_buffer_pending, actual_length);
+            uint16_t num_read_bytes = MIN(length, rx_buffer_pending_size);
+            ret = read_register(NRF52_REG_ADDR_RX_DATA_PORT, rx_buffer_pending, num_read_bytes);
             if (ret)
                 goto done;
+
             syshal_ble_event_t event =
             {
                 .error = SYSHAL_BLE_NO_ERROR,
                 .event_id = SYSHAL_BLE_EVENT_RECEIVE_COMPLETE,
                 .receive_complete = {
-                    .length = actual_length
+                    .length = num_read_bytes
                 }
             };
 
@@ -344,34 +391,72 @@ int syshal_ble_tick(void)
     }
 
     /* Check for any pending send operations */
-    if (tx_buffer_pending_size)
+    if (tx_buffer_pending)
     {
         uint16_t length;
         ret = read_register(NRF52_REG_ADDR_TX_DATA_LENGTH, (uint8_t *)&length, sizeof(length));
         if (ret)
             goto done;
-        if (length <= tx_buffer_pending_size)
-        {
-            tx_buffer_pending_size -= length;
 
+        /* Check to see if any data has been transmitted over BLE */
+        if (length < tx_last_data_length)
+        {
+            tx_bytes_transmitted_over_ble += tx_last_data_length - length; /* Calculate how many bytes were transmitted */
+        }
+
+        tx_last_data_length = length;
+
+        /* Has our transmission completed? */
+        if (tx_bytes_transmitted_over_ble >= tx_bytes_to_transmit)
+        {
             /* Signal send complete */
             syshal_ble_event_t event =
             {
                 .error = SYSHAL_BLE_NO_ERROR,
                 .event_id = SYSHAL_BLE_EVENT_SEND_COMPLETE,
                 .send_complete = {
-                    .length = length
+                    .length = tx_bytes_to_transmit
                 }
             };
+
+            /* Reset pending buffer */
+            tx_buffer_pending = NULL;
             syshal_ble_event_handler(&event);
         }
         else
         {
-            /* This should never happen, but we should raise an
-             * unrecoverable error.
-             */
-            return SYSHAL_BLE_ERROR_DEVICE;
+            /* Do we still have data to transfer to the nRF? */
+            if (tx_bytes_sent_to_nrf < tx_bytes_to_transmit)
+            {
+                /* Do we have room in the TX FIFO? */
+                uint16_t tx_buffer_free_space = tx_fifo_size - length;
+
+                DEBUG_PR_TRACE("tx_buffer_free_space: %u", tx_buffer_free_space);
+                DEBUG_PR_TRACE("tx_fifo_size: %u", tx_fifo_size);
+                DEBUG_PR_TRACE("length: %u", length);
+
+                while (tx_bytes_sent_to_nrf < tx_bytes_to_transmit)
+                {
+                    /* There are now three conditions for sending data
+                     * 1) We transmit the last of our data              (tx_bytes_to_transmit - tx_bytes_sent_to_nrf)
+                     * 2) We transmit up until we max out the TX FIFO   (tx_buffer_free_space)
+                     * 3) We transmit one full SPI packet size          (NRF52_SPI_DATA_PORT_SIZE)
+                     */
+    
+                    uint16_t bytes_to_send = MIN( MIN(tx_buffer_free_space, NRF52_SPI_DATA_PORT_SIZE), tx_bytes_to_transmit - tx_bytes_sent_to_nrf);
+    
+                    ret = write_register(NRF52_REG_ADDR_TX_DATA_PORT, tx_buffer_pending, bytes_to_send);
+                    if (ret)
+                        goto done;
+    
+                    tx_last_data_length += bytes_to_send;
+                    tx_bytes_sent_to_nrf += bytes_to_send;
+                    tx_buffer_free_space -= bytes_to_send;
+                }
+            }
+
         }
+
     }
 
 done:

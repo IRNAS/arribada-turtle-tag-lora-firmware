@@ -1345,6 +1345,7 @@ void cfg_read_req(cmd_t * req, uint16_t size)
             }
             else
             {
+                DEBUG_PR_ERROR("Failed to retrieve tag 0x%04X, with error: %d", req->p.cmd_cfg_read_req.configuration_tag, ret);
                 Throw(EXCEPTION_BAD_SYS_CONFIG_ERROR_CONDITION);
             }
         }

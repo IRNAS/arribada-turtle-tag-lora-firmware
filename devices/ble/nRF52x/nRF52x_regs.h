@@ -21,7 +21,7 @@
 
 /* Constants */
 
-#define NRF52_SPI_DATA_PORT_SIZE             255
+#define NRF52_SPI_DATA_PORT_SIZE             254
 
 #define NRF52_SPI_WRITE_NOT_READ_ADDR        0x80
 
