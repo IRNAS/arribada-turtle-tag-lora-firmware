@@ -30,7 +30,9 @@
 /* Macros */
 
 #define MIN(x, y)  (x) < (y) ? (x) : (y)
-#define SPI_BUS_DELAY_MS (4)
+
+#define SPI_BUS_DELAY_US_WRITE    (4000) //(300)
+#define SPI_BUS_DELAY_US_READ_REG (4000) //(400)
 
 /* Private variables */
 
@@ -71,25 +73,32 @@ static int read_register(uint16_t address, uint8_t * data, uint16_t size)
     xfer_buffer[1] = size & 0x00FF;
     xfer_buffer[2] = (size >> 8) & 0x00FF;
 
-    while (syshal_time_get_ticks_ms() - time_of_last_transfer < SPI_BUS_DELAY_MS)
+    while (syshal_time_get_ticks_us() - time_of_last_transfer < SPI_BUS_DELAY_US_WRITE)
     {}
 
     syshal_gpio_set_output_low(GPIO_SPI1_CS_BT);
+    syshal_time_delay_us(1);
     ret = syshal_spi_transfer(spi_device, xfer_buffer, xfer_buffer, 3);
+    syshal_time_delay_us(2);
     syshal_gpio_set_output_high(GPIO_SPI1_CS_BT);
-    time_of_last_transfer = syshal_time_get_ticks_ms();
+    time_of_last_transfer = syshal_time_get_ticks_us();
 
     if (ret)
         return SYSHAL_BLE_ERROR_COMMS;
 
     // Wait for the BLE device to populate it's read buffer
-    while (syshal_time_get_ticks_ms() - time_of_last_transfer < SPI_BUS_DELAY_MS)
+    //syshal_time_delay_us(SPI_BUS_DELAY_US_WRITE);
+    while (syshal_time_get_ticks_us() - time_of_last_transfer < SPI_BUS_DELAY_US_READ_REG)
     {}
 
     syshal_gpio_set_output_low(GPIO_SPI1_CS_BT);
+    syshal_time_delay_us(1);
     ret = syshal_spi_transfer(spi_device, xfer_buffer, xfer_buffer, size);
+    syshal_time_delay_us(2);
     syshal_gpio_set_output_high(GPIO_SPI1_CS_BT);
-    time_of_last_transfer = syshal_time_get_ticks_ms();
+    time_of_last_transfer = syshal_time_get_ticks_us();
+
+    //syshal_time_delay_us(SPI_BUS_DELAY_US_WRITE);
 
     if (ret)
         return SYSHAL_BLE_ERROR_COMMS;
@@ -110,19 +119,23 @@ static int write_register(uint16_t address, uint8_t * data, uint16_t size)
     xfer_buffer[0] = address | NRF52_SPI_WRITE_NOT_READ_ADDR;
     memcpy(&xfer_buffer[1], data, size);
 
-    //DEBUG_PR_TRACE("write_register(0x%02X, *data, %d)", address, size);
-    //for (uint32_t i = 1; i < size + 1; ++i)
-    //    printf("%02X ", xfer_buffer[i]);
-    //printf("\r\n");
+    DEBUG_PR_TRACE("write_register(0x%02X, *data, %d)", address, size);
+    for (uint32_t i = 1; i < size + 1; ++i)
+        printf("%02X ", xfer_buffer[i]);
+    printf("\r\n");
 
-    while (syshal_time_get_ticks_ms() - time_of_last_transfer < SPI_BUS_DELAY_MS)
+    while (syshal_time_get_ticks_us() - time_of_last_transfer < SPI_BUS_DELAY_US_WRITE)
     {}
 
     syshal_gpio_set_output_low(GPIO_SPI1_CS_BT);
+    syshal_time_delay_us(1);
     ret = syshal_spi_transfer(spi_device, xfer_buffer, xfer_buffer, size + 1);
+    syshal_time_delay_us(2);
     syshal_gpio_set_output_high(GPIO_SPI1_CS_BT);
 
-    time_of_last_transfer = syshal_time_get_ticks_ms();
+    //syshal_time_delay_us(SPI_BUS_DELAY_US_WRITE);
+
+    time_of_last_transfer = syshal_time_get_ticks_us();
 
     if (ret)
         return SYSHAL_BLE_ERROR_COMMS;
@@ -140,7 +153,7 @@ int syshal_ble_init(uint32_t comms_device)
     syshal_gpio_init(GPIO_SPI1_CS_BT);
     syshal_gpio_set_output_high(GPIO_SPI1_CS_BT);
 
-    time_of_last_transfer = syshal_time_get_ticks_ms();
+    time_of_last_transfer = syshal_time_get_ticks_us();
 
     /* Keep attempting to read the softdevice version until we either timeout or get the correct version */
     /* This is used to determine whether or not our bluetooth device has booted */
@@ -190,6 +203,8 @@ int syshal_ble_init(uint32_t comms_device)
     uint8_t mode = NRF52_MODE_GATT_SERVER;
     write_register(NRF52_REG_ADDR_MODE, &mode, sizeof(mode));
     DEBUG_PR_TRACE("NRF52 start GATT server");
+
+    syshal_time_delay_ms(50); // Give the BLE device time to start
 
     return ret;
 }
@@ -317,6 +332,10 @@ int syshal_ble_tick(void)
     }
     else if ((int_status & NRF52_INT_GATT_CONNECTED) == 0 && gatt_connected)
     {
+        // We've disconnected so we can't send or receive anything
+        rx_buffer_pending = NULL;
+        tx_buffer_pending = NULL;
+
         gatt_connected = false;
         syshal_ble_event_t event =
         {
@@ -329,9 +348,12 @@ int syshal_ble_tick(void)
     if ((int_status & NRF52_INT_ERROR_INDICATION))
     {
         uint8_t error_indication;
+        syshal_time_delay_ms(50);
         ret = read_register(NRF52_REG_ADDR_ERROR_CODE, (uint8_t *)&error_indication, sizeof(error_indication));
         if (ret)
             goto done;
+
+        DEBUG_PR_ERROR("Int_status = 0x%02X, Error indication: %u", int_status, error_indication);
 
         /* This will abort any pending FW update */
         fw_update_pending = false;
