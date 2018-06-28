@@ -3003,6 +3003,8 @@ static void handle_config_if_messages(void)
 
 void boot_state(void)
 {
+    syshal_time_init();
+
     setup_buffers();
 
     // Initialize all configured peripherals
