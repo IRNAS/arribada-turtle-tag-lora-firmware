@@ -134,7 +134,6 @@ typedef struct
         {
             uint32_t length;
             uint32_t start_offset;
-            fs_handle_t file_handle;
         } log_read;
 
         struct
@@ -143,7 +142,6 @@ typedef struct
             uint32_t length;
             uint32_t crc32_supplied;
             uint32_t crc32_calculated;
-            fs_handle_t file_handle;
         } fw_send_image;
     };
 } sm_context_t;
@@ -194,11 +192,12 @@ static uint8_t           spi_bridge_buffer[SYSHAL_USB_PACKET_SIZE + 1];
 static uint32_t          config_if_message_timeout;
 static volatile bool     config_if_connected = false;
 static fs_t              file_system;
-static fs_handle_t       log_file_handle = NULL;
 static volatile bool     tracker_above_water = true; // Is the device above water?
 static volatile bool     log_file_created = false; // Does a log file exist?
 static volatile bool     gps_ttff_reading_logged = false; // Have we read the most recent gps ttff reading?
 static uint8_t           last_battery_reading;
+
+static fs_handle_t       file_handle = NULL; // The global file handle we have open. Only allow one at once
 
 // Timer handles
 static timer_handle_t timer_gps_interval;
@@ -858,8 +857,8 @@ static void timer_log_flush_callback(void)
     DEBUG_PR_TRACE("%s() called", __FUNCTION__);
 
     // Flush and log data to the FLASH
-    if (log_file_handle)
-        fs_flush(log_file_handle);
+    if (file_handle)
+        fs_flush(file_handle);
 }
 
 static void timer_switch_hysteresis_callback(void)
@@ -1106,13 +1105,12 @@ static void populate_log_file_size_tag(void)
 static int fs_create_configuration_data(void)
 {
     // The configuration file does not exist so lets make one
-    fs_handle_t file_system_handle;
-    int ret = fs_open(file_system, &file_system_handle, FS_FILE_ID_CONF, FS_MODE_CREATE, NULL);
+    int ret = fs_open(file_system, &file_handle, FS_FILE_ID_CONF, FS_MODE_CREATE, NULL);
 
     if (FS_NO_ERROR != ret)
         return ret; // An unrecoverable error has occured
 
-    fs_close(file_system_handle); // Close the newly created file and flush any data
+    fs_close(file_handle); // Close the newly created file and flush any data
 
     return FS_NO_ERROR;
 }
@@ -1146,8 +1144,7 @@ static int fs_delete_configuration_data(void)
  */
 static int fs_set_configuration_data(void)
 {
-    fs_handle_t file_system_handle;
-    int ret = fs_open(file_system, &file_system_handle, FS_FILE_ID_CONF, FS_MODE_WRITEONLY, NULL);
+    int ret = fs_open(file_system, &file_handle, FS_FILE_ID_CONF, FS_MODE_WRITEONLY, NULL);
 
     if (FS_NO_ERROR != ret)
         return ret; // An unrecoverable error has occured
@@ -1159,9 +1156,9 @@ static int fs_set_configuration_data(void)
     // Ensure our configuration version flag is set
     sys_config.format_version = SYS_CONFIG_FORMAT_VERSION;
 
-    ret = fs_write(file_system_handle, &sys_config, sizeof(sys_config), &bytes_written);
+    ret = fs_write(file_handle, &sys_config, sizeof(sys_config), &bytes_written);
 
-    fs_close(file_system_handle); // Close the file and flush any data
+    fs_close(file_handle); // Close the file and flush any data
 
     if (FS_NO_ERROR != ret)
         return ret; // An unrecoverable error has occured
@@ -1189,9 +1186,8 @@ static int fs_set_configuration_data(void)
  */
 static int fs_get_configuration_data(void)
 {
-    fs_handle_t file_system_handle;
     // Attempt to open the configuration file
-    int ret = fs_open(file_system, &file_system_handle, FS_FILE_ID_CONF, FS_MODE_READONLY, NULL);
+    int ret = fs_open(file_system, &file_handle, FS_FILE_ID_CONF, FS_MODE_READONLY, NULL);
 
     if (FS_NO_ERROR != ret)
         return ret; // An unrecoverable error has occured
@@ -1200,12 +1196,12 @@ static int fs_get_configuration_data(void)
     uint32_t bytes_read;
 
     uint8_t format_version = 0;
-    ret = fs_read(file_system_handle, &format_version, sizeof(sys_config.format_version), &bytes_read);
+    ret = fs_read(file_handle, &format_version, sizeof(sys_config.format_version), &bytes_read);
 
     if (FS_NO_ERROR != ret)
         return ret; // An unrecoverable error has occured
 
-    fs_close(file_system_handle); // We're done reading from this file
+    fs_close(file_handle); // We're done reading from this file
 
     if (SYS_CONFIG_FORMAT_VERSION != format_version)
     {
@@ -1214,9 +1210,9 @@ static int fs_get_configuration_data(void)
     }
 
     // Populate our sys_config RAM struct from the FLASH file
-    ret  = fs_open(file_system, &file_system_handle, FS_FILE_ID_CONF, FS_MODE_READONLY, NULL);
-    ret |= fs_read(file_system_handle, &sys_config, sizeof(sys_config), &bytes_read);
-    fs_close(file_system_handle); // We're done reading from this file
+    ret  = fs_open(file_system, &file_handle, FS_FILE_ID_CONF, FS_MODE_READONLY, NULL);
+    ret |= fs_read(file_handle, &sys_config, sizeof(sys_config), &bytes_read);
+    fs_close(file_handle); // We're done reading from this file
 
     if (FS_NO_ERROR != ret)
         return ret; // An unrecoverable error has occured
@@ -2180,7 +2176,7 @@ static void fw_send_image_req(cmd_t * req, uint16_t size)
             case FS_ERROR_FILE_NOT_FOUND: // If there is no image file, then make one
             case FS_NO_ERROR:
                 __NOP(); // Instruct for switch case to jump to
-                int ret = fs_open(file_system, &sm_context.fw_send_image.file_handle, sm_context.fw_send_image.image_type, FS_MODE_CREATE, NULL);
+                int ret = fs_open(file_system, &file_handle, sm_context.fw_send_image.image_type, FS_MODE_CREATE, NULL);
                 if (FS_NO_ERROR != ret)
                     Throw(EXCEPTION_FS_ERROR); // An unrecoverable error has occured
 
@@ -2223,17 +2219,17 @@ static void fw_send_image_next_state(void)
     {
         // If it is we should exit out
         message_set_state(SM_MESSAGE_STATE_IDLE);
-        fs_close(sm_context.fw_send_image.file_handle);
+        fs_close(file_handle);
         fs_delete(file_system, sm_context.fw_send_image.image_type);
         Throw(EXCEPTION_PACKET_WRONG_SIZE);
     }
 
     sm_context.fw_send_image.crc32_calculated = crc32(sm_context.fw_send_image.crc32_calculated, read_buffer, length);
     uint32_t bytes_written = 0;
-    int ret = fs_write(sm_context.fw_send_image.file_handle, read_buffer, length, &bytes_written);
+    int ret = fs_write(file_handle, read_buffer, length, &bytes_written);
     if (FS_NO_ERROR != ret)
     {
-        fs_close(sm_context.fw_send_image.file_handle);
+        fs_close(file_handle);
         fs_delete(file_system, sm_context.fw_send_image.image_type);
         message_set_state(SM_MESSAGE_STATE_IDLE);
         Throw(EXCEPTION_FS_ERROR);
@@ -2249,7 +2245,7 @@ static void fw_send_image_next_state(void)
     else
     {
         // We have received all the data
-        fs_close(sm_context.fw_send_image.file_handle); // Close the file
+        fs_close(file_handle); // Close the file
 
         // Then send a confirmation
         cmd_t * resp;
@@ -2277,18 +2273,17 @@ static void fw_send_image_next_state(void)
 
 __RAMFUNC void execute_stm32_firmware_upgrade(void)
 {
-    fs_handle_t file_system_handle;
     uint8_t read_buffer[4];
     uint32_t bytes_actually_read;
     int ret;
 
-    fs_open(file_system, &file_system_handle, FS_FILE_ID_STM32_IMAGE, FS_MODE_READONLY, NULL);
+    fs_open(file_system, &file_handle, FS_FILE_ID_STM32_IMAGE, FS_MODE_READONLY, NULL);
 
     syshal_firmware_prepare(); // Erase our FLASH
 
     do
     {
-        ret = fs_read(file_system_handle, &read_buffer, sizeof(read_buffer), &bytes_actually_read);
+        ret = fs_read(file_handle, &read_buffer, sizeof(read_buffer), &bytes_actually_read);
         syshal_firmware_write(read_buffer, bytes_actually_read);
     }
     while (FS_ERROR_END_OF_FILE != ret);
@@ -2301,8 +2296,6 @@ __RAMFUNC void execute_stm32_firmware_upgrade(void)
 
 static void fw_apply_image_req(cmd_t * req, uint16_t size)
 {
-    fs_handle_t file_system_handle;
-
     // Check request size is correct
     if (CMD_SIZE(cmd_fw_apply_image_req_t) != size)
         Throw(EXCEPTION_REQ_WRONG_SIZE);
@@ -2321,7 +2314,7 @@ static void fw_apply_image_req(cmd_t * req, uint16_t size)
          || (image_type == FS_FILE_ID_BLE_APP_IMAGE))
     {
         // Check image exists
-        int ret = fs_open(file_system, &file_system_handle, image_type, FS_MODE_READONLY, NULL);
+        int ret = fs_open(file_system, &file_handle, image_type, FS_MODE_READONLY, NULL);
 
         switch (ret)
         {
@@ -2330,7 +2323,7 @@ static void fw_apply_image_req(cmd_t * req, uint16_t size)
                 switch (image_type)
                 {
                     case FS_FILE_ID_STM32_IMAGE:
-                        fs_close(file_system_handle); // Close the file
+                        fs_close(file_handle); // Close the file
 
                         // Respond now as we're about to wipe our FLASH and reset
                         resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
@@ -2361,7 +2354,7 @@ static void fw_apply_image_req(cmd_t * req, uint16_t size)
                         break;
                 }
 
-                fs_close(file_system_handle); // Close the file
+                fs_close(file_handle); // Close the file
 
                 resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
 
@@ -2476,15 +2469,14 @@ static void log_create_req(cmd_t * req, uint16_t size)
         else if (CMD_LOG_CREATE_REQ_MODE_CIRCULAR == mode)
             fs_mode = FS_MODE_CREATE_CIRCULAR;
 
-        fs_handle_t file_system_handle;
-        int ret = fs_open(file_system, &file_system_handle, FS_FILE_ID_LOG, fs_mode, &sync_enable);
+        int ret = fs_open(file_system, &file_handle, FS_FILE_ID_LOG, fs_mode, &sync_enable);
 
         switch (ret)
         {
             case FS_NO_ERROR:
                 log_file_created = true;
                 resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
-                fs_close(file_system_handle); // Close the file
+                fs_close(file_handle); // Close the file
 
                 // Set the sys_config log file type
                 sys_config_logging_file_type_t log_file_type;
@@ -2602,7 +2594,7 @@ static void log_read_req(cmd_t * req, uint16_t size)
                 }
 
                 // Open the file
-                ret = fs_open(file_system, &sm_context.log_read.file_handle, FS_FILE_ID_LOG, FS_MODE_READONLY, NULL);
+                ret = fs_open(file_system, &file_handle, FS_FILE_ID_LOG, FS_MODE_READONLY, NULL);
 
                 if (FS_NO_ERROR == ret)
                 {
@@ -2610,7 +2602,7 @@ static void log_read_req(cmd_t * req, uint16_t size)
                     if (sm_context.log_read.length)
                         message_set_state(SM_MESSAGE_STATE_LOG_READ_NEXT);
                     else
-                        fs_close(sm_context.log_read.file_handle);
+                        fs_close(file_handle);
                 }
                 else
                 {
@@ -2651,7 +2643,7 @@ static void log_read_next_state()
         // If so move to this location in packet sized chunks
         bytes_to_read = MIN(sm_context.log_read.start_offset, SYSHAL_USB_PACKET_SIZE);
 
-        ret = fs_read(sm_context.log_read.file_handle, &read_buffer, bytes_to_read, &bytes_actually_read);
+        ret = fs_read(file_handle, &read_buffer, bytes_to_read, &bytes_actually_read);
         if (FS_NO_ERROR != ret)
         {
             Throw(EXCEPTION_FS_ERROR);
@@ -2663,7 +2655,7 @@ static void log_read_next_state()
     // Read data out
     bytes_to_read = MIN(sm_context.log_read.length, SYSHAL_USB_PACKET_SIZE);
 
-    ret = fs_read(sm_context.log_read.file_handle, read_buffer, bytes_to_read, &bytes_actually_read);
+    ret = fs_read(file_handle, read_buffer, bytes_to_read, &bytes_actually_read);
 
     if (FS_NO_ERROR != ret)
     {
@@ -2682,7 +2674,7 @@ static void log_read_next_state()
     else
     {
         // We have sent all the data
-        fs_close(sm_context.log_read.file_handle); // Close the file
+        fs_close(file_handle); // Close the file
         message_set_state(SM_MESSAGE_STATE_IDLE);
     }
 
@@ -2698,6 +2690,11 @@ static void config_if_session_cleanup(void)
     buffer_reset(&config_if_receive_buffer);
     config_if_tx_pending = false;
     config_if_rx_queued = false; // Setting this to false does not mean a receive is still not queued!
+
+    // Close any open files
+    if (file_handle)
+        fs_close(file_handle);
+    file_handle = NULL;
 }
 
 int config_if_event_handler(config_if_event_t * event)
@@ -3056,13 +3053,12 @@ void boot_state(void)
     fs_mount(FS_DEVICE, &file_system);
 
     // Determine if a log file exists or not
-    fs_handle_t file_system_handle;
-    int ret = fs_open(file_system, &file_system_handle, FS_FILE_ID_LOG, FS_MODE_READONLY, NULL);
+    int ret = fs_open(file_system, &file_handle, FS_FILE_ID_LOG, FS_MODE_READONLY, NULL);
 
     if (FS_NO_ERROR == ret)
     {
         log_file_created = true;
-        fs_close(file_system_handle);
+        fs_close(file_handle);
     }
     else
     {
@@ -3212,10 +3208,10 @@ void standby_provisioning_needed_state()
         {
             if (level <= sys_config.sys_config_battery_low_threshold.contents.threshold)
             {
-                if (log_file_handle)
+                if (file_handle)
                 {
-                    fs_close(log_file_handle);
-                    log_file_handle = NULL;
+                    fs_close(file_handle);
+                    file_handle = NULL;
                 }
                 sm_set_state(SM_STATE_STANDBY_BATTERY_LEVEL_LOW);
                 return;
@@ -3269,9 +3265,9 @@ void provisioning_state(void)
 void operational_state(void)
 {
     // If log file is not open
-    if (NULL == log_file_handle)
+    if (NULL == file_handle)
     {
-        int ret = fs_open(file_system, &log_file_handle, FS_FILE_ID_LOG, FS_MODE_WRITEONLY, NULL);
+        int ret = fs_open(file_system, &file_handle, FS_FILE_ID_LOG, FS_MODE_WRITEONLY, NULL);
 
         switch (ret)
         {
@@ -3447,13 +3443,13 @@ void operational_state(void)
                 break;
 
             case FS_ERROR_FILE_NOT_FOUND:
-                log_file_handle = NULL;
+                file_handle = NULL;
                 sm_set_state(SM_STATE_STANDBY_PROVISIONING_NEEDED); // We still need provisioning
                 break;
 
             case FS_ERROR_FILE_PROTECTED: // We never lock the log file so this shouldn't occur
             default:
-                log_file_handle = NULL;
+                file_handle = NULL;
                 Throw(EXCEPTION_FS_ERROR);
                 break;
         }
@@ -3489,7 +3485,7 @@ void operational_state(void)
         while (length) // Then write all of it
         {
             uint32_t bytes_written;
-            int ret = fs_write(log_file_handle, read_buffer, length, &bytes_written);
+            int ret = fs_write(file_handle, read_buffer, length, &bytes_written);
             DEBUG_PR_TRACE("Writing to Log File");
             printf("Contents: ");
             for (uint32_t i = 0; i < length; ++i)
@@ -3503,15 +3499,15 @@ void operational_state(void)
                     break;
 
                 case FS_ERROR_FILESYSTEM_FULL: // Our log file is full
-                    fs_close(log_file_handle);
-                    log_file_handle = NULL;
+                    fs_close(file_handle);
+                    file_handle = NULL;
                     sm_set_state(SM_STATE_STANDBY_LOG_FILE_FULL);
                     break;
 
                 case FS_ERROR_FLASH_MEDIA:
                 default:
-                    fs_close(log_file_handle);
-                    log_file_handle = NULL;
+                    fs_close(file_handle);
+                    file_handle = NULL;
                     Throw(EXCEPTION_FS_ERROR);
                     break;
             }
@@ -3528,9 +3524,9 @@ void operational_state(void)
     {
         syshal_timer_cancel_all();
 
-        if (log_file_handle)
-            fs_close(log_file_handle);
-        log_file_handle = NULL;
+        if (file_handle)
+            fs_close(file_handle);
+        file_handle = NULL;
 
         syshal_axl_term();
         syshal_pressure_term();
@@ -3565,9 +3561,9 @@ void operational_state(void)
                 {
                     syshal_timer_cancel_all();
 
-                    if (log_file_handle)
-                        fs_close(log_file_handle);
-                    log_file_handle = NULL;
+                    if (file_handle)
+                        fs_close(file_handle);
+                    file_handle = NULL;
 
                     syshal_axl_term();
                     syshal_pressure_term();
