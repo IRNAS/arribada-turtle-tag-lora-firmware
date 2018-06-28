@@ -3231,7 +3231,15 @@ void provisioning_state(void)
 {
     config_if_tick();
 
-    handle_config_if_messages(); // Process any config_if messages
+    if (config_if_connected)
+    {
+        handle_config_if_messages();
+    }
+    else
+    {
+        message_set_state(SM_MESSAGE_STATE_IDLE); // Return to the idle state
+        config_if_session_cleanup(); // Clear any pending messages
+    }
 
     if (syshal_gpio_get_input(GPIO_VUSB) && !config_if_connected)
     {
