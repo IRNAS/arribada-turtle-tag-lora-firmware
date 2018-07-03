@@ -3122,7 +3122,7 @@ void boot_state(void)
     // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
     if (syshal_gpio_get_input(GPIO_VUSB))
     {
-        config_if_init(CONFIG_IF_BACKEND_BLE);
+        config_if_init(CONFIG_IF_BACKEND_USB);
         sm_set_state(SM_STATE_STANDBY_BATTERY_CHARGING);
         return;
     }
@@ -3181,7 +3181,7 @@ void standby_battery_level_low_state()
     // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
     if (syshal_gpio_get_input(GPIO_VUSB))
     {
-        config_if_init(CONFIG_IF_BACKEND_BLE);
+        config_if_init(CONFIG_IF_BACKEND_USB);
         sm_set_state(SM_STATE_STANDBY_BATTERY_CHARGING);
     }
 }
@@ -3193,7 +3193,7 @@ void standby_log_file_full_state()
     // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
     if (syshal_gpio_get_input(GPIO_VUSB))
     {
-        config_if_init(CONFIG_IF_BACKEND_BLE);
+        config_if_init(CONFIG_IF_BACKEND_USB);
         sm_set_state(SM_STATE_STANDBY_BATTERY_CHARGING);
         return;
     }
@@ -3229,7 +3229,7 @@ void standby_provisioning_needed_state()
     // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
     if (syshal_gpio_get_input(GPIO_VUSB))
     {
-        config_if_init(CONFIG_IF_BACKEND_BLE);
+        config_if_init(CONFIG_IF_BACKEND_USB);
         sm_set_state(SM_STATE_STANDBY_BATTERY_CHARGING);
         return;
     }
@@ -3573,7 +3573,7 @@ void operational_state(void)
         syshal_axl_term();
         syshal_pressure_term();
 
-        config_if_init(CONFIG_IF_BACKEND_BLE);
+        config_if_init(CONFIG_IF_BACKEND_USB);
         sm_set_state(SM_STATE_STANDBY_BATTERY_CHARGING);
         return;
     }
