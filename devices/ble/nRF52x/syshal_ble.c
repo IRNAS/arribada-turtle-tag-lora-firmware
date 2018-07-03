@@ -206,6 +206,35 @@ int syshal_ble_init(uint32_t comms_device)
     int ret = write_register(NRF52_REG_ADDR_INT_ENABLE, &int_enable, sizeof(int_enable));
     DEBUG_PR_TRACE("NRF52 Enabling interrupt on TX sent and RX data ready");
 
+    /* Set device address */
+    if (sys_config.sys_config_tag_bluetooth_device_address.hdr.set)
+        write_register(NRF52_REG_ADDR_DEVICE_ADDRESS
+                       sys_config.sys_config_tag_bluetooth_device_address.contents.address,
+                       NRF52_REG_SIZE_DEVICE_ADDRESS);
+
+    /* Set advertising interval */
+    if (sys_config.sys_config_tag_bluetooth_advertising_interval.hdr.set)
+        write_register(NRF52_REG_ADDR_ADVERTISING_INTERVAL
+                       sys_config.sys_config_tag_bluetooth_advertising_interval.contents.interval,
+                       NRF52_REG_SIZE_ADVERTISING_INTERVAL);
+
+    /* Set connection interval */
+    if (sys_config.sys_config_tag_bluetooth_connection_interval.hdr.set)
+        write_register(NRF52_REG_ADDR_CONNECTION_INTERVAL
+                       sys_config.sys_config_tag_bluetooth_connection_interval.contents.interval,
+                       NRF52_REG_SIZE_CONNECTION_INTERVAL);
+
+    /* Set phy mode */
+    if (sys_config.sys_config_tag_bluetooth_phy_mode.hdr.set)
+        write_register(NRF52_REG_ADDR_PHY_MODE
+                       sys_config.sys_config_tag_bluetooth_phy_mode.contents.mode,
+                       NRF52_REG_SIZE_PHY_MODE);
+
+    NRF52_REG_SIZE_DEVICE_ADDRESS
+    NRF52_REG_SIZE_ADVERTISING_INTERVAL
+    NRF52_REG_SIZE_CONNECTION_INTERVAL
+    NRF52_REG_SIZE_PHY_MODE
+
     /* Start the nRF52 GATT Server */
     uint8_t mode = NRF52_MODE_GATT_SERVER;
     write_register(NRF52_REG_ADDR_MODE, &mode, sizeof(mode));
