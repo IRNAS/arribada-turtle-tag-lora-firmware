@@ -21,7 +21,9 @@
 
 /* Constants */
 
-#define NRF52_SPI_DATA_PORT_SIZE             254
+#define NRF52_SPI_DATA_PORT_SIZE              254
+
+#define NRF52_FW_WRITE_TIME_PER_BYTE_US        50 // Time in us to write a byte to internal FLASH
 
 #define NRF52_SPI_WRITE_NOT_READ_ADDR        0x80
 

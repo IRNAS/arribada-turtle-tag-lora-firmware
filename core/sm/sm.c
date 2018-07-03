@@ -2296,6 +2296,8 @@ __RAMFUNC void execute_stm32_firmware_upgrade(void)
 
 static void fw_apply_image_req(cmd_t * req, uint16_t size)
 {
+    fs_stat_t stat;
+
     // Check request size is correct
     if (CMD_SIZE(cmd_fw_apply_image_req_t) != size)
         Throw(EXCEPTION_REQ_WRONG_SIZE);
@@ -2343,14 +2345,42 @@ static void fw_apply_image_req(cmd_t * req, uint16_t size)
                         {}
                         break;
 
-                    case FS_FILE_ID_BLE_SOFT_IMAGE:
-                        DEBUG_PR_WARN("Apply FS_FILE_ID_BLE_SOFT_IMAGE not implemented");
-                        // FIXME: needs implementing
+                    case FS_FILE_ID_BLE_APP_IMAGE:
+                        DEBUG_PR_TRACE("Apply FS_FILE_ID_BLE_APP_IMAGE");
+
+                        fs_stat(file_system, FS_FILE_ID_BLE_APP_IMAGE, &stat);
+
+                        syshal_ble_config_fw_upgrade(SYSHAL_BLE_FW_UPGRADE_TYPE_APP, stat.size, 0);
+
+                        do
+                        {
+                            uint8_t read_buffer[50];
+                            uint32_t bytes_actually_read;
+                            ret = fs_read(file_handle, &read_buffer, sizeof(read_buffer), &bytes_actually_read);
+                            syshal_ble_fw_send(read_buffer, bytes_actually_read);
+                        }
+                        while (FS_ERROR_END_OF_FILE != ret);
+
+                        fs_close(file_handle); // Close the file
+
                         break;
 
-                    case FS_FILE_ID_BLE_APP_IMAGE:
-                        DEBUG_PR_WARN("Apply FS_FILE_ID_BLE_APP_IMAGE not implemented");
-                        // FIXME: needs implementing
+                    case FS_FILE_ID_BLE_SOFT_IMAGE:
+                        DEBUG_PR_TRACE("Apply FS_FILE_ID_BLE_SOFT_IMAGE");
+
+                        fs_stat(file_system, FS_FILE_ID_BLE_SOFT_IMAGE, &stat);
+
+                        syshal_ble_config_fw_upgrade(SYSHAL_BLE_FW_UPGRADE_TYPE_SOFT_DEV, stat.size, 0);
+
+                        do
+                        {
+                            uint8_t read_buffer[50];
+                            uint32_t bytes_actually_read;
+                            ret = fs_read(file_handle, &read_buffer, sizeof(read_buffer), &bytes_actually_read);
+                            syshal_ble_fw_send(read_buffer, bytes_actually_read);
+                        }
+                        while (FS_ERROR_END_OF_FILE != ret);
+
                         break;
                 }
 
@@ -2631,6 +2661,8 @@ static void log_read_next_state()
     uint32_t bytes_to_read;
     uint32_t bytes_actually_read;
     int ret;
+
+    DEBUG_PR_TRACE("Bytes left to write: %lu", sm_context.log_read.length);
 
     // Get write buffer
     uint8_t * read_buffer;
@@ -3090,7 +3122,7 @@ void boot_state(void)
     // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
     if (syshal_gpio_get_input(GPIO_VUSB))
     {
-        config_if_init(CONFIG_IF_BACKEND_USB);
+        config_if_init(CONFIG_IF_BACKEND_BLE);
         sm_set_state(SM_STATE_STANDBY_BATTERY_CHARGING);
         return;
     }
@@ -3149,7 +3181,7 @@ void standby_battery_level_low_state()
     // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
     if (syshal_gpio_get_input(GPIO_VUSB))
     {
-        config_if_init(CONFIG_IF_BACKEND_USB);
+        config_if_init(CONFIG_IF_BACKEND_BLE);
         sm_set_state(SM_STATE_STANDBY_BATTERY_CHARGING);
     }
 }
@@ -3161,7 +3193,7 @@ void standby_log_file_full_state()
     // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
     if (syshal_gpio_get_input(GPIO_VUSB))
     {
-        config_if_init(CONFIG_IF_BACKEND_USB);
+        config_if_init(CONFIG_IF_BACKEND_BLE);
         sm_set_state(SM_STATE_STANDBY_BATTERY_CHARGING);
         return;
     }
@@ -3197,7 +3229,7 @@ void standby_provisioning_needed_state()
     // If the battery is charging then the system shall transition to the BATTERY_CHARGING state
     if (syshal_gpio_get_input(GPIO_VUSB))
     {
-        config_if_init(CONFIG_IF_BACKEND_USB);
+        config_if_init(CONFIG_IF_BACKEND_BLE);
         sm_set_state(SM_STATE_STANDBY_BATTERY_CHARGING);
         return;
     }
@@ -3541,7 +3573,7 @@ void operational_state(void)
         syshal_axl_term();
         syshal_pressure_term();
 
-        config_if_init(CONFIG_IF_BACKEND_USB);
+        config_if_init(CONFIG_IF_BACKEND_BLE);
         sm_set_state(SM_STATE_STANDBY_BATTERY_CHARGING);
         return;
     }

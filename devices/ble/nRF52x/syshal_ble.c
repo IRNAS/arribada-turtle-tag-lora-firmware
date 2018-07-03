@@ -277,6 +277,32 @@ int syshal_ble_config_fw_upgrade(syshal_ble_fw_upgrade_type_t type, uint32_t siz
     return ret;
 }
 
+int syshal_ble_fw_send(uint8_t * data, uint32_t size)
+{
+    int ret = 0;
+
+    while (size)
+    {
+        uint32_t bytes_to_send = MIN(size, NRF52_SPI_DATA_PORT_SIZE);
+
+        syshal_gpio_set_output_low(GPIO_SPI1_CS_BT);
+        syshal_time_delay_us(3);
+        ret = syshal_spi_transfer(spi_device, data, rx_buffer, size);
+        syshal_time_delay_us(3);
+        syshal_gpio_set_output_high(GPIO_SPI1_CS_BT);
+
+        // Wait for the device to have written to its FLASH
+        syshal_time_delay_us(bytes_to_send * NRF52_FW_WRITE_TIME_PER_BYTE_US);
+
+        size -= bytes_to_send;
+    }
+
+    if (ret)
+        return SYSHAL_BLE_ERROR_COMMS;
+    else
+        return SYSHAL_BLE_NO_ERROR;
+}
+
 int syshal_ble_reset(void)
 {
     uint8_t mode = NRF52_MODE_RESET;
