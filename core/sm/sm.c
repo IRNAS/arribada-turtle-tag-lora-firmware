@@ -3114,6 +3114,11 @@ void boot_state(void)
     if (!(FS_NO_ERROR == ret || FS_ERROR_FILE_NOT_FOUND == ret || FS_ERROR_FILE_VERSION_MISMATCH == ret))
         Throw(EXCEPTION_FS_ERROR);
 
+    // Delete any firmware images we may have
+    fs_delete(file_system, FS_FILE_ID_STM32_IMAGE);
+    fs_delete(file_system, FS_FILE_ID_BLE_APP_IMAGE);
+    fs_delete(file_system, FS_FILE_ID_BLE_SOFT_IMAGE);
+
     // Init the peripheral devices after configuration data has been collected
 
     syshal_gps_init();
