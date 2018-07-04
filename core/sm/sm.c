@@ -2363,6 +2363,10 @@ static void fw_apply_image_req(cmd_t * req, uint16_t size)
 
                         fs_close(file_handle); // Close the file
 
+                        fs_delete(file_system, FS_FILE_ID_BLE_APP_IMAGE);
+
+                        DEBUG_PR_TRACE("Complete FS_FILE_ID_BLE_APP_IMAGE");
+
                         break;
 
                     case FS_FILE_ID_BLE_SOFT_IMAGE:
@@ -2381,13 +2385,16 @@ static void fw_apply_image_req(cmd_t * req, uint16_t size)
                         }
                         while (FS_ERROR_END_OF_FILE != ret);
 
+                        fs_close(file_handle); // Close the file
+
+                        fs_delete(file_system, FS_FILE_ID_BLE_SOFT_IMAGE);
+
+                        DEBUG_PR_TRACE("Complete FS_FILE_ID_BLE_SOFT_IMAGE");
+
                         break;
                 }
 
-                fs_close(file_handle); // Close the file
-
                 resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
-
                 break;
 
             case FS_ERROR_FILE_NOT_FOUND:
@@ -2405,6 +2412,7 @@ static void fw_apply_image_req(cmd_t * req, uint16_t size)
         resp->p.cmd_generic_resp.error_code = CMD_ERROR_INVALID_FW_IMAGE_TYPE;
     }
 
+    config_if_timeout_reset();
     buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_generic_resp_t));
     config_if_send_priv(&config_if_send_buffer);
 }
@@ -3045,6 +3053,8 @@ void boot_state(void)
     syshal_gpio_init(GPIO_LED1_GREEN);
     syshal_gpio_init(GPIO_LED2_RED);
     syshal_gpio_init(GPIO_VUSB);
+    syshal_gpio_init(GPIO_SPI1_CS_BT);
+    syshal_gpio_set_output_high(GPIO_SPI1_CS_BT);
 
     syshal_uart_init(UART_1);
     syshal_uart_init(UART_2);

@@ -32,8 +32,8 @@
 
 #define MIN(x, y)  (x) < (y) ? (x) : (y)
 
-#define SPI_BUS_DELAY_US_WRITE    (300) //(4000) //(300)
-#define SPI_BUS_DELAY_US_READ_REG (400) //(4000) //(400)
+#define SPI_BUS_DELAY_US_WRITE    (300)
+#define SPI_BUS_DELAY_US_READ_REG (400)
 
 #define NRF52_SPIS_DMA_ANOMALY_109_WORKAROUND_ENABLED
 
@@ -117,6 +117,12 @@ static int read_register(uint16_t address, uint8_t * data, uint16_t size)
     // Remove the 0x00 padding byte, this is because the first byte may be erroneous as stated in the DMA anomaly 109 errata
     memcpy(data, rx_buffer + 1, size);
 #endif
+
+//    DEBUG_PR_TRACE("read_register(0x%02X, *data, %d)", address, size);
+//    for (uint32_t i = 0; i < size; ++i)
+//        printf("%02X ", data[i]);
+//    printf("\r\n");
+
     return SYSHAL_BLE_NO_ERROR;
 }
 
@@ -158,8 +164,8 @@ int syshal_ble_init(uint32_t comms_device)
     spi_device = comms_device;
     uint32_t version;
 
-    syshal_gpio_init(GPIO_SPI1_CS_BT);
-    syshal_gpio_set_output_high(GPIO_SPI1_CS_BT);
+//    syshal_gpio_init(GPIO_SPI1_CS_BT);
+//    syshal_gpio_set_output_high(GPIO_SPI1_CS_BT);
 
     time_of_last_transfer = syshal_time_get_ticks_us();
 
@@ -299,6 +305,12 @@ int syshal_ble_config_fw_upgrade(syshal_ble_fw_upgrade_type_t type, uint32_t siz
     ret = write_register(NRF52_REG_ADDR_FW_UPGRADE_SIZE, (uint8_t *)&size, sizeof(size));
     ret |= write_register(NRF52_REG_ADDR_FW_UPGRADE_TYPE, (uint8_t *)&type, sizeof(uint8_t));
     ret |= write_register(NRF52_REG_ADDR_FW_UPGRADE_CRC, (uint8_t *)&crc, sizeof(crc));
+
+    uint8_t mode = NRF52_MODE_FW_UPGRADE;
+    ret |= write_register(NRF52_REG_ADDR_MODE, &mode, sizeof(mode));
+
+    syshal_time_delay_ms(1000); // Allow time for the nRF device to enter its RAM only functions/state
+
     return ret;
 }
 
@@ -317,7 +329,7 @@ int syshal_ble_fw_send(uint8_t * data, uint32_t size)
         syshal_gpio_set_output_high(GPIO_SPI1_CS_BT);
 
         // Wait for the device to have written to its FLASH
-        syshal_time_delay_us(bytes_to_send * NRF52_FW_WRITE_TIME_PER_BYTE_US);
+        syshal_time_delay_us(((bytes_to_send / 4) + 1) * NRF52_FW_WRITE_TIME_PER_WORD_US);
 
         size -= bytes_to_send;
     }
