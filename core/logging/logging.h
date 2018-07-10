@@ -24,18 +24,33 @@
 #define LOGGING_SET_HDR(p, i)  \
     (p)->h.id   = i;
 
-#define LOGGING_LOG_START     (0x7E) // Used to synchronize to the start of a log entry
-#define LOGGING_LOG_END       (0x7F) // Used to synchronize to the end of a log entry, including an 8-bit parity checksum
-#define LOGGING_GPS_POSITION  (0x00) // GPS location
-#define LOGGING_GPS_TTFF      (0x01) // GPS time to first fix
-#define LOGGING_PRESSURE      (0x02) // Pressure sensor reading
-#define LOGGING_AXL_XYZ       (0x03) // Accelerometer X/Y/Z reading
-#define LOGGING_DATE_TIME     (0x04) // The date and time retrieved from the RTC
-#define LOGGING_HRT           (0x05) // High resolution timer
-#define LOGGING_TEMPERATURE   (0x06)
-#define LOGGING_SURFACED      (0x07) // Saltwater switch opened event
-#define LOGGING_SUBMERGED     (0x08) // Saltwater switch closed event
-#define LOGGING_BATTERY       (0x09) // Battery charge state
+#define LOGGING_LOG_START         (0x7E) // Used to synchronize to the start of a log entry
+#define LOGGING_LOG_END           (0x7F) // Used to synchronize to the end of a log entry, including an 8-bit parity checksum
+#define LOGGING_GPS_POSITION      (0x00) // GPS location
+#define LOGGING_GPS_TTFF          (0x01) // GPS time to first fix
+#define LOGGING_PRESSURE          (0x02) // Pressure sensor reading
+#define LOGGING_AXL_XYZ           (0x03) // Accelerometer X/Y/Z reading
+#define LOGGING_DATE_TIME         (0x04) // The date and time retrieved from the RTC
+#define LOGGING_HRT               (0x05) // High resolution timer
+#define LOGGING_TEMPERATURE       (0x06)
+#define LOGGING_SURFACED          (0x07) // Saltwater switch opened event
+#define LOGGING_SUBMERGED         (0x08) // Saltwater switch closed event
+#define LOGGING_BATTERY           (0x09) // Battery charge state
+#define LOGGING_BLE_ENABLED       (0x0A) // Bluetooth function has been enabled
+#define LOGGING_BLE_DISABLED      (0x0B) // Bluetooth function has been disabled
+#define LOGGING_BLE_CONNECTED     (0x0C) // Bluetooth GATT connection has been made
+#define LOGGING_BLE_DISCONNECTED  (0x0D) // Bluetooth GATT connection has been released
+
+#define LOGGING_BLE_ENABLED_CAUSE_REED_SWITCH     (0x00)
+#define LOGGING_BLE_ENABLED_CAUSE_SCHEDULE_TIMER  (0x01)
+#define LOGGING_BLE_ENABLED_CAUSE_GEOFENCE        (0x02)
+
+#define LOGGING_BLE_DISABLED_CAUSE_REED_SWITCH    (0x00)
+#define LOGGING_BLE_DISABLED_CAUSE_SCHEDULE_TIMER (0x01)
+#define LOGGING_BLE_DISABLED_CAUSE_GEOFENCE       (0x02)
+
+#define LOGGING_BLE_DISCONNECTED_CAUSE_DISCONNECT (0x00)
+#define LOGGING_BLE_DISCONNECTED_CAUSE_INACTIVITY (0x01)
 
 typedef struct __attribute__((__packed__))
 {
@@ -113,5 +128,23 @@ typedef struct __attribute__((__packed__))
     logging_hdr_t h;
     uint8_t charge;
 } logging_battery_t;
+
+typedef struct __attribute__((__packed__))
+{
+    logging_hdr_t h;
+    uint8_t cause;
+} logging_ble_enabled_t;
+
+typedef struct __attribute__((__packed__))
+{
+    logging_hdr_t h;
+    uint8_t cause;
+} logging_ble_disabled_t;
+
+typedef struct __attribute__((__packed__))
+{
+    logging_hdr_t h;
+    uint8_t cause;
+} logging_ble_disconnect_t;
 
 #endif /* _LOGGING_H_ */
