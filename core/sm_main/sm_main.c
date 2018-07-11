@@ -217,7 +217,7 @@ static volatile bool     log_file_created = false; // Does a log file exist?
 static volatile bool     gps_ttff_reading_logged = false; // Have we read the most recent gps ttff reading?
 static uint8_t           last_battery_reading;
 static volatile bool     sensor_logging_enabled = false; // Are sensors currently allowed to log
-
+static uint8_t           ble_state;
 static fs_handle_t       file_handle = NULL; // The global file handle we have open. Only allow one at once
 
 // Timer handles
@@ -609,6 +609,18 @@ void logging_add_to_buffer(uint8_t * data, uint32_t size)
     buffer_write_advance(&logging_buffer, length);
 }
 
+// Start or stop BLE based on ble_state triggers
+void manage_ble(void)
+{
+    if (ble_state &&
+        CONFIG_IF_BACKEND_NOT_SET == config_if_current())
+        config_if_init(CONFIG_IF_BACKEND_BLE);
+
+    if (!ble_state &&
+        CONFIG_IF_BACKEND_BLE == config_if_current())
+        config_if_term();
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////// CALLBACK FUNCTIONS //////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -812,6 +824,21 @@ void syshal_switch_callback(syshal_switch_event_id_t event)
         default:
             DEBUG_PR_WARN("Unknown switch event in %s() : %d", __FUNCTION__, event);
             break;
+    }
+}
+
+static void gpio_reed_sw_callback(void)
+{
+    DEBUG_PR_TRACE("%s() state: %d", __FUNCTION__, syshal_gpio_get_input(GPIO_REED_SW));
+
+    // Should we be using the reed switch to trigger BLE activation?
+    if (sys_config.sys_config_tag_bluetooth_trigger_control.hdr.set &&
+        sys_config.sys_config_tag_bluetooth_trigger_control.contents.flags | SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_REED_SWITCH)
+    {
+        if (!syshal_gpio_get_input(GPIO_REED_SW))
+            ble_state |= SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_REED_SWITCH;
+        else
+            ble_state &= ~SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_REED_SWITCH;
     }
 }
 
@@ -2928,6 +2955,9 @@ static void sm_main_boot(sm_handle_t * state_handle)
     syshal_gpio_init(GPIO_SPI1_CS_BT);
     syshal_gpio_set_output_high(GPIO_SPI1_CS_BT);
 
+    syshal_gpio_init(GPIO_REED_SW);
+    syshal_gpio_enable_interrupt(GPIO_REED_SW, gpio_reed_sw_callback);
+
     syshal_uart_init(UART_1);
     syshal_uart_init(UART_2);
 //    syshal_uart_init(UART_3);
@@ -3296,6 +3326,8 @@ static void sm_main_operational(sm_handle_t * state_handle)
         }
     }
 
+    manage_ble();
+
     config_if_tick();
 
     // Branch to Provisioning state if config_if has connected
@@ -3335,6 +3367,10 @@ static void sm_main_log_file_full(sm_handle_t * state_handle)
                       sm_main_state_str[sm_get_last_state(state_handle)]);
     }
 
+    manage_ble();
+
+    config_if_tick();
+
     // Branch to Provisioning state if config_if has connected
     if (config_if_connected)
     {
@@ -3368,6 +3404,8 @@ static void sm_main_battery_charging(sm_handle_t * state_handle)
             usb_enumeration_timeout = syshal_time_get_ticks_ms();
         }
     }
+
+    manage_ble();
 
     config_if_tick();
 
@@ -3413,6 +3451,8 @@ static void sm_main_battery_level_low(sm_handle_t * state_handle)
                       sm_main_state_str[sm_get_current_state(state_handle)],
                       sm_main_state_str[sm_get_last_state(state_handle)]);
 
+        config_if_term();
+
         // Sleep the GPS to save power
         if (SM_GPS_STATE_ASLEEP != sm_gps_state)
         {
@@ -3453,6 +3493,8 @@ static void sm_main_provisioning_needed(sm_handle_t * state_handle)
         syshal_gpio_set_output_low(GPIO_LED2_RED);
         blinkTimer = syshal_time_get_ticks_ms();
     }
+
+    manage_ble();
 
     config_if_tick();
 
