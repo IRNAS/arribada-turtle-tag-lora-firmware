@@ -17,8 +17,10 @@
 // Includes ------------------------------------------------------------------
 #include "main.h"
 #include "bsp.h"
+#include "cexception.h"
 #include "debug.h"
 #include "sm.h"
+#include "sm_main.h"
 #include "system_clock.h"
 #include "syshal_gpio.h"
 #include "syshal_i2c.h"
@@ -32,6 +34,8 @@
 
 int main(void)
 {
+    sm_handle_t state_handle;
+
     // Reset of all peripherals, Initializes the Flash interface and the Systick
     HAL_Init();
 
@@ -68,9 +72,20 @@ int main(void)
     // Configure the system clock
     system_clock_config();
 
+    sm_init(&state_handle, sm_main_states);
+    sm_set_next_state(&state_handle, SM_MAIN_BOOT);
+
     while (1)
     {
-        sm_iterate();
+        CEXCEPTION_T e = CEXCEPTION_NONE;
+
+        Try
+        {
+            sm_tick(&state_handle);
+        } Catch (e)
+        {
+            sm_main_exception_handler(e);
+        }
     }
 
     return 0;

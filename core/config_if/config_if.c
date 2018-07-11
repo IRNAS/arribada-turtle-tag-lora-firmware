@@ -65,6 +65,11 @@ int config_if_init(config_if_backend_t backend)
     }
 }
 
+config_if_backend_t config_if_current(void)
+{
+    return backend_priv;
+}
+
 int config_if_term(void)
 {
     config_if_func_send_priv = NULL;
@@ -134,6 +139,7 @@ void config_if_tick(void)
 int syshal_usb_event_handler(syshal_usb_event_t * event)
 {
     config_if_event_t parsedEvent;
+    parsedEvent.backend = CONFIG_IF_BACKEND_USB;
 
     switch (event->id)
     {
@@ -174,6 +180,7 @@ int syshal_usb_event_handler(syshal_usb_event_t * event)
 void syshal_ble_event_handler(syshal_ble_event_t * event)
 {
     config_if_event_t parsedEvent;
+    parsedEvent.backend = CONFIG_IF_BACKEND_BLE;
 
     switch (event->event_id)
     {

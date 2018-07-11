@@ -40,9 +40,17 @@ typedef enum
     CONFIG_IF_EVENT_DISCONNECTED, // maps to BLE disconnection or USB host disconnection
 } config_if_event_id_t;
 
+typedef enum
+{
+    CONFIG_IF_BACKEND_USB,
+    CONFIG_IF_BACKEND_BLE,
+    CONFIG_IF_BACKEND_NOT_SET
+} config_if_backend_t;
+
 typedef struct
 {
     config_if_event_id_t id;
+    config_if_backend_t backend;
     union
     {
         struct
@@ -56,17 +64,11 @@ typedef struct
     };
 } config_if_event_t;
 
-typedef enum
-{
-    CONFIG_IF_BACKEND_USB,
-    CONFIG_IF_BACKEND_BLE,
-    CONFIG_IF_BACKEND_NOT_SET
-} config_if_backend_t;
-
 int config_if_init(config_if_backend_t backend);
 int config_if_term(void);
 int config_if_send(uint8_t * data, uint32_t size);
 int config_if_receive(uint8_t * data, uint32_t size);
+config_if_backend_t config_if_current(void);
 void config_if_tick(void);
 
 int config_if_event_handler(config_if_event_t * event);

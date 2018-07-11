@@ -1,4 +1,4 @@
-/* sm.h - Main state machine
+/* sm.h - State machine handling code
  *
  * Copyright (C) 2018 Arribada
  *
@@ -19,27 +19,30 @@
 #ifndef _SM_H_
 #define _SM_H_
 
-#define SM_MESSAGE_INACTIVITY_TIMEOUT_MS (2000)
+#include <stdbool.h>
 
-typedef enum
+struct state;
+typedef void (*sm_state_func_t)(struct state *);
+typedef struct state
 {
-    SM_STATE_BOOT,
-    SM_STATE_STANDBY_BATTERY_CHARGING,
-    SM_STATE_STANDBY_BATTERY_LEVEL_LOW,
-    SM_STATE_STANDBY_LOG_FILE_FULL,
-    SM_STATE_STANDBY_PROVISIONING_NEEDED,
-    SM_STATE_STANDBY_TRIGGER_PENDING,
-    SM_STATE_PROVISIONING,
-    SM_STATE_OPERATIONAL,
-} sm_state_t;
+    sm_state_func_t * state_function_lookup_table;
 
-sm_state_t sm_get_state(void);
-void sm_set_state(sm_state_t s);
-void sm_iterate(void);
+    int last_state;
+    int current_state;
+    int next_state;
 
-#ifdef GTEST
-// If we are doing a gtest, expose the event handler so we can mock events
-int config_if_event_handler(config_if_event_t * event);
-#endif
+    bool first_time_running;
+} sm_handle_t;
+
+void sm_init(sm_handle_t * handle, sm_state_func_t * state_table);
+void sm_set_next_state(sm_handle_t * handle, int state);
+
+bool sm_is_first_entry(const sm_handle_t * handle);
+bool sm_is_last_entry(const sm_handle_t * handle);
+int sm_get_last_state(const sm_handle_t * handle);
+int sm_get_current_state(const sm_handle_t * handle);
+int sm_get_next_state(const sm_handle_t * handle);
+
+void sm_tick(sm_handle_t * handle);
 
 #endif /* _SM_H_ */
