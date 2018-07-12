@@ -82,7 +82,7 @@ static uint8_t syshal_gpio_get_pin_id_priv(uint16_t pin)
  *
  * @param[in]  pin   The pin
  */
-void syshal_gpio_init(uint32_t pin)
+int syshal_gpio_init(uint32_t pin)
 {
 
     if (GPIOA == GPIO_Inits[pin].Port)
@@ -105,6 +105,7 @@ void syshal_gpio_init(uint32_t pin)
 
     HAL_GPIO_Init(GPIO_Inits[pin].Port, &GPIO_Inits[pin].Init);
 
+    return SYSHAL_GPIO_NO_ERROR;
 }
 
 /**

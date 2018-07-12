@@ -82,6 +82,24 @@ bool sm_is_last_entry(const sm_handle_t * handle)
 }
 
 /**
+ * @brief      Set the current state to be execute
+ *
+ * @warning    This should only be used in unit tests
+ *
+ * @param      handle  The state handler
+ * @param[in]  state   The next state
+ */
+void sm_set_current_state(sm_handle_t * handle, int state)
+{
+    if (handle->current_state != state)
+        handle->first_time_running = true;
+
+    handle->last_state = handle->current_state;
+    handle->current_state = state;
+    handle->next_state = state;
+}
+
+/**
  * @brief      Set the next state to be execute
  *
  * @param      handle  The state handler

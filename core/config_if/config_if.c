@@ -112,7 +112,7 @@ int config_if_receive(uint8_t * data, uint32_t size)
  *
  * @return     Return error code
  */
-__attribute__((weak)) int config_if_event_handler(config_if_event_t * event)
+__attribute__((weak)) int config_if_callback(config_if_event_t * event)
 {
     ((void)(event)); // Remove unused variable compiler warning
     DEBUG_PR_WARN("%s Not implemented", __FUNCTION__);
@@ -167,7 +167,7 @@ int syshal_usb_event_handler(syshal_usb_event_t * event)
             break;
     }
 
-    config_if_event_handler(&parsedEvent);
+    config_if_callback(&parsedEvent);
 
     return SYSHAL_USB_NO_ERROR;
 }
@@ -218,5 +218,5 @@ void syshal_ble_event_handler(syshal_ble_event_t * event)
             break;
     }
 
-    config_if_event_handler(&parsedEvent);
+    config_if_callback(&parsedEvent);
 }

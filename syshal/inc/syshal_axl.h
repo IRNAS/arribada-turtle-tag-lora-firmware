@@ -20,6 +20,7 @@
 #define _SYSHAL_AXL_H_
 
 #include <stdint.h>
+#include <stdbool.h>
 
 #define SYSHAL_AXL_NO_ERROR                   ( 0)
 #define SYSHAL_AXL_ERROR_PROVISIONING_NEEDED  (-1)

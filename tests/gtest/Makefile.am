@@ -4,7 +4,7 @@ devices_srcdir=$(basedir)/devices
 syshal_srcdir=$(basedir)/syshal
 gtest_srcdir=$(top_srcdir)/gtest
 ports_srcdir=$(basedir)/ports/stm32
-boards_srcdir=$(ports_srcdir)/boards/arribada_v1
+boards_srcdir=$(ports_srcdir)/boards/arribada_v2
 CMSIS_srcdir=$(ports_srcdir)/drivers/CMSIS
 device_srcdir=$(CMSIS_srcdir)/Device/ST/STM32F0xx
 hal_srcdir=$(ports_srcdir)/drivers/STM32F0xx_HAL_Driver
@@ -51,7 +51,7 @@ nodist_Flash_SOURCES = $(gtest_srcdir)/Flash.cpp \
                     $(devices_srcdir)/flash/S25FL128/S25FL128.c
 
 Flash_LDADD = $(COMMON_LDADD)
-Flash_CPPFLAGS = $(AM_CPPFLAGS) -I$(devices_srcdir)/flash/S25FL128
+Flash_CPPFLAGS = $(AM_CPPFLAGS) -I$(ports_srcdir) -I$(hal_srcdir)/Inc -I$(boards_srcdir) -I$(devices_srcdir)/flash/S25FL128
 
 TESTS += Flash.test
 
@@ -72,44 +72,53 @@ Ble_nRF52_LDADD = $(COMMON_LDADD)
 Ble_nRF52_CPPFLAGS = $(AM_CPPFLAGS) -I$(devices_srcdir)/ble/nRF52x
 TESTS += Ble_nRF52.test
 
-check_PROGRAMS += Sm
-nodist_Sm_SOURCES = $(gtest_srcdir)/Sm.cpp \
-                    $(gtest_srcdir)/mocks/cmock.c \
-                    $(gtest_srcdir)/mocks/Mockconfig_if.c \
-                    $(gtest_srcdir)/mocks/Mocksyshal_axl.c \
-                    $(gtest_srcdir)/mocks/Mocksyshal_batt.c \
-                    $(gtest_srcdir)/mocks/Mocksyshal_gpio.c \
-                    $(gtest_srcdir)/mocks/Mocksyshal_gps.c \
-                    $(gtest_srcdir)/mocks/Mocksyshal_i2c.c \
-                    $(gtest_srcdir)/mocks/Mocksyshal_pmu.c \
-                    $(gtest_srcdir)/mocks/Mocksyshal_spi.c \
-                    $(gtest_srcdir)/mocks/Mocksyshal_time.c \
-                    $(gtest_srcdir)/mocks/Mocksyshal_uart.c \
-                    $(gtest_srcdir)/mocks/Mocksyshal_flash.c \
-                    $(core_srcdir)/fs/fs.c \
-                    $(core_srcdir)/cexception/cexception.c \
-                    $(core_srcdir)/crc32/crc32.c \
-                    $(core_srcdir)/buffer/buffer.c \
-                    $(core_srcdir)/sys_config/sys_config.c \
-                    $(core_srcdir)/sm/sm.c
+check_PROGRAMS += Sm_Main_GTest
+nodist_Sm_Main_GTest_SOURCES = $(gtest_srcdir)/Sm_Main_GTest.cpp \
+                               $(gtest_srcdir)/mocks/cmock.c \
+                               $(gtest_srcdir)/mocks/Mocksyshal_axl.c \
+                               $(gtest_srcdir)/mocks/Mocksyshal_batt.c \
+                               $(gtest_srcdir)/mocks/Mockconfig_if.c \
+                               $(gtest_srcdir)/mocks/Mocksyshal_gpio.c \
+                               $(gtest_srcdir)/mocks/Mocksyshal_pressure.c \
+                               $(gtest_srcdir)/mocks/Mocksyshal_pmu.c \
+                               $(gtest_srcdir)/mocks/Mocksyshal_ble.c \
+                               $(gtest_srcdir)/mocks/Mocksyshal_switch.c \
+                               $(gtest_srcdir)/mocks/Mocksyshal_gps.c \
+                               $(gtest_srcdir)/mocks/Mocksyshal_flash.c \
+                               $(gtest_srcdir)/mocks/Mocksyshal_time.c \
+                               $(gtest_srcdir)/mocks/Mocksyshal_uart.c \
+                               $(gtest_srcdir)/mocks/Mocksyshal_spi.c \
+                               $(gtest_srcdir)/mocks/Mocksyshal_i2c.c \
+                               $(gtest_srcdir)/mocks/Mocksyshal_rtc.c \
+                               $(gtest_srcdir)/mocks/Mocksyshal_firmware.c \
+                               $(syshal_srcdir)/src/syshal_timer.c \
+                               $(core_srcdir)/cexception/cexception.c \
+                               $(core_srcdir)/sys_config/sys_config.c \
+                               $(core_srcdir)/crc32/crc32.c \
+                               $(core_srcdir)/fs/fs.c \
+                               $(core_srcdir)/sm/sm.c \
+                               $(core_srcdir)/buffer/buffer.c \
+                               $(core_srcdir)/sm_main/sm_main.c
 
-Sm_LDADD = $(COMMON_LDADD)
-Sm_CPPFLAGS = $(AM_CPPFLAGS) \
-						  -I$(core_srcdir)/sm \
-						  -I$(core_srcdir)/buffer \
-						  -I$(core_srcdir)/cexception \
-						  -I$(core_srcdir)/config_if \
-              -I$(core_srcdir)/crc32 \
-              -I$(core_srcdir)/sys_config \
-						  -I$(core_srcdir)/debug \
-						  -I$(core_srcdir)/fs \
-						  -I$(core_srcdir)/config \
-						  -I$(ports_srcdir) \
-						  -I$(boards_srcdir) \
-						  -I$(hal_srcdir)/Inc \
-						  -I$(device_srcdir)/Include \
-						  -I$(CMSIS_srcdir)/Include
-TESTS += Sm.test
+Sm_Main_GTest_LDADD = $(COMMON_LDADD)
+Sm_Main_GTest_CPPFLAGS = $(AM_CPPFLAGS) \
+                         -I$(CMSIS_srcdir)/Device/ST/STM32F0xx/Include \
+                         -I$(CMSIS_srcdir)/Include \
+                         -I$(boards_srcdir) \
+                         -I$(hal_srcdir)/inc \
+                         -I$(ports_srcdir) \
+                         -I$(core_srcdir)/crc32 \
+                         -I$(core_srcdir)/config \
+                         -I$(core_srcdir)/config_if \
+                         -I$(core_srcdir)/buffer \
+                         -I$(core_srcdir)/fs \
+                         -I$(core_srcdir)/logging \
+                         -I$(core_srcdir)/sys_config \
+                         -I$(core_srcdir)/cexception \
+                         -I$(core_srcdir)/debug \
+                         -I$(core_srcdir)/sm_main \
+                         -I$(core_srcdir)/sm
+TESTS += Sm_Main_GTest.test
 
 LINT_FLAGS  = -"A(C++2010)"
 LINT_FLAGS += -e537 # Ignore repeated includes

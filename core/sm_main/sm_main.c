@@ -19,7 +19,7 @@
 #include <string.h>
 #include <math.h>
 #include "sm_main.h"
-#include "bsp.h"
+//#include "bsp.h"
 #include "buffer.h"
 #include "cmd.h"
 #include "config_if.h"
@@ -2636,7 +2636,7 @@ static void config_if_session_cleanup(void)
     file_handle = NULL;
 }
 
-int config_if_event_handler(config_if_event_t * event)
+int config_if_callback(config_if_event_t * event)
 {
     // This is called from an interrupt so we'll keep it short
     switch (event->id)
@@ -3409,6 +3409,8 @@ static void sm_main_battery_charging(sm_handle_t * state_handle)
 
     config_if_tick();
 
+    syshal_timer_tick();
+
     // Branch to Provisioning state if config_if has connected
     if (config_if_connected)
         sm_set_next_state(state_handle, SM_MAIN_PROVISIONING);
@@ -3497,6 +3499,8 @@ static void sm_main_provisioning_needed(sm_handle_t * state_handle)
     manage_ble();
 
     config_if_tick();
+
+    syshal_timer_tick();
 
     // Branch to Battery Charging if VUSB is present
     if (syshal_gpio_get_input(GPIO_VUSB))

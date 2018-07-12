@@ -22,7 +22,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-void syshal_gpio_init(uint32_t pin);
+#define SYSHAL_GPIO_NO_ERROR (0)
+
+int syshal_gpio_init(uint32_t pin);
 void syshal_gpio_term(uint32_t pin);
 void syshal_gpio_enable_interrupt(uint32_t pin, void (*callback_function)(void));
 void syshal_gpio_disable_interrupt(uint32_t pin);

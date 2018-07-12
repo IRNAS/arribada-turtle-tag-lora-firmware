@@ -7,3 +7,5 @@ ports/stm32/build/
 *.o
 *.log
 tests/gtest/.deps/
+tests/gtest/mocks/
+tests/gtest/gtest/

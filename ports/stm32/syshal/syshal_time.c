@@ -29,7 +29,7 @@
 
 TIM_HandleTypeDef htim2;
 
-void syshal_time_init(void)
+int syshal_time_init(void)
 {
     // Setup timer 2 as free running at a frequency of 1MHz. This is used to determine microseconds elapsed
     __HAL_RCC_TIM2_CLK_ENABLE();
@@ -53,6 +53,8 @@ void syshal_time_init(void)
     HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig);
 
     HAL_TIM_Base_Start(&htim2);
+
+    return SYSHAL_TIME_NO_ERROR;
 }
 
 /**

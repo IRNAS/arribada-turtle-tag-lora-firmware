@@ -18,10 +18,6 @@
 #define _BSP_H_
 
 #include "stm32f0xx_hal.h"
-#include "stm32f0xx_hal_gpio.h"
-#include "stm32f0xx_hal_spi.h"
-#include "stm32f0xx_hal_uart.h"
-#include "stm32f0xx_hal_i2c.h"
 
 // Logical device mappings to physical devices
 #define GPS_UART        UART_1

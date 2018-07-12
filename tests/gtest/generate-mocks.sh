@@ -13,6 +13,7 @@
 mocks="../../syshal/inc/syshal_axl.h \
        ../../syshal/inc/syshal_batt.h \
        ../../syshal/inc/syshal_ble.h \
+       ../../syshal/inc/syshal_firmware.h \
        ../../syshal/inc/syshal_flash.h \
        ../../syshal/inc/syshal_gpio.h \
        ../../syshal/inc/syshal_gps.h \
@@ -21,6 +22,7 @@ mocks="../../syshal/inc/syshal_axl.h \
        ../../syshal/inc/syshal_pressure.h \
        ../../syshal/inc/syshal_rtc.h \
        ../../syshal/inc/syshal_spi.h \
+       ../../syshal/inc/syshal_switch.h \
        ../../syshal/inc/syshal_time.h \
        ../../syshal/inc/syshal_timer.h \
        ../../syshal/inc/syshal_uart.h \

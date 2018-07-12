@@ -3,6 +3,6 @@
      - :callback
      - :ignore
   :strippables:
-     - ['__attribute__\(\(weak\)\)\s[^;]*.']
+     - ['__attribute__\(\(weak\)\)\s[^;]*.','(.*)_callback(.*)']
   :ignore:
       :args_only

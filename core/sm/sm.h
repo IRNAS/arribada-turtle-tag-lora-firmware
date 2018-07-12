@@ -43,6 +43,10 @@ int sm_get_last_state(const sm_handle_t * handle);
 int sm_get_current_state(const sm_handle_t * handle);
 int sm_get_next_state(const sm_handle_t * handle);
 
+#ifdef GTEST
+void sm_set_current_state(sm_handle_t * handle, int state);
+#endif
+
 void sm_tick(sm_handle_t * handle);
 
 #endif /* _SM_H_ */

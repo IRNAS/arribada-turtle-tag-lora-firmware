@@ -21,7 +21,9 @@
 
 #include <stdint.h>
 
-void syshal_time_init(void);
+#define SYSHAL_TIME_NO_ERROR (0)
+
+int syshal_time_init(void);
 uint32_t syshal_time_get_ticks_us(void);
 uint32_t syshal_time_get_ticks_ms(void);
 void syshal_time_delay_us(uint32_t us);
