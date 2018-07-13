@@ -76,6 +76,9 @@ config_if_backend_t config_if_current_GTest(int cmock_num_calls)
     return config_if_current_interface;
 }
 
+int config_if_send_GTest(uint8_t * data, uint32_t size, int cmock_num_calls) {return CONFIG_IF_NO_ERROR;}
+int config_if_receive_GTest(uint8_t * data, uint32_t size, int cmock_num_calls) {return CONFIG_IF_NO_ERROR;}
+
 void config_if_tick_GTest(int cmock_num_calls) {}
 
 // syshal_time
@@ -207,12 +210,14 @@ class Sm_MainTest : public ::testing::Test
         config_if_init_StubWithCallback(config_if_init_GTest);
         config_if_term_StubWithCallback(config_if_term_GTest);
         config_if_current_StubWithCallback(config_if_current_GTest);
+        config_if_send_StubWithCallback(config_if_send_GTest);
+        config_if_receive_StubWithCallback(config_if_receive_GTest);
         config_if_tick_StubWithCallback(config_if_tick_GTest);
 
         config_if_current_interface = CONFIG_IF_BACKEND_NOT_SET;
 
         // syshal_gpio
-        Mocksyshal_gpio_Init();
+        Mocksyshal_gpio_Init()
 
         syshal_gpio_init_StubWithCallback(syshal_gpio_init_GTest);
         syshal_gpio_get_input_StubWithCallback(syshal_gpio_get_input_GTest);
