@@ -217,7 +217,7 @@ class Sm_MainTest : public ::testing::Test
         config_if_current_interface = CONFIG_IF_BACKEND_NOT_SET;
 
         // syshal_gpio
-        Mocksyshal_gpio_Init()
+        Mocksyshal_gpio_Init();
 
         syshal_gpio_init_StubWithCallback(syshal_gpio_init_GTest);
         syshal_gpio_get_input_StubWithCallback(syshal_gpio_get_input_GTest);
