@@ -29,7 +29,7 @@ runTestSuite() {
   rm -f ${name}-valgrind.log
   exec 3>${name}-valgrind.log
   valgrind_cmd="valgrind --tool=memcheck --leak-check=full --show-reachable=yes --log-fd=3"
-  cmd="./${name} --gtest_color=yes --gtest_output=xml:${name}-results.xml $@ ${EXTRA_TEST_ARGS}"
+  cmd="./${name} --gtest_shuffle --gtest_repeat=100 --gtest_color=yes --gtest_output=xml:${name}-results.xml $@ ${EXTRA_TEST_ARGS}"
 
   if [ -n "$VALGRIND" ]; then
     $valgrind_cmd $cmd
