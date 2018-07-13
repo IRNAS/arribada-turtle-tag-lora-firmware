@@ -14,11 +14,12 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
+
 extern "C" {
 #include <assert.h>
 #include <stdint.h>
 #include "unity.h"
+#include "Mocksyshal_gpio.h"
 #include "Mocksyshal_spi.h"
 #include "syshal_flash.h"
 #include "S25FL128.h"
@@ -46,16 +47,44 @@ static unsigned int rx_buf_rd = 0;
 static unsigned int tx_buf_wr = 0;
 static unsigned int tx_buf_rd = 0;
 
+#define GPIO_TOTAL_NUMBER (200)
+static bool GPIO_pin_input_state[GPIO_TOTAL_NUMBER];
+static bool GPIO_pin_output_state[GPIO_TOTAL_NUMBER];
+static void (*GPIO_callback_function[GPIO_TOTAL_NUMBER])(void);
+
 class FlashTest : public ::testing::Test {
 
     virtual void SetUp() {
         Mocksyshal_spi_Init();
         syshal_spi_transfer_StubWithCallback(syshal_spi_transfer_Callback);
+
+        Mocksyshal_gpio_Init();
+
+        syshal_gpio_init_StubWithCallback(syshal_gpio_init_GTest);
+        syshal_gpio_get_input_StubWithCallback(syshal_gpio_get_input_GTest);
+        syshal_gpio_set_output_low_StubWithCallback(syshal_gpio_set_output_low_GTest);
+        syshal_gpio_set_output_high_StubWithCallback(syshal_gpio_set_output_high_GTest);
+        syshal_gpio_set_output_toggle_StubWithCallback(syshal_gpio_set_output_toggle_GTest);
+        syshal_gpio_enable_interrupt_StubWithCallback(syshal_gpio_enable_interrupt_GTest);
+
+        // Set all gpio input pins low
+        for (unsigned int i = 0; i < GPIO_TOTAL_NUMBER; ++i)
+            GPIO_pin_input_state[i] = 0;
+
+        // Set all gpio output pins low
+        for (unsigned int i = 0; i < GPIO_TOTAL_NUMBER; ++i)
+            GPIO_pin_output_state[i] = 0;
+
+        // Clear all gpio interrupts
+        for (unsigned int i = 0; i < GPIO_TOTAL_NUMBER; ++i)
+            GPIO_callback_function[i] = nullptr;
     }
 
     virtual void TearDown() {
         Mocksyshal_spi_Verify();
         Mocksyshal_spi_Destroy();
+        Mocksyshal_gpio_Verify();
+        Mocksyshal_gpio_Destroy();
     }
 
 public:
@@ -94,6 +123,14 @@ public:
 
         return SYSHAL_SPI_NO_ERROR;
     }
+
+    // syshal_gpio
+    static int syshal_gpio_init_GTest(uint32_t pin, int cmock_num_calls) {return SYSHAL_GPIO_NO_ERROR;}
+    static bool syshal_gpio_get_input_GTest(uint32_t pin, int cmock_num_calls) {return GPIO_pin_input_state[pin];}
+    static void syshal_gpio_set_output_low_GTest(uint32_t pin, int cmock_num_calls) {GPIO_pin_output_state[pin] = 0;}
+    static void syshal_gpio_set_output_high_GTest(uint32_t pin, int cmock_num_calls) {GPIO_pin_output_state[pin] = 1;}
+    static void syshal_gpio_set_output_toggle_GTest(uint32_t pin, int cmock_num_calls) {GPIO_pin_output_state[pin] = !GPIO_pin_output_state[pin];}
+    static void syshal_gpio_enable_interrupt_GTest(uint32_t pin, void (*callback_function)(void), int cmock_num_calls) {GPIO_callback_function[pin] = callback_function;}
 
     void WriteEnable() {
         uint8_t wren[] = { WREN };

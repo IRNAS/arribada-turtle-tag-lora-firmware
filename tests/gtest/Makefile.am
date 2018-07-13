@@ -44,23 +44,24 @@ Fs_CPPFLAGS = $(AM_CPPFLAGS) -I$(core_srcdir)/fs
 
 TESTS += Fs.test
 
-#check_PROGRAMS += Flash
-#nodist_Flash_SOURCES = $(gtest_srcdir)/Flash.cpp \
-#                    $(gtest_srcdir)/mocks/cmock.c \
-#                    $(gtest_srcdir)/mocks/Mocksyshal_spi.c \
-#                    $(devices_srcdir)/flash/S25FL128/S25FL128.c
-#
-#Flash_LDADD = $(COMMON_LDADD)
-#Flash_CPPFLAGS = $(AM_CPPFLAGS) \
-#                         -I$(CMSIS_srcdir)/Device/ST/STM32F0xx/Include \
-#                         -I$(CMSIS_srcdir)/Include \
-#-I$(ports_srcdir) \
-#-I$(hal_srcdir)/Inc \
-#-I$(boards_srcdir) \
-#-I$(core_srcdir)/debug \
-#-I$(devices_srcdir)/flash/S25FL128
-#
-#TESTS += Flash.test
+check_PROGRAMS += Flash
+nodist_Flash_SOURCES = $(gtest_srcdir)/Flash.cpp \
+                       $(gtest_srcdir)/mocks/cmock.c \
+                       $(gtest_srcdir)/mocks/Mocksyshal_gpio.c \
+                       $(gtest_srcdir)/mocks/Mocksyshal_spi.c \
+                       $(devices_srcdir)/flash/S25FL128/S25FL128.c
+
+Flash_LDADD = $(COMMON_LDADD)
+Flash_CPPFLAGS = $(AM_CPPFLAGS) \
+                 -I$(CMSIS_srcdir)/Device/ST/STM32F0xx/Include \
+                 -I$(CMSIS_srcdir)/Include \
+                 -I$(ports_srcdir) \
+                 -I$(hal_srcdir)/Inc \
+                 -I$(boards_srcdir) \
+                 -I$(core_srcdir)/debug \
+                 -I$(devices_srcdir)/flash/S25FL128
+
+TESTS += Flash.test
 
 check_PROGRAMS += Ring_Buffer
 nodist_Ring_Buffer_SOURCES = $(gtest_srcdir)/Ring_Buffer.cpp
