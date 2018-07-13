@@ -475,7 +475,7 @@ TEST_F(FsTest, ProtectedFileCanBeRead)
     EXPECT_EQ(FS_NO_ERROR, fs_write(handle, test_string[0], strlen(test_string[0]), &wr));
     EXPECT_EQ((uint32_t)strlen(test_string[0]), wr);
     EXPECT_EQ(FS_NO_ERROR, fs_close(handle));
-    EXPECT_EQ(FS_NO_ERROR, fs_protect(handle, 0));
+    EXPECT_EQ(FS_NO_ERROR, fs_protect(fs, 0));
     EXPECT_EQ(FS_NO_ERROR, fs_open(fs, &handle, 0, FS_MODE_READONLY, NULL));
     EXPECT_EQ(FS_NO_ERROR, fs_read(handle, buf, sizeof(buf), &rd));
     EXPECT_EQ((uint32_t)strlen(test_string[0]), rd);
@@ -501,8 +501,8 @@ TEST_F(FsTest, ToggledFileProtectionAllowsWrite)
     EXPECT_EQ(FS_NO_ERROR, fs_write(handle, test_string[0], strlen(test_string[0]), &wr));
     EXPECT_EQ((uint32_t)strlen(test_string[0]), wr);
     EXPECT_EQ(FS_NO_ERROR, fs_close(handle));
-    EXPECT_EQ(FS_NO_ERROR, fs_protect(handle, 0));
-    EXPECT_EQ(FS_NO_ERROR, fs_unprotect(handle, 0));
+    EXPECT_EQ(FS_NO_ERROR, fs_protect(fs, 0));
+    EXPECT_EQ(FS_NO_ERROR, fs_unprotect(fs, 0));
     EXPECT_EQ(FS_NO_ERROR, fs_open(fs, &handle, 0, FS_MODE_WRITEONLY, NULL));
     EXPECT_EQ(FS_NO_ERROR, fs_write(handle, test_string[0], strlen(test_string[0]), &wr));
     EXPECT_EQ((uint32_t)strlen(test_string[0]), wr);
