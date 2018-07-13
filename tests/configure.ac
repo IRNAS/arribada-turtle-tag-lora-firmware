@@ -1,5 +1,5 @@
 AC_INIT([tests],[0.1.0],[support@icoteq.com])
-AC_CONFIG_SRCDIR([gtest/Fs.cpp])
+AC_CONFIG_SRCDIR([gtest/Fs_gtest.cpp])
 
 LT_INIT
 AC_CONFIG_MACRO_DIR([m4])
