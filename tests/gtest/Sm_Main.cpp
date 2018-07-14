@@ -354,6 +354,12 @@ public:
         battery_level = level;
     }
 
+    void SetBatteryLowThreshold(uint8_t level)
+    {
+        sys_config.sys_config_battery_low_threshold.hdr.set = true;
+        sys_config.sys_config_battery_low_threshold.contents.threshold = level;
+    }
+
     void BLEConnectionEvent(void)
     {
         config_if_event_t event;
@@ -464,8 +470,7 @@ TEST_F(Sm_MainTest, BatteryChargingNoVUSBBatteryLow)
     SetVUSB(false);
     SetBatteryPercentage(0);
 
-    sys_config.sys_config_battery_low_threshold.hdr.set = true;
-    sys_config.sys_config_battery_low_threshold.contents.threshold = 10;
+    SetBatteryLowThreshold(10);
 
     sm_tick(&state_handle);
 
@@ -541,4 +546,117 @@ TEST_F(Sm_MainTest, BatteryChargingUSBConnected)
     sm_tick(&state_handle);
 
     EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+}
+
+//////////////////////////////////////////////////////////////////
+////////////////////// Log File Full State ///////////////////////
+//////////////////////////////////////////////////////////////////
+
+TEST_F(Sm_MainTest, LogFileFullToBatteryCharging)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_LOG_FILE_FULL);
+
+    EXPECT_EQ(SM_MAIN_LOG_FILE_FULL, sm_get_current_state(&state_handle));
+
+    SetVUSB(true);
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_BATTERY_CHARGING, sm_get_current_state(&state_handle));
+}
+
+TEST_F(Sm_MainTest, LogFileFullToLowBattery)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_LOG_FILE_FULL);
+
+    EXPECT_EQ(SM_MAIN_LOG_FILE_FULL, sm_get_current_state(&state_handle));
+
+    SetBatteryPercentage(0);
+    SetBatteryLowThreshold(10);
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_BATTERY_LEVEL_LOW, sm_get_current_state(&state_handle));
+}
+
+TEST_F(Sm_MainTest, LogFileFullBLEConnection)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_LOG_FILE_FULL);
+
+    EXPECT_EQ(SM_MAIN_LOG_FILE_FULL, sm_get_current_state(&state_handle));
+
+    config_if_init(CONFIG_IF_BACKEND_BLE);
+    BLEConnectionEvent();
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+}
+
+//////////////////////////////////////////////////////////////////
+/////////////////////// Provisioning State ///////////////////////
+//////////////////////////////////////////////////////////////////
+
+TEST_F(Sm_MainTest, ProvisioningToProvisioningNeeded)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_BLE);
+    BLEConnectionEvent();
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+
+    BLEDisconnectEvent();
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_PROVISIONING_NEEDED, sm_get_current_state(&state_handle));
+}
+
+TEST_F(Sm_MainTest, ProvisioningToCharging)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    SetVUSB(true);
+    USBConnectionEvent();
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+
+    USBDisconnectEvent();
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_BATTERY_CHARGING, sm_get_current_state(&state_handle));
+}
+
+TEST_F(Sm_MainTest, ProvisioningToLowBattery)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+    SetBatteryPercentage(0);
+    SetBatteryLowThreshold(10);
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_BATTERY_LEVEL_LOW, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_NOT_SET, config_if_current());
 }
