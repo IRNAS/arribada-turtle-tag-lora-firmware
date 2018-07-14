@@ -272,6 +272,27 @@ static void setup_buffers(void)
                        sizeof(logging_buffer_pool), LOGGING_FIFO_DEPTH);
 }
 
+// Set all global varibles to their default values
+// this is used to allow unit tests to start from a clean slate
+static void set_default_global_values(void)
+{
+    config_if_tx_pending = false;
+    config_if_rx_queued = false;
+    syshal_gps_bridging = false;
+    syshal_ble_bridging = false;
+    spi_bridge_buffer[SYSHAL_USB_PACKET_SIZE + 1];
+    config_if_message_timeout = 0;
+    config_if_connected = false;
+    file_system;
+    tracker_above_water = true;
+    log_file_created = false;
+    gps_ttff_reading_logged = false;
+    last_battery_reading = 0;
+    sensor_logging_enabled = false;
+    ble_state = 0;
+    file_handle = NULL;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////// HELPER FUNCTIONS ///////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -2942,6 +2963,10 @@ static void handle_config_if_messages(void)
 
 static void sm_main_boot(sm_handle_t * state_handle)
 {
+#ifdef GTEST
+    set_default_global_values(); // If we're unit testing reset all our global static variables to their default values
+#endif
+
     syshal_time_init();
 
     setup_buffers();
