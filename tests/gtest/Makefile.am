@@ -33,6 +33,15 @@ TESTS =
 TESTS_ENVIRONMENT = SRCDIR=$(top_srcdir)
 check_PROGRAMS =
 
+check_PROGRAMS += Buffer
+nodist_Buffer_SOURCES = $(gtest_srcdir)/Buffer.cpp \
+                    $(core_srcdir)/buffer/buffer.c
+
+Buffer_LDADD = $(COMMON_LDADD)
+Buffer_CPPFLAGS = $(AM_CPPFLAGS) -I$(core_srcdir)/buffer
+
+TESTS += Buffer.test
+
 check_PROGRAMS += Fs
 nodist_Fs_SOURCES = $(gtest_srcdir)/Fs.cpp \
                     $(gtest_srcdir)/mocks/cmock.c \
