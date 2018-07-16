@@ -22,6 +22,8 @@
 #include "sm.h"
 #include "cexception.h"
 
+#define STM32_FIRMWARE_VERSION (2) // The current version of the firmware
+
 extern sm_state_func_t sm_main_states[]; // State function lookup table is populate in main_state.c
 
 typedef enum

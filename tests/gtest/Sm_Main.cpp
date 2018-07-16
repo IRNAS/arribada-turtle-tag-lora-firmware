@@ -21,6 +21,7 @@ extern "C" {
 #include <stdint.h>
 //#include "Mocksyshal_axl.h"
 #include "Mocksyshal_batt.h"
+#include "Mocksyshal_ble.h"
 #include "Mocksyshal_gpio.h"
 #include "Mocksyshal_gps.h"
 #include "Mocksyshal_flash.h"
@@ -34,7 +35,7 @@ extern "C" {
 #include "fs_priv.h"
 #include "fs.h"
 //#include "crc32.h"
-//#include "cmd.h"
+#include "cmd.h"
 
 #include "sys_config.h"
 #include "sm.h"
@@ -54,6 +55,8 @@ extern "C" {
 
 
 // config_if
+typedef std::vector<uint8_t> message_t;
+
 config_if_backend_t config_if_current_interface;
 
 int config_if_init_GTest(config_if_backend_t backend, int cmock_num_calls)
@@ -76,10 +79,78 @@ config_if_backend_t config_if_current_GTest(int cmock_num_calls)
     return config_if_current_interface;
 }
 
-int config_if_send_GTest(uint8_t * data, uint32_t size, int cmock_num_calls) {return CONFIG_IF_NO_ERROR;}
-int config_if_receive_GTest(uint8_t * data, uint32_t size, int cmock_num_calls) {return CONFIG_IF_NO_ERROR;}
-
 void config_if_tick_GTest(int cmock_num_calls) {}
+
+uint8_t * config_if_receive_buffer;
+uint32_t config_if_receive_buffer_size;
+bool config_if_receive_queued = false;
+
+static int config_if_receive_GTest(uint8_t * data, uint32_t size, int cmock_num_calls)
+{
+    if (config_if_receive_queued)
+        return CONFIG_IF_ERROR_BUSY;
+
+    config_if_receive_queued = true;
+
+    config_if_receive_buffer = data;
+    config_if_receive_buffer_size = size;
+
+    return CONFIG_IF_NO_ERROR;
+}
+
+std::vector< std::vector<uint8_t> > config_if_transmitted_data;
+
+static int config_if_send_GTest(uint8_t * data, uint32_t size, int cmock_num_calls)
+{
+    config_if_transmitted_data.push_back( std::vector<uint8_t> (data, data + size) );
+
+    return CONFIG_IF_NO_ERROR;
+}
+
+// Send config_if message to the state machine
+void send_message(cmd_t message, uint32_t size)
+{
+    // We should have a configuration interface init before sending a message
+    ASSERT_NE(CONFIG_IF_BACKEND_NOT_SET, config_if_current_interface);
+
+    ASSERT_LE(size, config_if_receive_buffer_size); // Message is less than or equal to expected size
+    ASSERT_NE(nullptr, config_if_receive_buffer);
+
+    // Copy message into receive buffer
+    memcpy(config_if_receive_buffer, &message, size);
+
+    // Generate a receive complete event
+    config_if_event_t event;
+    event.id = CONFIG_IF_EVENT_RECEIVE_COMPLETE;
+    event.backend = config_if_current_interface;
+    event.receive.size = size;
+
+    config_if_receive_queued = false;
+    config_if_callback(&event);
+}
+
+cmd_t receive_message()
+{
+    //ASSERT_NE(0, config_if_transmitted_data.size()); // We must at least have a message to receive
+
+    // Prepare a transmit complete event
+    config_if_event_t event;
+    event.id = CONFIG_IF_EVENT_SEND_COMPLETE;
+    event.backend = config_if_current_interface;
+    event.send.size = config_if_transmitted_data.size();
+
+    // Copy message from send buffer
+    cmd_t message;
+    for (auto i = 0; i < config_if_transmitted_data[0].size(); ++i)
+        ((uint8_t *)&message)[i] = config_if_transmitted_data.back()[i];
+
+    // Remove this buffer from the vector
+    config_if_transmitted_data.pop_back();
+
+    config_if_callback(&event); // Generate the transmit complete event
+
+    return message;
+}
 
 // syshal_time
 
@@ -102,6 +173,15 @@ void syshal_gpio_set_output_low_GTest(uint32_t pin, int cmock_num_calls) {GPIO_p
 void syshal_gpio_set_output_high_GTest(uint32_t pin, int cmock_num_calls) {GPIO_pin_output_state[pin] = 1;}
 void syshal_gpio_set_output_toggle_GTest(uint32_t pin, int cmock_num_calls) {GPIO_pin_output_state[pin] = !GPIO_pin_output_state[pin];}
 void syshal_gpio_enable_interrupt_GTest(uint32_t pin, void (*callback_function)(void), int cmock_num_calls) {GPIO_callback_function[pin] = callback_function;}
+
+// syshal_ble
+const uint32_t syshal_ble_version = 0xABCD0123;
+
+int syshal_ble_get_version_GTest(uint32_t *version, int cmock_num_calls)
+{
+    *version = syshal_ble_version;
+    return SYSHAL_BLE_NO_ERROR;
+};
 
 // syshal_rtc
 syshal_rtc_data_and_time_t current_date_time;
@@ -245,6 +325,10 @@ class Sm_MainTest : public ::testing::Test
         syshal_time_get_ticks_ms_StubWithCallback(syshal_time_get_ticks_ms_GTest);
         syshal_time_get_ticks_ms_value = 0;
 
+        // syshal_ble
+        Mocksyshal_ble_Init();
+        syshal_ble_get_version_StubWithCallback(syshal_ble_get_version_GTest);
+
         // syshal_rtc
         Mocksyshal_rtc_Init();
 
@@ -317,6 +401,8 @@ class Sm_MainTest : public ::testing::Test
         Mocksyshal_gpio_Destroy();
         Mocksyshal_time_Verify();
         Mocksyshal_time_Destroy();
+        Mocksyshal_ble_Verify();
+        Mocksyshal_ble_Destroy();
         Mocksyshal_rtc_Verify();
         Mocksyshal_rtc_Destroy();
         Mocksyshal_batt_Verify();
@@ -360,7 +446,9 @@ public:
         sys_config.sys_config_battery_low_threshold.contents.threshold = level;
     }
 
-    void BLEConnectionEvent(void)
+    // Message handling //
+
+    static void BLEConnectionEvent(void)
     {
         config_if_event_t event;
         event.id = CONFIG_IF_EVENT_CONNECTED;
@@ -368,7 +456,7 @@ public:
         config_if_callback(&event);
     }
 
-    void BLEDisconnectEvent(void)
+    static void BLEDisconnectEvent(void)
     {
         config_if_event_t event;
         event.id = CONFIG_IF_EVENT_DISCONNECTED;
@@ -376,7 +464,7 @@ public:
         config_if_callback(&event);
     }
 
-    void USBConnectionEvent(void)
+    static void USBConnectionEvent(void)
     {
         config_if_event_t event;
         event.id = CONFIG_IF_EVENT_CONNECTED;
@@ -384,7 +472,7 @@ public:
         config_if_callback(&event);
     }
 
-    void USBDisconnectEvent(void)
+    static void USBDisconnectEvent(void)
     {
         config_if_event_t event;
         event.id = CONFIG_IF_EVENT_DISCONNECTED;
@@ -397,6 +485,7 @@ public:
 //////////////////////////////////////////////////////////////////
 /////////////////////////// Boot State ///////////////////////////
 //////////////////////////////////////////////////////////////////
+
 TEST_F(Sm_MainTest, BootNoTags)
 {
     BootTagsNotSet();
@@ -659,4 +748,40 @@ TEST_F(Sm_MainTest, ProvisioningToLowBattery)
 
     EXPECT_EQ(SM_MAIN_BATTERY_LEVEL_LOW, sm_get_current_state(&state_handle));
     EXPECT_EQ(CONFIG_IF_BACKEND_NOT_SET, config_if_current());
+}
+
+//////////////////////////////////////////////////////////////////
+//////////////////////// Message Handling ////////////////////////
+//////////////////////////////////////////////////////////////////
+
+TEST_F(Sm_MainTest, StatusRequest)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+
+    // Generate status request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_STATUS_REQ);
+    send_message(req, CMD_SIZE_HDR);
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    cmd_t resp = receive_message();
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_STATUS_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_status_resp.error_code);
+    EXPECT_EQ(STM32_FIRMWARE_VERSION, resp.p.cmd_status_resp.stm_firmware_version);
+    EXPECT_EQ(syshal_ble_version, resp.p.cmd_status_resp.ble_firmware_version);
+    EXPECT_EQ(SYS_CONFIG_FORMAT_VERSION, resp.p.cmd_status_resp.configuration_format_version);
 }
