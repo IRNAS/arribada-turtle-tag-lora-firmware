@@ -23,12 +23,15 @@
 #include "sys_config.h"
 #include "debug.h"
 
+#define M8N_TIMEOUT (50)
+
 // Private functions
 static int syshal_gps_parse_rx_buffer_priv(UBX_Packet_t * packet);
 static void syshal_gps_process_nav_status_priv(UBX_Packet_t * packet);
 static void syshal_gps_process_nav_posllh_priv(UBX_Packet_t * packet);
 static void syshal_gps_set_checksum_priv(UBX_Packet_t * packet);
 static void syshal_gps_send_packet_priv(UBX_Packet_t * ubx_packet);
+static bool syshal_gps_device_responsive_priv(void);
 
 // HAL to SYSHAL error code mapping table
 static int hal_error_map[] =
@@ -72,8 +75,7 @@ void syshal_gps_shutdown(void)
     DEBUG_PR_TRACE("Shutdown GPS %s", __FUNCTION__);
 
     // Ensure the device is actually awake to receive the shutdown command
-    uint8_t data = 0xAA;
-    syshal_uart_send(GPS_UART, &data, 1);
+    while(!syshal_gps_device_responsive_priv()) {}
 
     // Send the shutdown request
     UBX_Packet_t ubx_packet;
@@ -259,7 +261,7 @@ static void syshal_gps_compute_checksum_priv(UBX_Packet_t * packet, uint8_t ck[2
     }
 }
 
-void syshal_gps_set_checksum_priv(UBX_Packet_t * packet)
+static void syshal_gps_set_checksum_priv(UBX_Packet_t * packet)
 {
     uint8_t ck[2];
 
@@ -269,8 +271,30 @@ void syshal_gps_set_checksum_priv(UBX_Packet_t * packet)
     packet->payloadAndCrc[packet->msgLength + 1] = ck[1];
 }
 
+static bool syshal_gps_device_responsive_priv(void)
+{
+    uint32_t bytesInRxBuffer = syshal_uart_available(GPS_UART);
+
+    // Check to see if GPS is responsive or not
+    // Send a UBX-CFG-MSG request
+    UBX_Packet_t ubx_packet;
+    UBX_SET_PACKET_HEADER(&ubx_packet, UBX_MSG_CLASS_CFG, UBX_MSG_ID_CFG_MSG, sizeof(UBX_CFG_MSG_POLL_t));
+    UBX_PAYLOAD(&ubx_packet, UBX_CFG_MSG_POLL)->msgClass = 0;
+    UBX_PAYLOAD(&ubx_packet, UBX_CFG_MSG_POLL)->msgID = 0;
+    syshal_gps_send_packet_priv(&ubx_packet);
+
+    uint32_t start_time = syshal_time_get_ticks_ms();
+    while (syshal_time_get_ticks_ms() - start_time < M8N_TIMEOUT)
+    {
+        if (syshal_uart_available(GPS_UART) != bytesInRxBuffer)
+            return true;
+    }
+    
+    return false;
+}
+
 // Return 0 on CRC match
-int syshal_gps_check_checksum_priv(UBX_Packet_t * packet)
+static int syshal_gps_check_checksum_priv(UBX_Packet_t * packet)
 {
     uint8_t ck[2];
 

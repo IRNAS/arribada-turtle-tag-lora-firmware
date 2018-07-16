@@ -287,6 +287,12 @@ typedef struct
 {
     uint8_t  msgClass;
     uint8_t  msgID;
+} UBX_CFG_MSG_POLL_t;
+
+typedef struct
+{
+    uint8_t  msgClass;
+    uint8_t  msgID;
     uint8_t  rate;
 } UBX_CFG_MSG_t;
 
@@ -513,6 +519,7 @@ typedef struct
     {
         uint8_t             payloadAndCrc[1018];  /* CRC is appended to payload */
         UBX_CFG_CFG_t       UBX_CFG_CFG;
+        UBX_CFG_MSG_POLL_t  UBX_CFG_MSG_POLL;
         UBX_LOG_INFO_t      UBX_LOG_INFO;
         UBX_LOG_CREATE_t    UBX_LOG_CREATE;
         UBX_RXM_PMREQ2_t    UBX_RXM_PMREQ2;
