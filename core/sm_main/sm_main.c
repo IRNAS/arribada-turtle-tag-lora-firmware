@@ -280,10 +280,8 @@ static void set_default_global_values(void)
     config_if_rx_queued = false;
     syshal_gps_bridging = false;
     syshal_ble_bridging = false;
-    spi_bridge_buffer[SYSHAL_USB_PACKET_SIZE + 1];
     config_if_message_timeout = 0;
     config_if_connected = false;
-    file_system;
     tracker_above_water = true;
     log_file_created = false;
     gps_ttff_reading_logged = false;
@@ -2963,9 +2961,8 @@ static void handle_config_if_messages(void)
 
 static void sm_main_boot(sm_handle_t * state_handle)
 {
-#ifdef GTEST
-    set_default_global_values(); // If we're unit testing reset all our global static variables to their default values
-#endif
+    set_default_global_values(); // Set all our global static variables to their default values
+    // This is done to ensure individual unit tests all start in the same state
 
     syshal_time_init();
 
