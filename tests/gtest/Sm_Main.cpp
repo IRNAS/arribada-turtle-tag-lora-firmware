@@ -400,8 +400,6 @@ class Sm_MainTest : public ::testing::Test
         // syshal_ble
         Mocksyshal_ble_Init();
         syshal_ble_get_version_StubWithCallback(syshal_ble_get_version_GTest);
-        syshal_ble_write_register_StubWithCallback(syshal_ble_write_register_GTest);
-        syshal_ble_read_register_StubWithCallback(syshal_ble_read_register_GTest);
 
         syshal_ble_write_register_address.clear();
         syshal_ble_write_register_data.clear();
