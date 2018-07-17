@@ -1545,7 +1545,7 @@ TEST_F(Sm_MainTest, LogCreateFill)
     EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
     EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
 
-    // Check the log file has been created as is of the right mode
+    // Check the log file has been created and is of the right mode
     fs_t file_system;
     fs_stat_t file_stats;
 
@@ -1586,7 +1586,7 @@ TEST_F(Sm_MainTest, LogCreateCircular)
     EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
     EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
 
-    // Check the log file has been created as is of the right mode
+    // Check the log file has been created and is of the right mode
     fs_t file_system;
     fs_stat_t file_stats;
 
@@ -1636,6 +1636,108 @@ TEST_F(Sm_MainTest, LogCreateAlreadyExists)
     EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
     EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
     EXPECT_EQ(CMD_ERROR_FILE_ALREADY_EXISTS, resp.p.cmd_generic_resp.error_code);
+}
+
+TEST_F(Sm_MainTest, LogReadNoFile)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+
+    // Generate log read request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_LOG_READ_REQ);
+    req.p.cmd_log_read_req.start_offset = 0;
+    req.p.cmd_log_read_req.length = 256;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_log_read_req_t));
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_LOG_READ_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_ERROR_FILE_NOT_FOUND, resp.p.cmd_log_read_resp.error_code);
+}
+
+TEST_F(Sm_MainTest, LogReadSuccess)
+{
+    const uint32_t log_size = 256;
+    uint8_t testData[log_size];
+    uint32_t bytes_written = 0;
+
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+
+    // Generate test data
+    for (auto i = 0; i < log_size; ++i)
+        testData[i] = rand();
+
+    // Create the log file
+    fs_t file_system;
+    fs_handle_t file_system_handle;
+
+    EXPECT_EQ(FS_NO_ERROR, fs_init(FS_DEVICE));
+    EXPECT_EQ(FS_NO_ERROR, fs_mount(FS_DEVICE, &file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_format(file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_open(file_system, &file_system_handle, FS_FILE_ID_LOG, FS_MODE_CREATE, NULL));
+    EXPECT_EQ(FS_NO_ERROR, fs_write(file_system_handle, testData, log_size, &bytes_written)); // Load test data into the log file
+    EXPECT_EQ(log_size, bytes_written);
+    EXPECT_EQ(FS_NO_ERROR, fs_close(file_system_handle));
+
+    // Generate log read request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_LOG_READ_REQ);
+    req.p.cmd_log_read_req.start_offset = 0;
+    req.p.cmd_log_read_req.length = log_size;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_log_read_req_t));
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_LOG_READ_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_log_read_resp.error_code);
+    EXPECT_EQ(log_size, resp.p.cmd_log_read_resp.length);
+
+    sm_tick(&state_handle); // Process the message
+
+    uint8_t log_data[log_size];
+    receive_message(log_data);
+
+    bool log_read_mismatch = false;
+    for (auto i = 0; i < log_size; ++i)
+    {
+        if (log_data[i] != testData[i])
+        {
+            log_read_mismatch = true;
+            break;
+        }
+    }
+
+    EXPECT_FALSE(log_read_mismatch);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
