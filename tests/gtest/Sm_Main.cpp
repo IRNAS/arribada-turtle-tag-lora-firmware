@@ -192,6 +192,39 @@ int syshal_ble_get_version_GTest(uint32_t * version, int cmock_num_calls)
     return SYSHAL_BLE_NO_ERROR;
 };
 
+static std::vector<uint8_t> syshal_ble_write_register_address;
+static std::vector<uint8_t> syshal_ble_write_register_data;
+static std::vector<uint16_t> syshal_ble_write_register_length;
+int syshal_ble_write_register_GTest(uint8_t address, uint8_t * data, uint16_t length, int cmock_num_calls)
+{
+    syshal_ble_write_register_address.push_back(address);
+
+    for (auto i = 0; i < length; ++i)
+        syshal_ble_write_register_data.push_back(data[i]);
+
+    syshal_ble_write_register_length.push_back(length);
+
+    return SYSHAL_BLE_NO_ERROR;
+}
+
+static std::vector<uint8_t> syshal_ble_read_register_address;
+static std::vector<uint8_t> syshal_ble_read_register_data;
+static std::vector<uint16_t> syshal_ble_read_register_length;
+int syshal_ble_read_register_GTest(uint8_t address, uint8_t * data, uint16_t length, int cmock_num_calls)
+{
+    syshal_ble_read_register_address.push_back(address);
+
+    for (auto i = 0; i < length; ++i)
+    {
+        data[i] = syshal_ble_read_register_data.back();
+        syshal_ble_read_register_data.pop_back();
+    }
+
+    syshal_ble_read_register_length.push_back(length);
+
+    return SYSHAL_BLE_NO_ERROR;
+}
+
 // syshal_rtc
 syshal_rtc_data_and_time_t current_date_time;
 
@@ -367,6 +400,15 @@ class Sm_MainTest : public ::testing::Test
         // syshal_ble
         Mocksyshal_ble_Init();
         syshal_ble_get_version_StubWithCallback(syshal_ble_get_version_GTest);
+        syshal_ble_write_register_StubWithCallback(syshal_ble_write_register_GTest);
+        syshal_ble_read_register_StubWithCallback(syshal_ble_read_register_GTest);
+
+        syshal_ble_write_register_address.clear();
+        syshal_ble_write_register_data.clear();
+        syshal_ble_write_register_length.clear();
+        syshal_ble_read_register_address.clear();
+        syshal_ble_read_register_data.clear();
+        syshal_ble_read_register_length.clear();
 
         // syshal_rtc
         Mocksyshal_rtc_Init();
@@ -1932,16 +1974,20 @@ TEST_F(Sm_MainTest, BleWriteBridgingOff)
 //TEST_F(Sm_MainTest, BleWriteSuccess)
 //{
 //    uint32_t ble_write_length = 256;
+//    uint8_t ble_address = rand();
 //
-//    startup_provisioning_needed(); // Boot and transition to provisioning needed state
+//    BootTagsNotSet();
 //
-//    connect(); // Connect the config_if
+//    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
 //
+//    config_if_init(CONFIG_IF_BACKEND_USB);
+//    USBConnectionEvent();
+//
+//    SetVUSB(true);
 //    sm_tick(&state_handle);
 //
-//    EXPECT_EQ(SM_STATE_PROVISIONING, sm_get_state());
-//
-//    sm_tick(&state_handle); // Queue the first receive
+//    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+//    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
 //
 //    // Generate ble config message
 //    cmd_t req;
@@ -1960,8 +2006,9 @@ TEST_F(Sm_MainTest, BleWriteBridgingOff)
 //
 //    // Generate BLE write request message
 //    CMD_SET_HDR((&req), CMD_BLE_WRITE_REQ);
+//    req.p.cmd_ble_write_req.address = ble_address;
 //    req.p.cmd_ble_write_req.length = ble_write_length;
-//    send_message((uint8_t *) &req, CMD_SIZE(cmd_ble_write_req_t));
+//    send_message(&req, CMD_SIZE(cmd_ble_write_req_t));
 //
 //    sm_tick(&state_handle); // Process the message
 //
@@ -1980,18 +2027,19 @@ TEST_F(Sm_MainTest, BleWriteBridgingOff)
 //
 //    sm_tick(&state_handle); // Process the message
 //
+//    EXPECT_EQ(ble_address, syshal_ble_write_register_address.back());
+//    EXPECT_EQ(ble_write_length, syshal_ble_write_register_length.back());
+//    ASSERT_EQ(ble_write_length, syshal_ble_write_register_data.size());
+//
 //    // Check message wrote is as expected
 //    bool ble_write_mismatch = false;
 //    for (unsigned int i = 0; i < sizeof(ble_data_packet); ++i)
 //    {
-//        printf("%u: %s()\n\r", __LINE__, __FUNCTION__);
-//        if (spi_sent_buffer[SPI_BLE].front() != ble_data_packet[i])
+//        if (syshal_ble_write_register_data[i] != ble_data_packet[i])
 //        {
-//            printf("%u: %s()\n\r", __LINE__, __FUNCTION__);
 //            ble_write_mismatch = true;
 //            break;
 //        }
-//        spi_sent_buffer[SPI_BLE].pop();
 //    }
 //
 //    EXPECT_FALSE(ble_write_mismatch);
@@ -2015,7 +2063,8 @@ TEST_F(Sm_MainTest, BleReadBridgingOff)
     // Generate BLE read request message
     cmd_t req;
     CMD_SET_HDR((&req), CMD_BLE_READ_REQ);
-    req.p.cmd_gps_read_req.length = 100;
+    req.p.cmd_ble_read_req.length = 100;
+    req.p.cmd_ble_read_req.address = 0xAA;
     send_message((uint8_t *) &req, CMD_SIZE(cmd_ble_read_req_t));
 
     sm_tick(&state_handle); // Process the message
@@ -2027,6 +2076,80 @@ TEST_F(Sm_MainTest, BleReadBridgingOff)
     EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
     EXPECT_EQ(CMD_ERROR_BRIDGING_DISABLED, resp.p.cmd_generic_resp.error_code);
 }
+
+//TEST_F(Sm_MainTest, BleReadSuccess)
+//{
+//    uint32_t ble_read_length = 256;
+//    uint8_t ble_address = rand();
+//
+//    BootTagsNotSet();
+//
+//    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+//
+//    config_if_init(CONFIG_IF_BACKEND_USB);
+//    USBConnectionEvent();
+//
+//    SetVUSB(true);
+//    sm_tick(&state_handle);
+//
+//    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+//    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+//
+//    // Generate ble config message
+//    cmd_t req;
+//    CMD_SET_HDR((&req), CMD_BLE_CONFIG_REQ);
+//    req.p.cmd_ble_config_req.enable = true;
+//    send_message((uint8_t *) &req, CMD_SIZE(cmd_ble_config_req_t));
+//
+//    sm_tick(&state_handle); // Process the message
+//
+//    // Check the response
+//    cmd_t resp;
+//    receive_message(&resp);
+//    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+//    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+//    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+//
+//    // Generate BLE write request message
+//    CMD_SET_HDR((&req), CMD_BLE_READ_REQ);
+//    req.p.cmd_ble_write_req.address = ble_address;
+//    req.p.cmd_ble_write_req.length = ble_read_length;
+//    send_message(&req, CMD_SIZE(cmd_ble_write_req_t));
+//
+//    sm_tick(&state_handle); // Process the message
+//
+//    // Check the response
+//    receive_message(&resp);
+//    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+//    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+//    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+//
+//    // Generate BLE write payload
+//    uint8_t ble_data_packet[ble_read_length];
+//    for (unsigned int i = 0; i < sizeof(ble_data_packet); ++i)
+//        ble_data_packet[i] = i;
+//
+//    send_message(ble_data_packet, sizeof(ble_data_packet));
+//
+//    sm_tick(&state_handle); // Process the message
+//
+//    EXPECT_EQ(ble_address, syshal_ble_write_register_address.back());
+//    EXPECT_EQ(ble_write_length, syshal_ble_write_register_length.back());
+//    ASSERT_EQ(ble_write_length, syshal_ble_write_register_data.size());
+//
+//    // Check message wrote is as expected
+//    bool ble_write_mismatch = false;
+//    for (unsigned int i = 0; i < sizeof(ble_data_packet); ++i)
+//    {
+//        if (syshal_ble_write_register_data[i] != ble_data_packet[i])
+//        {
+//            ble_write_mismatch = true;
+//            break;
+//        }
+//    }
+//
+//    EXPECT_FALSE(ble_write_mismatch);
+//}
 
 TEST_F(Sm_MainTest, FwWriteWrongImageType)
 {
