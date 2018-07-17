@@ -268,6 +268,7 @@ static void setup_buffers(void)
 // this is used to allow unit tests to start from a clean slate
 static void set_default_global_values(void)
 {
+    message_state = SM_MESSAGE_STATE_IDLE;
     config_if_tx_pending = false;
     config_if_rx_queued = false;
     syshal_gps_bridging = false;
@@ -2243,16 +2244,18 @@ static void fw_apply_image_req(cmd_t * req, uint16_t size)
                         config_if_send_priv(&config_if_send_buffer);
 
                         // Make sure our response is sent before we attempt any FLASH operations
+#ifndef GTEST // Prevent infinite loop in unit test
                         while (config_if_tx_pending)
+#endif
                         {
                             config_if_tick();
                         }
 
+#ifndef GTEST // Prevent infinite loop in unit test
                         execute_stm32_firmware_upgrade();
+#endif
 
                         // Program will never reach this point as the firmware upgrade resets the MCU
-                        for (;;)
-                        {}
                         break;
 
                     case FS_FILE_ID_BLE_APP_IMAGE:

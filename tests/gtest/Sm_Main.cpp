@@ -35,7 +35,7 @@ extern "C" {
 #include "Mockconfig_if.h"
 #include "fs_priv.h"
 #include "fs.h"
-//#include "crc32.h"
+#include "crc32.h"
 #include "cmd.h"
 
 #include "sys_config.h"
@@ -136,7 +136,7 @@ void send_message(cmd_t * message, uint32_t size)
     send_message((uint8_t *)message, size);
 }
 
-void receive_message(cmd_t * message)
+void receive_message(uint8_t * message)
 {
     ASSERT_GT(config_if_transmitted_data.size(), 0); // We must at least have a message to receive
 
@@ -147,13 +147,18 @@ void receive_message(cmd_t * message)
     event.send.size = config_if_transmitted_data.size();
 
     // Copy message from send buffer
-    for (auto i = 0; i < config_if_transmitted_data[0].size(); ++i)
-        ((uint8_t *)message)[i] = config_if_transmitted_data.back()[i];
+    for (unsigned int i = 0; i < config_if_transmitted_data[0].size(); ++i)
+        message[i] = config_if_transmitted_data.back()[i];
 
     // Remove this buffer from the vector
     config_if_transmitted_data.pop_back();
 
     config_if_callback(&event); // Generate the transmit complete event
+}
+
+void receive_message(cmd_t * message)
+{
+    receive_message( (uint8_t *) message);
 }
 
 // syshal_time
@@ -277,6 +282,34 @@ int syshal_flash_erase_GTest(uint32_t device, uint32_t address, uint32_t size, i
 void syshal_gps_init_GTest(int cmock_num_calls) {}
 void syshal_gps_shutdown_GTest(int cmock_num_calls) {}
 
+// syshal_gps_send_raw callback function
+uint8_t gps_write_buffer[2048];
+int syshal_gps_send_raw_GTest(uint8_t * data, uint32_t size, int cmock_num_calls)
+{
+    if (size > sizeof(gps_write_buffer))
+        assert(0);
+
+    memcpy(&gps_write_buffer[0], data, size);
+
+    return SYSHAL_GPS_NO_ERROR;
+}
+
+// syshal_gps_receive_raw callback function
+std::queue<uint8_t> gps_receive_buffer;
+int syshal_gps_receive_raw_GTest(uint8_t * data, uint32_t size, int cmock_num_calls)
+{
+    if (size > gps_receive_buffer.size())
+        size = gps_receive_buffer.size();
+
+    for (unsigned int i = 0; i < size; ++i)
+    {
+        data[i] = gps_receive_buffer.front();
+        gps_receive_buffer.pop();
+    }
+
+    return size;
+}
+
 // syshal_switch
 bool syshal_switch_state;
 
@@ -288,6 +321,8 @@ class Sm_MainTest : public ::testing::Test
 
     virtual void SetUp()
     {
+        srand(time(NULL));
+
         // config_if
         Mockconfig_if_Init();
 
@@ -387,6 +422,8 @@ class Sm_MainTest : public ::testing::Test
         Mocksyshal_gps_Init();
         syshal_gps_init_StubWithCallback(syshal_gps_init_GTest);
         syshal_gps_shutdown_StubWithCallback(syshal_gps_shutdown_GTest);
+        syshal_gps_send_raw_StubWithCallback(syshal_gps_send_raw_GTest);
+        syshal_gps_receive_raw_StubWithCallback(syshal_gps_receive_raw_GTest);
 
         // syshal_switch
         Mocksyshal_switch_Init();
@@ -497,11 +534,10 @@ public:
         uint16_t tag, last_index = 0;
         while (!sys_config_iterate(&tag, &last_index))
         {
-            void * src;
             int ret;
             do
             {
-                int ret = sys_config_set(tag, &src, length++);
+                ret = sys_config_set(tag, &config_if_dummy_data, length++);
             }
             while (SYS_CONFIG_ERROR_WRONG_SIZE == ret &&
                    length < SYS_CONFIG_MAX_DATA_SIZE);
@@ -987,7 +1023,6 @@ TEST_F(Sm_MainTest, CfgReadOne)
     EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
     EXPECT_EQ(CMD_CFG_READ_RESP, resp.h.cmd);
     EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_cfg_read_resp.error_code);
-    uint32_t expected_length = resp.p.cmd_cfg_read_resp.length;
 
     sm_tick(&state_handle); // Send the data packet
 
@@ -1014,6 +1049,9 @@ TEST_F(Sm_MainTest, CfgSaveSuccess)
 
     SetVUSB(true);
     sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
 
     // Generate cfg save request message
     cmd_t req;
@@ -1069,6 +1107,9 @@ TEST_F(Sm_MainTest, CfgRestoreNoFile)
     SetVUSB(true);
     sm_tick(&state_handle);
 
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+
     // Generate cfg save request message
     cmd_t req;
     CMD_SET_HDR((&req), CMD_CFG_RESTORE_REQ);
@@ -1095,6 +1136,9 @@ TEST_F(Sm_MainTest, CfgRestoreSuccess)
 
     SetVUSB(true);
     sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
 
     // Generate the configuration file in FLASH
     fs_t file_system;
@@ -1135,6 +1179,9 @@ TEST_F(Sm_MainTest, CfgProtectSuccess)
     SetVUSB(true);
     sm_tick(&state_handle);
 
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+
     // Generate the configuration file in FLASH
     fs_t file_system;
     fs_handle_t file_system_handle;
@@ -1172,6 +1219,9 @@ TEST_F(Sm_MainTest, CfgProtectNoFile)
     SetVUSB(true);
     sm_tick(&state_handle);
 
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+
     // Generate cfg save request message
     cmd_t req;
     CMD_SET_HDR((&req), CMD_CFG_PROTECT_REQ);
@@ -1198,6 +1248,9 @@ TEST_F(Sm_MainTest, CfgUnprotectSuccess)
 
     SetVUSB(true);
     sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
 
     // Generate the configuration file in FLASH
     fs_t file_system;
@@ -1236,6 +1289,9 @@ TEST_F(Sm_MainTest, CfgUnprotectNoFile)
     SetVUSB(true);
     sm_tick(&state_handle);
 
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+
     // Generate cfg save request message
     cmd_t req;
     CMD_SET_HDR((&req), CMD_CFG_UNPROTECT_REQ);
@@ -1262,6 +1318,9 @@ TEST_F(Sm_MainTest, CfgEraseAll)
 
     SetVUSB(true);
     sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
 
     set_all_configuration_tags_RAM(); // Set all the configuration tags
 
@@ -1314,6 +1373,9 @@ TEST_F(Sm_MainTest, CfgEraseOne)
     SetVUSB(true);
     sm_tick(&state_handle);
 
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+
     set_all_configuration_tags_RAM(); // Set all the configuration tags
 
     // Generate log erase request message
@@ -1354,6 +1416,9 @@ TEST_F(Sm_MainTest, LogEraseSuccess)
     SetVUSB(true);
     sm_tick(&state_handle);
 
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+
     // Generate the log file in FLASH
     fs_t file_system;
     fs_handle_t file_system_handle;
@@ -1391,6 +1456,9 @@ TEST_F(Sm_MainTest, LogEraseNoFile)
     SetVUSB(true);
     sm_tick(&state_handle);
 
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+
     // Generate log erase request message
     cmd_t req;
     CMD_SET_HDR((&req), CMD_LOG_ERASE_REQ);
@@ -1418,6 +1486,9 @@ TEST_F(Sm_MainTest, LogCreateFill)
     SetVUSB(true);
     sm_tick(&state_handle);
 
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+
     // Generate log create request message
     cmd_t req;
     CMD_SET_HDR((&req), CMD_LOG_CREATE_REQ);
@@ -1436,7 +1507,6 @@ TEST_F(Sm_MainTest, LogCreateFill)
 
     // Check the log file has been created as is of the right mode
     fs_t file_system;
-    fs_handle_t file_system_handle;
     fs_stat_t file_stats;
 
     EXPECT_EQ(FS_NO_ERROR, fs_init(FS_DEVICE));
@@ -1457,6 +1527,9 @@ TEST_F(Sm_MainTest, LogCreateCircular)
     SetVUSB(true);
     sm_tick(&state_handle);
 
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+
     // Generate log create request message
     cmd_t req;
     CMD_SET_HDR((&req), CMD_LOG_CREATE_REQ);
@@ -1475,7 +1548,6 @@ TEST_F(Sm_MainTest, LogCreateCircular)
 
     // Check the log file has been created as is of the right mode
     fs_t file_system;
-    fs_handle_t file_system_handle;
     fs_stat_t file_stats;
 
     EXPECT_EQ(FS_NO_ERROR, fs_init(FS_DEVICE));
@@ -1495,6 +1567,9 @@ TEST_F(Sm_MainTest, LogCreateAlreadyExists)
 
     SetVUSB(true);
     sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
 
     // Create the log file
     fs_t file_system;
@@ -1521,4 +1596,842 @@ TEST_F(Sm_MainTest, LogCreateAlreadyExists)
     EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
     EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
     EXPECT_EQ(CMD_ERROR_FILE_ALREADY_EXISTS, resp.p.cmd_generic_resp.error_code);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+TEST_F(Sm_MainTest, BatteryStatus)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+
+    // Generate battery status request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_BATTERY_STATUS_REQ);
+    send_message((uint8_t *) &req, CMD_SIZE_HDR);
+
+    uint8_t chargePercentage = rand() % 100;
+
+    SetBatteryPercentage(chargePercentage);
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_BATTERY_STATUS_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_battery_status_resp.error_code);
+    EXPECT_EQ(true, resp.p.cmd_battery_status_resp.charging_indicator);
+    EXPECT_EQ(chargePercentage, resp.p.cmd_battery_status_resp.charge_level);
+}
+
+TEST_F(Sm_MainTest, GpsConfig)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+
+    // Generate gps config request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_GPS_CONFIG_REQ);
+    req.p.cmd_gps_config_req.enable = true;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_gps_config_req_t));
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_battery_status_resp.error_code);
+}
+
+TEST_F(Sm_MainTest, GpsWriteBridgingOff)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+
+    // Generate GPS write request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_GPS_WRITE_REQ);
+    req.p.cmd_gps_write_req.length = 100;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_gps_write_req_t));
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_ERROR_BRIDGING_DISABLED, resp.p.cmd_generic_resp.error_code);
+}
+
+TEST_F(Sm_MainTest, GpsWriteSuccess)
+{
+    uint32_t gps_write_length = 256;
+
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+
+    // Generate gps config message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_GPS_CONFIG_REQ);
+    req.p.cmd_gps_config_req.enable = true;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_gps_config_req_t));
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+
+    // Generate GPS write request message
+    CMD_SET_HDR((&req), CMD_GPS_WRITE_REQ);
+    req.p.cmd_gps_write_req.length = gps_write_length;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_gps_write_req_t));
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+
+    // Generate GPS write payload
+    uint8_t gps_data_packet[gps_write_length];
+    for (unsigned int i = 0; i < sizeof(gps_data_packet); ++i)
+        gps_data_packet[i] = i;
+
+    send_message(gps_data_packet, sizeof(gps_data_packet));
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check message wrote is as expected
+    bool gps_write_mismatch = false;
+    for (unsigned int i = 0; i < gps_write_length; ++i)
+    {
+        if (gps_write_buffer[i] != gps_data_packet[i])
+        {
+            gps_write_mismatch = true;
+            break;
+        }
+    }
+
+    EXPECT_FALSE(gps_write_mismatch);
+}
+
+TEST_F(Sm_MainTest, GpsReadBridgingOff)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+
+    // Generate GPS read request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_GPS_READ_REQ);
+    req.p.cmd_gps_read_req.length = 100;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_gps_read_req_t));
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GPS_READ_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_ERROR_BRIDGING_DISABLED, resp.p.cmd_gps_read_resp.error_code);
+}
+
+TEST_F(Sm_MainTest, GpsReadSuccess)
+{
+    uint32_t gps_read_length = 256;
+
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+
+    // Generate gps config message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_GPS_CONFIG_REQ);
+    req.p.cmd_gps_config_req.enable = true;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_gps_config_req_t));
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+
+    // Generate GPS read request message
+    CMD_SET_HDR((&req), CMD_GPS_READ_REQ);
+    req.p.cmd_gps_read_req.length = gps_read_length;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_gps_read_req_t));
+
+    syshal_gps_available_raw_ExpectAndReturn(gps_read_length);
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GPS_READ_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+
+    // Load the GPS SPI buffer with test data
+    for (unsigned int i = 0; i < gps_read_length; ++i)
+        gps_receive_buffer.push(i);
+
+    sm_tick(&state_handle);
+
+    uint8_t received_data[gps_read_length];
+    receive_message(received_data);
+
+    // Look for mismatch between data received on SPI and data transmitted on config_if
+    bool SPI_and_config_if_mismatch = false;
+    for (unsigned int i = 0; i < gps_read_length; ++i)
+    {
+        if (received_data[i] != i)
+        {
+            SPI_and_config_if_mismatch = true;
+            break;
+        }
+    }
+
+    EXPECT_FALSE(SPI_and_config_if_mismatch);
+}
+
+TEST_F(Sm_MainTest, BleConfig)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+
+    // Generate ble config request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_BLE_CONFIG_REQ);
+    req.p.cmd_ble_config_req.enable = true;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_ble_config_req_t));
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_battery_status_resp.error_code);
+}
+
+TEST_F(Sm_MainTest, BleWriteBridgingOff)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+
+    // Generate BLE write request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_BLE_WRITE_REQ);
+    req.p.cmd_ble_write_req.length = 100;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_ble_write_req_t));
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_ERROR_BRIDGING_DISABLED, resp.p.cmd_generic_resp.error_code);
+}
+
+//TEST_F(Sm_MainTest, BleWriteSuccess)
+//{
+//    uint32_t ble_write_length = 256;
+//
+//    startup_provisioning_needed(); // Boot and transition to provisioning needed state
+//
+//    connect(); // Connect the config_if
+//
+//    sm_tick(&state_handle);
+//
+//    EXPECT_EQ(SM_STATE_PROVISIONING, sm_get_state());
+//
+//    sm_tick(&state_handle); // Queue the first receive
+//
+//    // Generate ble config message
+//    cmd_t req;
+//    CMD_SET_HDR((&req), CMD_BLE_CONFIG_REQ);
+//    req.p.cmd_ble_config_req.enable = true;
+//    send_message((uint8_t *) &req, CMD_SIZE(cmd_ble_config_req_t));
+//
+//    sm_tick(&state_handle); // Process the message
+//
+//    // Check the response
+//    cmd_t resp;
+//    receive_message(&resp);
+//    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+//    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+//    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+//
+//    // Generate BLE write request message
+//    CMD_SET_HDR((&req), CMD_BLE_WRITE_REQ);
+//    req.p.cmd_ble_write_req.length = ble_write_length;
+//    send_message((uint8_t *) &req, CMD_SIZE(cmd_ble_write_req_t));
+//
+//    sm_tick(&state_handle); // Process the message
+//
+//    // Check the response
+//    receive_message(&resp);
+//    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+//    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+//    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+//
+//    // Generate BLE write payload
+//    uint8_t ble_data_packet[ble_write_length];
+//    for (unsigned int i = 0; i < sizeof(ble_data_packet); ++i)
+//        ble_data_packet[i] = i;
+//
+//    send_message(ble_data_packet, sizeof(ble_data_packet));
+//
+//    sm_tick(&state_handle); // Process the message
+//
+//    // Check message wrote is as expected
+//    bool ble_write_mismatch = false;
+//    for (unsigned int i = 0; i < sizeof(ble_data_packet); ++i)
+//    {
+//        printf("%u: %s()\n\r", __LINE__, __FUNCTION__);
+//        if (spi_sent_buffer[SPI_BLE].front() != ble_data_packet[i])
+//        {
+//            printf("%u: %s()\n\r", __LINE__, __FUNCTION__);
+//            ble_write_mismatch = true;
+//            break;
+//        }
+//        spi_sent_buffer[SPI_BLE].pop();
+//    }
+//
+//    EXPECT_FALSE(ble_write_mismatch);
+//}
+
+TEST_F(Sm_MainTest, BleReadBridgingOff)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+
+    // Generate BLE read request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_BLE_READ_REQ);
+    req.p.cmd_gps_read_req.length = 100;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_ble_read_req_t));
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_ERROR_BRIDGING_DISABLED, resp.p.cmd_generic_resp.error_code);
+}
+
+TEST_F(Sm_MainTest, FwWriteWrongImageType)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+
+    // FS_FILE_ID_STM32_IMAGE    (1)  // STM32 application image
+    // FS_FILE_ID_BLE_APP_IMAGE  (2)  // BLE application image
+    // FS_FILE_ID_BLE_SOFT_IMAGE (3)  // BLE soft-device image
+
+    // Generate FW write request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_FW_SEND_IMAGE_REQ);
+    req.p.cmd_fw_send_image_req.image_type = 0xAA; // Invalid image type
+    req.p.cmd_fw_send_image_req.length = 100;
+    req.p.cmd_fw_send_image_req.CRC32 = 0;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_fw_send_image_req_t));
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_ERROR_INVALID_FW_IMAGE_TYPE, resp.p.cmd_generic_resp.error_code);
+}
+
+TEST_F(Sm_MainTest, FwWriteInvalidCRC32)
+{
+    const uint32_t fw_size = 100;
+    uint8_t fw_image[fw_size];
+
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+
+    // Generate the FW image to be sent
+    for (uint32_t i = 0; i < fw_size; ++i)
+        fw_image[i] = rand();
+
+    // FS_FILE_ID_STM32_IMAGE    (1)  // STM32 application image
+    // FS_FILE_ID_BLE_APP_IMAGE  (2)  // BLE application image
+    // FS_FILE_ID_BLE_SOFT_IMAGE (3)  // BLE soft-device image
+
+    // Generate FW write request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_FW_SEND_IMAGE_REQ);
+    req.p.cmd_fw_send_image_req.image_type = 1; // STM32 application image
+    req.p.cmd_fw_send_image_req.length = fw_size;
+    req.p.cmd_fw_send_image_req.CRC32 = 0;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_fw_send_image_req_t));
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+
+    // Send the firmware image
+    send_message(fw_image, sizeof(fw_image));
+
+    sm_tick(&state_handle); // Process the image
+
+    // Check the response
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_FW_SEND_IMAGE_COMPLETE_CNF, resp.h.cmd);
+    EXPECT_EQ(CMD_ERROR_IMAGE_CRC_MISMATCH, resp.p.cmd_fw_send_image_complete_cnf.error_code);
+}
+
+TEST_F(Sm_MainTest, FwWriteSingle)
+{
+    const uint32_t fw_size = 100;
+    uint8_t fw_image[fw_size];
+    uint32_t fw_crc32 = 0;
+
+    // FS_FILE_ID_STM32_IMAGE    (1)  // STM32 application image
+    // FS_FILE_ID_BLE_APP_IMAGE  (2)  // BLE application image
+    // FS_FILE_ID_BLE_SOFT_IMAGE (3)  // BLE soft-device image
+
+    uint8_t fw_type = 1;
+
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+
+    // Generate the FW image to be sent
+    for (uint32_t i = 0; i < fw_size; ++i)
+        fw_image[i] = rand();
+
+    // Calculate the crc
+    fw_crc32 = crc32(fw_crc32, fw_image, fw_size);
+
+    // Generate FW write request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_FW_SEND_IMAGE_REQ);
+    req.p.cmd_fw_send_image_req.image_type = fw_type; // STM32 application image
+    req.p.cmd_fw_send_image_req.length = fw_size;
+    req.p.cmd_fw_send_image_req.CRC32 = fw_crc32;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_fw_send_image_req_t));
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+
+    // Send the firmware image
+    send_message(fw_image, fw_size);
+
+    sm_tick(&state_handle); // Process the image
+
+    // Check the response
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_FW_SEND_IMAGE_COMPLETE_CNF, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_fw_send_image_complete_cnf.error_code);
+
+    // Check the image that has been written to the FLASH
+    fs_t file_system;
+    fs_handle_t file_system_handle;
+    uint8_t flash_fw_data[fw_size];
+    uint32_t bytes_read;
+
+    EXPECT_EQ(FS_NO_ERROR, fs_init(FS_DEVICE));
+    EXPECT_EQ(FS_NO_ERROR, fs_mount(FS_DEVICE, &file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_open(file_system, &file_system_handle, fw_type, FS_MODE_READONLY, NULL));
+    EXPECT_EQ(FS_NO_ERROR, fs_read(file_system_handle, &flash_fw_data[0], fw_size, &bytes_read));
+    EXPECT_EQ(FS_NO_ERROR, fs_close(file_system_handle));
+
+    // Look for differences between the two
+    bool flash_and_image_match = true;
+    for (uint32_t i = 0; i < fw_size; ++i)
+    {
+        if (flash_fw_data[i] != fw_image[i])
+        {
+            flash_and_image_match = false;
+            break;
+        }
+    }
+
+    EXPECT_TRUE(flash_and_image_match);
+}
+
+TEST_F(Sm_MainTest, FwWriteMultiple)
+{
+    const uint32_t packet_number = 20;
+    const uint32_t packet_size = 512;
+    const uint32_t fw_size = packet_number * packet_size;
+    uint8_t fw_image[fw_size];
+    uint32_t fw_crc32 = 0;
+
+    // FS_FILE_ID_STM32_IMAGE    (1)  // STM32 application image
+    // FS_FILE_ID_BLE_APP_IMAGE  (2)  // BLE application image
+    // FS_FILE_ID_BLE_SOFT_IMAGE (3)  // BLE soft-device image
+
+    uint8_t fw_type = 1;
+
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+
+    // Generate the FW image to be sent
+    for (uint32_t i = 0; i < fw_size; ++i)
+        fw_image[i] = rand();
+
+    // Calculate the crc
+    fw_crc32 = crc32(fw_crc32, fw_image, fw_size);
+
+    // Generate FW write request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_FW_SEND_IMAGE_REQ);
+    req.p.cmd_fw_send_image_req.image_type = fw_type; // STM32 application image
+    req.p.cmd_fw_send_image_req.length = fw_size;
+    req.p.cmd_fw_send_image_req.CRC32 = fw_crc32;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_fw_send_image_req_t));
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+
+    // Send the full firmware image in discrete packets
+    for (uint32_t i = 0; i < packet_number; ++i)
+    {
+        send_message(fw_image + (i * packet_size), packet_size);
+        sm_tick(&state_handle); // Process the image
+    }
+
+    // Check the response
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_FW_SEND_IMAGE_COMPLETE_CNF, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_fw_send_image_complete_cnf.error_code);
+
+    // Check the image that has been written to the FLASH
+    fs_t file_system;
+    fs_handle_t file_system_handle;
+    uint8_t flash_fw_data[fw_size];
+    uint32_t bytes_read;
+
+    EXPECT_EQ(FS_NO_ERROR, fs_init(FS_DEVICE));
+    EXPECT_EQ(FS_NO_ERROR, fs_mount(FS_DEVICE, &file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_open(file_system, &file_system_handle, fw_type, FS_MODE_READONLY, NULL));
+    EXPECT_EQ(FS_NO_ERROR, fs_read(file_system_handle, &flash_fw_data[0], fw_size, &bytes_read));
+    EXPECT_EQ(FS_NO_ERROR, fs_close(file_system_handle));
+
+    // Look for differences between the two
+    bool flash_and_image_match = true;
+    for (uint32_t i = 0; i < fw_size; ++i)
+    {
+        if (flash_fw_data[i] != fw_image[i])
+        {
+            flash_and_image_match = false;
+            break;
+        }
+    }
+
+    EXPECT_TRUE(flash_and_image_match);
+}
+
+TEST_F(Sm_MainTest, FwApplyImageCorrect)
+{
+    const uint32_t packet_number = 20;
+    const uint32_t packet_size = 512;
+    const uint32_t fw_size = packet_number * packet_size;
+    uint8_t fw_image[fw_size];
+    uint32_t fw_crc32 = 0;
+
+    // FS_FILE_ID_STM32_IMAGE    (1)  // STM32 application image
+    // FS_FILE_ID_BLE_APP_IMAGE  (2)  // BLE application image
+    // FS_FILE_ID_BLE_SOFT_IMAGE (3)  // BLE soft-device image
+
+    uint8_t fw_type = 1; // STM32 application image
+
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+
+    // Generate the FW image to be sent
+    for (uint32_t i = 0; i < fw_size; ++i)
+        fw_image[i] = rand();
+
+    // Calculate the crc
+    fw_crc32 = crc32(fw_crc32, fw_image, fw_size);
+
+    // Generate FW write request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_FW_SEND_IMAGE_REQ);
+    req.p.cmd_fw_send_image_req.image_type = fw_type;
+    req.p.cmd_fw_send_image_req.length = fw_size;
+    req.p.cmd_fw_send_image_req.CRC32 = fw_crc32;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_fw_send_image_req_t));
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+
+    // Send the full firmware image in discrete packets
+    for (uint32_t i = 0; i < packet_number; ++i)
+    {
+        send_message(fw_image + (i * packet_size), packet_size);
+        sm_tick(&state_handle); // Process the image
+    }
+
+    // Check the response
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_FW_SEND_IMAGE_COMPLETE_CNF, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_fw_send_image_complete_cnf.error_code);
+
+    // Check the image that has been written to the FLASH
+    fs_t file_system;
+    fs_handle_t file_system_handle;
+    uint8_t flash_fw_data[fw_size];
+    uint32_t bytes_read;
+
+    EXPECT_EQ(FS_NO_ERROR, fs_init(FS_DEVICE));
+    EXPECT_EQ(FS_NO_ERROR, fs_mount(FS_DEVICE, &file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_open(file_system, &file_system_handle, fw_type, FS_MODE_READONLY, NULL));
+    EXPECT_EQ(FS_NO_ERROR, fs_read(file_system_handle, &flash_fw_data[0], fw_size, &bytes_read));
+    EXPECT_EQ(FS_NO_ERROR, fs_close(file_system_handle));
+
+    // Look for differences between the two
+    bool flash_and_image_match = true;
+    for (uint32_t i = 0; i < fw_size; ++i)
+    {
+        if (flash_fw_data[i] != fw_image[i])
+        {
+            flash_and_image_match = false;
+            break;
+        }
+    }
+
+    EXPECT_TRUE(flash_and_image_match);
+
+    // Generate an apple image request
+    CMD_SET_HDR((&req), CMD_FW_APPLY_IMAGE_REQ);
+    req.p.cmd_fw_apply_image_req.image_type = fw_type;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_fw_apply_image_req_t));
+
+    sm_tick(&state_handle); // Process the request
+
+    // Check the response
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+}
+
+TEST_F(Sm_MainTest, FwApplyImageNotFound)
+{
+    // FS_FILE_ID_STM32_IMAGE    (1)  // STM32 application image
+    // FS_FILE_ID_BLE_APP_IMAGE  (2)  // BLE application image
+    // FS_FILE_ID_BLE_SOFT_IMAGE (3)  // BLE soft-device image
+
+    uint8_t fw_type = 1; // STM32 application image
+
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+
+    // Generate an apply image request
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_FW_APPLY_IMAGE_REQ);
+    req.p.cmd_fw_apply_image_req.image_type = fw_type;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_fw_apply_image_req_t));
+
+    sm_tick(&state_handle); // Process the request
+
+    // Check the response
+    cmd_t resp;
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_ERROR_FILE_NOT_FOUND, resp.p.cmd_generic_resp.error_code);
 }

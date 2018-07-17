@@ -33,6 +33,5 @@ int syshal_batt_init(void);
 uint16_t syshal_batt_temp(void);
 uint16_t syshal_batt_voltage(void);
 int syshal_batt_level(void);
-bool syshal_batt_charging(void);
 
 #endif /* _SYSHAL_BATT_H_ */
