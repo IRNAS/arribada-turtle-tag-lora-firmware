@@ -2550,7 +2550,24 @@ static void log_read_req(cmd_t * req, uint16_t size)
                 {
                     resp->p.cmd_log_read_resp.error_code = CMD_NO_ERROR;
                     if (sm_context.log_read.length)
+                    {
                         message_set_state(SM_MESSAGE_STATE_LOG_READ_NEXT);
+
+                        // Move to the offset position
+                        while (sm_context.log_read.start_offset)
+                        {
+                            uint8_t dummyData;
+                            uint32_t bytes_actually_read;
+                            // If so move to this location in packet sized chunks
+                            ret = fs_read(file_handle, &dummyData, sizeof(dummyData), &bytes_actually_read);
+                            if (FS_NO_ERROR != ret)
+                            {
+                                Throw(EXCEPTION_FS_ERROR);
+                            }
+
+                            sm_context.log_read.start_offset -= bytes_actually_read;
+                        }
+                    }
                     else
                         fs_close(file_handle);
                 }
@@ -2589,26 +2606,9 @@ static void log_read_next_state()
     if (!buffer_write(&config_if_send_buffer, (uintptr_t *)&read_buffer))
         Throw(EXCEPTION_TX_BUFFER_FULL);
 
-    // Is there a reading offset?
-    while (sm_context.log_read.start_offset)
-    {
-        // If so move to this location in packet sized chunks
-        bytes_to_read = MIN(sm_context.log_read.start_offset, SYSHAL_USB_PACKET_SIZE);
-
-        ret = fs_read(file_handle, &read_buffer, bytes_to_read, &bytes_actually_read);
-        if (FS_NO_ERROR != ret)
-        {
-            Throw(EXCEPTION_FS_ERROR);
-        }
-
-        sm_context.log_read.start_offset -= bytes_actually_read;
-    }
-
     // Read data out
     bytes_to_read = MIN(sm_context.log_read.length, SYSHAL_USB_PACKET_SIZE);
-
     ret = fs_read(file_handle, read_buffer, bytes_to_read, &bytes_actually_read);
-
     if (FS_NO_ERROR != ret)
     {
         Throw(EXCEPTION_FS_ERROR);
