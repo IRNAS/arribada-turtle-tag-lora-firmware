@@ -395,6 +395,8 @@ class Sm_MainTest : public ::testing::Test
 
         // Setup main state machine
         sm_init(&state_handle, sm_main_states);
+
+        sys_config.format_version = SYS_CONFIG_FORMAT_VERSION;
     }
 
     virtual void TearDown()
