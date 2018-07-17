@@ -513,6 +513,39 @@ public:
         sm_tick(&state_handle);
     }
 
+    void BootTagsSetAndLogFileCreated(void)
+    {
+        set_all_configuration_tags_RAM();
+        SetBatteryLowThreshold(10);
+
+        // Create the log file
+        fs_t file_system;
+        fs_handle_t file_system_handle;
+
+        EXPECT_EQ(FS_NO_ERROR, fs_init(FS_DEVICE));
+        EXPECT_EQ(FS_NO_ERROR, fs_mount(FS_DEVICE, &file_system));
+        EXPECT_EQ(FS_NO_ERROR, fs_format(file_system));
+        EXPECT_EQ(FS_NO_ERROR, fs_open(file_system, &file_system_handle, FS_FILE_ID_LOG, FS_MODE_CREATE, NULL));
+        EXPECT_EQ(FS_NO_ERROR, fs_close(file_system_handle));
+
+        sm_set_current_state(&state_handle, SM_MAIN_BOOT);
+
+        sm_tick(&state_handle);
+    }
+
+
+    void CreateEmptyLogfile(void)
+    {
+        fs_t file_system;
+        fs_handle_t file_system_handle;
+
+        EXPECT_EQ(FS_NO_ERROR, fs_init(FS_DEVICE));
+        EXPECT_EQ(FS_NO_ERROR, fs_mount(FS_DEVICE, &file_system));
+        EXPECT_EQ(FS_NO_ERROR, fs_format(file_system));
+        EXPECT_EQ(FS_NO_ERROR, fs_open(file_system, &file_system_handle, FS_FILE_ID_LOG, FS_MODE_CREATE, NULL));
+        EXPECT_EQ(FS_NO_ERROR, fs_close(file_system_handle));
+    }
+
     void SetVUSB(bool state)
     {
         GPIO_pin_input_state[GPIO_VUSB] = state;
@@ -569,9 +602,9 @@ public:
         for (auto i = 0; i < SYS_CONFIG_MAX_DATA_SIZE; ++i)
             config_if_dummy_data[i] = rand();
 
+        uint16_t tag, last_index = 0;
         uint32_t length = 0;
 
-        uint16_t tag, last_index = 0;
         while (!sys_config_iterate(&tag, &last_index))
         {
             int ret;
@@ -579,12 +612,11 @@ public:
             {
                 ret = sys_config_set(tag, &config_if_dummy_data, length++);
             }
-            while (SYS_CONFIG_ERROR_WRONG_SIZE == ret &&
-                   length < SYS_CONFIG_MAX_DATA_SIZE);
+            while (SYS_CONFIG_ERROR_WRONG_SIZE == ret);
 
             length = 0;
 
-            if (SYS_CONFIG_ERROR_NO_MORE_TAGS != ret)
+            if (SYS_CONFIG_ERROR_NO_MORE_TAGS == ret)
             {
                 break;
             }
@@ -611,6 +643,13 @@ TEST_F(Sm_MainTest, BootNoTagsVUSB)
     BootTagsNotSet();
 
     EXPECT_EQ(SM_MAIN_BATTERY_CHARGING, sm_get_current_state(&state_handle));
+}
+
+TEST_F(Sm_MainTest, BootOperationalState)
+{
+    BootTagsSetAndLogFileCreated();
+
+    EXPECT_EQ(SM_MAIN_OPERATIONAL, sm_get_current_state(&state_handle));
 }
 
 //////////////////////////////////////////////////////////////////
@@ -659,6 +698,19 @@ TEST_F(Sm_MainTest, BatteryChargingNoVUSBBatteryLowNoThreshold)
     sm_tick(&state_handle);
 
     EXPECT_EQ(SM_MAIN_PROVISIONING_NEEDED, sm_get_current_state(&state_handle));
+}
+
+TEST_F(Sm_MainTest, BatteryChargingNoVUSBOperationalState)
+{
+    BootTagsSetAndLogFileCreated();
+
+    sm_set_current_state(&state_handle, SM_MAIN_BATTERY_CHARGING);
+
+    SetVUSB(false);
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_OPERATIONAL, sm_get_current_state(&state_handle));
 }
 
 TEST_F(Sm_MainTest, BatteryChargingNoVUSBBatteryLow)
@@ -800,6 +852,52 @@ TEST_F(Sm_MainTest, LogFileFullBLEConnection)
 }
 
 //////////////////////////////////////////////////////////////////
+//////////////////// Provisioning Needed State ///////////////////
+//////////////////////////////////////////////////////////////////
+
+TEST_F(Sm_MainTest, ProvisioningNeededToBatteryCharging)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING_NEEDED);
+
+    SetVUSB(true);
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_BATTERY_CHARGING, sm_get_current_state(&state_handle));
+}
+
+TEST_F(Sm_MainTest, ProvisioningNeededToBatteryLow)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING_NEEDED);
+
+    SetVUSB(false);
+    SetBatteryPercentage(0);
+    SetBatteryLowThreshold(10);
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_BATTERY_LEVEL_LOW, sm_get_current_state(&state_handle));
+}
+
+TEST_F(Sm_MainTest, ProvisioningNeededToProvisioning)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING_NEEDED);
+
+    config_if_init(CONFIG_IF_BACKEND_BLE);
+    BLEConnectionEvent();
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+}
+
+//////////////////////////////////////////////////////////////////
 /////////////////////// Provisioning State ///////////////////////
 //////////////////////////////////////////////////////////////////
 
@@ -859,6 +957,17 @@ TEST_F(Sm_MainTest, ProvisioningToLowBattery)
 
     EXPECT_EQ(SM_MAIN_BATTERY_LEVEL_LOW, sm_get_current_state(&state_handle));
     EXPECT_EQ(CONFIG_IF_BACKEND_NOT_SET, config_if_current());
+}
+
+TEST_F(Sm_MainTest, ProvisioningToOperationalState)
+{
+    BootTagsSetAndLogFileCreated();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_OPERATIONAL, sm_get_current_state(&state_handle));
 }
 
 //////////////////////////////////////////////////////////////////
@@ -1881,8 +1990,6 @@ TEST_F(Sm_MainTest, LogReadOffset)
 
     EXPECT_FALSE(log_read_mismatch);
 }
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 TEST_F(Sm_MainTest, BatteryStatus)
 {
