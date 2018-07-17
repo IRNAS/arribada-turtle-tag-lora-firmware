@@ -31,6 +31,7 @@ extern "C" {
 #include "Mocksyshal_i2c.h"
 #include "Mocksyshal_rtc.h"
 #include "Mocksyshal_time.h"
+#include "Mocksyshal_pmu.h"
 #include "Mockconfig_if.h"
 #include "fs_priv.h"
 #include "fs.h"
@@ -108,7 +109,7 @@ static int config_if_send_GTest(uint8_t * data, uint32_t size, int cmock_num_cal
 }
 
 // Send config_if message to the state machine
-void send_message(cmd_t message, uint32_t size)
+void send_message(uint8_t * message, uint32_t size)
 {
     // We should have a configuration interface init before sending a message
     ASSERT_NE(CONFIG_IF_BACKEND_NOT_SET, config_if_current_interface);
@@ -117,7 +118,7 @@ void send_message(cmd_t message, uint32_t size)
     ASSERT_NE(nullptr, config_if_receive_buffer);
 
     // Copy message into receive buffer
-    memcpy(config_if_receive_buffer, &message, size);
+    memcpy(config_if_receive_buffer, message, size);
 
     // Generate a receive complete event
     config_if_event_t event;
@@ -129,9 +130,15 @@ void send_message(cmd_t message, uint32_t size)
     config_if_callback(&event);
 }
 
-cmd_t receive_message()
+// Send config_if message to the state machine
+void send_message(cmd_t * message, uint32_t size)
 {
-    //ASSERT_NE(0, config_if_transmitted_data.size()); // We must at least have a message to receive
+    send_message((uint8_t *)message, size);
+}
+
+void receive_message(cmd_t * message)
+{
+    ASSERT_GT(config_if_transmitted_data.size(), 0); // We must at least have a message to receive
 
     // Prepare a transmit complete event
     config_if_event_t event;
@@ -140,16 +147,13 @@ cmd_t receive_message()
     event.send.size = config_if_transmitted_data.size();
 
     // Copy message from send buffer
-    cmd_t message;
     for (auto i = 0; i < config_if_transmitted_data[0].size(); ++i)
-        ((uint8_t *)&message)[i] = config_if_transmitted_data.back()[i];
+        ((uint8_t *)message)[i] = config_if_transmitted_data.back()[i];
 
     // Remove this buffer from the vector
     config_if_transmitted_data.pop_back();
 
     config_if_callback(&event); // Generate the transmit complete event
-
-    return message;
 }
 
 // syshal_time
@@ -177,7 +181,7 @@ void syshal_gpio_enable_interrupt_GTest(uint32_t pin, void (*callback_function)(
 // syshal_ble
 const uint32_t syshal_ble_version = 0xABCD0123;
 
-int syshal_ble_get_version_GTest(uint32_t *version, int cmock_num_calls)
+int syshal_ble_get_version_GTest(uint32_t * version, int cmock_num_calls)
 {
     *version = syshal_ble_version;
     return SYSHAL_BLE_NO_ERROR;
@@ -772,16 +776,198 @@ TEST_F(Sm_MainTest, StatusRequest)
     // Generate status request message
     cmd_t req;
     CMD_SET_HDR((&req), CMD_STATUS_REQ);
-    send_message(req, CMD_SIZE_HDR);
+    send_message(&req, CMD_SIZE_HDR);
 
     sm_tick(&state_handle); // Process the message
 
     // Check the response
-    cmd_t resp = receive_message();
+    cmd_t resp;
+    receive_message(&resp);
     EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
     EXPECT_EQ(CMD_STATUS_RESP, resp.h.cmd);
     EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_status_resp.error_code);
     EXPECT_EQ(STM32_FIRMWARE_VERSION, resp.p.cmd_status_resp.stm_firmware_version);
     EXPECT_EQ(syshal_ble_version, resp.p.cmd_status_resp.ble_firmware_version);
     EXPECT_EQ(SYS_CONFIG_FORMAT_VERSION, resp.p.cmd_status_resp.configuration_format_version);
+}
+
+TEST_F(Sm_MainTest, ResetRequest)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+
+    // Generate status request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_RESET_REQ);
+    req.p.cmd_reset_req.reset_type = 0;
+    send_message(&req, CMD_SIZE(cmd_reset_req_t));
+
+    syshal_pmu_reset_Expect();
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+}
+
+TEST_F(Sm_MainTest, CfgWriteOne)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+
+    // Generate cfg write request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_CFG_WRITE_REQ);
+    req.p.cmd_cfg_write_req.length = SYS_CONFIG_TAG_ID_SIZE + SYS_CONFIG_TAG_DATA_SIZE(sys_config_logging_group_sensor_readings_enable_t);
+    send_message(&req, CMD_SIZE(cmd_cfg_write_req_t));
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+
+    // Generate cfg tag data packet
+    uint8_t tag_data_packet[3];
+    tag_data_packet[0] = uint16_t(SYS_CONFIG_TAG_LOGGING_GROUP_SENSOR_READINGS_ENABLE) & 0x00FF;
+    tag_data_packet[1] = (uint16_t(SYS_CONFIG_TAG_LOGGING_GROUP_SENSOR_READINGS_ENABLE) & 0xFF00) >> 8;
+    tag_data_packet[2] = true; // Enable
+
+    send_message(tag_data_packet, sizeof(tag_data_packet));
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_CFG_WRITE_CNF, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_cfg_write_cnf.error_code);
+
+    // Check the tag was correctly set
+    EXPECT_TRUE(sys_config.sys_config_logging_group_sensor_readings_enable.contents.enable);
+}
+
+TEST_F(Sm_MainTest, CfgWriteOneInvalidTag)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+
+    // Generate cfg write request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_CFG_WRITE_REQ);
+    req.p.cmd_cfg_write_req.length = SYS_CONFIG_TAG_ID_SIZE + SYS_CONFIG_TAG_DATA_SIZE(sys_config_logging_group_sensor_readings_enable_t);
+    send_message(&req, CMD_SIZE(cmd_cfg_write_req_t));
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+
+    // Generate cfg tag data packet
+    uint8_t tag_data_packet[3];
+    uint16_t invalid_tag_ID = 0xABAB;
+    tag_data_packet[0] = invalid_tag_ID & 0x00FF;
+    tag_data_packet[1] = (invalid_tag_ID & 0xFF00) >> 8;
+    tag_data_packet[2] = true; // Enable
+
+    send_message(tag_data_packet, sizeof(tag_data_packet));
+
+    sm_tick(&state_handle); // Process the message
+    sm_tick(&state_handle); // Return the error
+
+    // Check the response
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_CFG_WRITE_CNF, resp.h.cmd);
+    EXPECT_EQ(CMD_ERROR_INVALID_CONFIG_TAG, resp.p.cmd_cfg_write_cnf.error_code);
+}
+
+TEST_F(Sm_MainTest, CfgReadOne)
+{
+    // Set a tag up for reading later
+    sys_config.sys_config_logging_group_sensor_readings_enable.contents.enable = true;
+    sys_config.sys_config_logging_group_sensor_readings_enable.hdr.set = true;
+
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+
+    // Generate cfg read request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_CFG_READ_REQ);
+    req.p.cmd_cfg_read_req.configuration_tag = SYS_CONFIG_TAG_LOGGING_GROUP_SENSOR_READINGS_ENABLE;
+    send_message(&req, CMD_SIZE(cmd_cfg_read_req_t));
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_CFG_READ_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_cfg_read_resp.error_code);
+    uint32_t expected_length = resp.p.cmd_cfg_read_resp.length;
+
+    sm_tick(&state_handle); // Send the data packet
+
+    receive_message(&resp);
+    uint8_t * message = (uint8_t *) &resp;
+
+    uint16_t tag = 0;
+    tag |= (uint16_t) message[0] & 0x00FF;
+    tag |= (uint16_t) (message[1] << 8) & 0xFF00;
+    EXPECT_EQ(SYS_CONFIG_TAG_LOGGING_GROUP_SENSOR_READINGS_ENABLE, tag);
+
+    // Check the tag was correctly read
+    EXPECT_TRUE(message[2]);
 }

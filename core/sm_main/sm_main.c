@@ -2351,15 +2351,14 @@ static void reset_req(cmd_t * req, uint16_t size)
     config_if_send_priv(&config_if_send_buffer);
 
     // Wait for response to have been sent
+#ifndef GTEST // Prevent an infinite loop in unit tests
     while (config_if_tx_pending)
+#endif
     {
         config_if_tick();
     }
 
     syshal_pmu_reset();
-
-    // If a system reset isn't available then block until a watchdog reset
-    for (;;) {}
 }
 
 ////////////////////////////////////////////////////////////////////////////////
