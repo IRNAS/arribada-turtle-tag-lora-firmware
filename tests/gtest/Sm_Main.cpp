@@ -171,6 +171,9 @@ uint32_t syshal_time_get_ticks_ms_GTest(int cmock_num_calls)
     return syshal_time_get_ticks_ms_value;
 }
 
+void syshal_time_delay_us_GTest(uint32_t us, int cmock_num_calls) {}
+void syshal_time_delay_ms_GTest(uint32_t ms, int cmock_num_calls) {}
+
 // syshal_gpio
 bool GPIO_pin_input_state[GPIO_TOTAL_NUMBER];
 bool GPIO_pin_output_state[GPIO_TOTAL_NUMBER];
@@ -394,6 +397,8 @@ class Sm_MainTest : public ::testing::Test
         Mocksyshal_time_Init();
 
         syshal_time_init_StubWithCallback(syshal_time_init_GTest);
+        syshal_time_delay_us_StubWithCallback(syshal_time_delay_us_GTest);
+        syshal_time_delay_ms_StubWithCallback(syshal_time_delay_ms_GTest);
         syshal_time_get_ticks_ms_StubWithCallback(syshal_time_get_ticks_ms_GTest);
         syshal_time_get_ticks_ms_value = 0;
 
@@ -964,6 +969,21 @@ TEST_F(Sm_MainTest, ProvisioningToOperationalState)
     BootTagsSetAndLogFileCreated();
 
     sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_OPERATIONAL, sm_get_current_state(&state_handle));
+}
+
+//////////////////////////////////////////////////////////////////
+/////////////////////// Operational State ////////////////////////
+//////////////////////////////////////////////////////////////////
+
+TEST_F(Sm_MainTest, Operational)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_OPERATIONAL);
 
     sm_tick(&state_handle);
 
