@@ -180,12 +180,6 @@ static volatile sm_gps_state_t sm_gps_state; // The current operating state of t
 ////////////////////////////////// GLOBALS /////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-#define FS_FILE_ID_CONF             (0) // The File ID of the configuration data
-#define FS_FILE_ID_STM32_IMAGE      (1) // STM32 application image
-#define FS_FILE_ID_BLE_APP_IMAGE    (2) // BLE application image
-#define FS_FILE_ID_BLE_SOFT_IMAGE   (3) // BLE soft-device image
-#define FS_FILE_ID_LOG              (4) // Sensor log file
-
 #define LOG_FILE_FLUSH_PERIOD_SECONDS ( (24 * 60 * 60) - 60 ) // Period in seconds in which to flush the log file to FLASH
 
 // Size of logging buffer that is used to store sensor data before it it written to FLASH

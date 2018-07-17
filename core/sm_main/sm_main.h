@@ -24,6 +24,12 @@
 
 #define STM32_FIRMWARE_VERSION (2) // The current version of the firmware
 
+#define FS_FILE_ID_CONF             (0) // The File ID of the configuration data
+#define FS_FILE_ID_STM32_IMAGE      (1) // STM32 application image
+#define FS_FILE_ID_BLE_APP_IMAGE    (2) // BLE application image
+#define FS_FILE_ID_BLE_SOFT_IMAGE   (3) // BLE soft-device image
+#define FS_FILE_ID_LOG              (4) // Sensor log file
+
 extern sm_state_func_t sm_main_states[]; // State function lookup table is populate in main_state.c
 
 typedef enum

@@ -484,6 +484,35 @@ public:
         config_if_callback(&event);
     }
 
+    static void set_all_configuration_tags_RAM()
+    {
+        uint8_t config_if_dummy_data[SYS_CONFIG_MAX_DATA_SIZE];
+        for (auto i = 0; i < SYS_CONFIG_MAX_DATA_SIZE; ++i)
+            config_if_dummy_data[i] = rand();
+
+        uint32_t length = 0;
+
+        uint16_t tag, last_index = 0;
+        while (!sys_config_iterate(&tag, &last_index))
+        {
+            void * src;
+            int ret;
+            do
+            {
+                int ret = sys_config_set(tag, &src, length++);
+            }
+            while (SYS_CONFIG_ERROR_WRONG_SIZE == ret &&
+                   length < SYS_CONFIG_MAX_DATA_SIZE);
+
+            length = 0;
+
+            if (SYS_CONFIG_ERROR_NO_MORE_TAGS != ret)
+            {
+                break;
+            }
+        }
+    }
+
 };
 
 //////////////////////////////////////////////////////////////////
@@ -970,4 +999,524 @@ TEST_F(Sm_MainTest, CfgReadOne)
 
     // Check the tag was correctly read
     EXPECT_TRUE(message[2]);
+}
+
+TEST_F(Sm_MainTest, CfgSaveSuccess)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    // Generate cfg save request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_CFG_SAVE_REQ);
+    send_message((uint8_t *) &req, CMD_SIZE_HDR);
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+
+    // Check the configuration file in FLASH matches the configuration in RAM
+    fs_t file_system;
+    fs_handle_t file_system_handle;
+    uint32_t bytes_read;
+    uint8_t flash_config_data[sizeof(sys_config)];
+
+    EXPECT_EQ(FS_NO_ERROR, fs_init(FS_DEVICE));
+    EXPECT_EQ(FS_NO_ERROR, fs_mount(FS_DEVICE, &file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_open(file_system, &file_system_handle, FS_FILE_ID_CONF, FS_MODE_READONLY, NULL));
+    EXPECT_EQ(FS_NO_ERROR, fs_read(file_system_handle, &flash_config_data[0], sizeof(sys_config), &bytes_read));
+    EXPECT_EQ(FS_NO_ERROR, fs_close(file_system_handle));
+    EXPECT_EQ(sizeof(sys_config), bytes_read);
+
+    // Check RAM and FLASH contents match
+    bool RAM_FLASH_mismatch = false;
+    uint8_t * sys_config_itr = (uint8_t *) &sys_config;
+    for (unsigned int i = 0; i < bytes_read; ++i)
+    {
+        if (flash_config_data[i] != sys_config_itr[i])
+        {
+            RAM_FLASH_mismatch = true;
+            break;
+        }
+    }
+
+    EXPECT_FALSE(RAM_FLASH_mismatch);
+}
+
+TEST_F(Sm_MainTest, CfgRestoreNoFile)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    // Generate cfg save request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_CFG_RESTORE_REQ);
+    send_message((uint8_t *) &req, CMD_SIZE_HDR);
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_ERROR_FILE_NOT_FOUND, resp.p.cmd_generic_resp.error_code);
+}
+
+TEST_F(Sm_MainTest, CfgRestoreSuccess)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    // Generate the configuration file in FLASH
+    fs_t file_system;
+    fs_handle_t file_system_handle;
+    uint32_t bytes_written;
+
+    EXPECT_EQ(FS_NO_ERROR, fs_init(FS_DEVICE));
+    EXPECT_EQ(FS_NO_ERROR, fs_mount(FS_DEVICE, &file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_format(file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_open(file_system, &file_system_handle, FS_FILE_ID_CONF, FS_MODE_CREATE, NULL));
+    EXPECT_EQ(FS_NO_ERROR, fs_write(file_system_handle, &sys_config, sizeof(sys_config), &bytes_written));
+    EXPECT_EQ(FS_NO_ERROR, fs_close(file_system_handle));
+
+    // Generate cfg save request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_CFG_RESTORE_REQ);
+    send_message((uint8_t *) &req, CMD_SIZE_HDR);
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+}
+
+TEST_F(Sm_MainTest, CfgProtectSuccess)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    // Generate the configuration file in FLASH
+    fs_t file_system;
+    fs_handle_t file_system_handle;
+
+    EXPECT_EQ(FS_NO_ERROR, fs_init(FS_DEVICE));
+    EXPECT_EQ(FS_NO_ERROR, fs_mount(FS_DEVICE, &file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_format(file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_open(file_system, &file_system_handle, FS_FILE_ID_CONF, FS_MODE_CREATE, NULL));
+    EXPECT_EQ(FS_NO_ERROR, fs_close(file_system_handle));
+
+    // Generate cfg save request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_CFG_PROTECT_REQ);
+    send_message((uint8_t *) &req, CMD_SIZE_HDR);
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+}
+
+TEST_F(Sm_MainTest, CfgProtectNoFile)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    // Generate cfg save request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_CFG_PROTECT_REQ);
+    send_message((uint8_t *) &req, CMD_SIZE_HDR);
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_ERROR_FILE_NOT_FOUND, resp.p.cmd_generic_resp.error_code);
+}
+
+TEST_F(Sm_MainTest, CfgUnprotectSuccess)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    // Generate the configuration file in FLASH
+    fs_t file_system;
+    fs_handle_t file_system_handle;
+
+    EXPECT_EQ(FS_NO_ERROR, fs_init(FS_DEVICE));
+    EXPECT_EQ(FS_NO_ERROR, fs_mount(FS_DEVICE, &file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_format(file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_open(file_system, &file_system_handle, FS_FILE_ID_CONF, FS_MODE_CREATE, NULL));
+    EXPECT_EQ(FS_NO_ERROR, fs_close(file_system_handle));
+
+    // Generate cfg save request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_CFG_UNPROTECT_REQ);
+    send_message((uint8_t *) &req, CMD_SIZE_HDR);
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+}
+
+TEST_F(Sm_MainTest, CfgUnprotectNoFile)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    // Generate cfg save request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_CFG_UNPROTECT_REQ);
+    send_message((uint8_t *) &req, CMD_SIZE_HDR);
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_ERROR_FILE_NOT_FOUND, resp.p.cmd_generic_resp.error_code);
+}
+
+TEST_F(Sm_MainTest, CfgEraseAll)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    set_all_configuration_tags_RAM(); // Set all the configuration tags
+
+    // Generate cfg erase request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_CFG_ERASE_REQ);
+    req.p.cmd_cfg_erase_req.configuration_tag = CFG_ERASE_REQ_ERASE_ALL;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_cfg_erase_req_t));
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+
+    // Check all the configuration tags have been unset
+    bool all_tags_unset = true;
+    uint16_t tag, last_index = 0;
+    while (!sys_config_iterate(&tag, &last_index))
+    {
+        void * src;
+        int ret = sys_config_get(tag, &src);
+
+        if (SYS_CONFIG_ERROR_TAG_NOT_SET != ret &&
+            SYS_CONFIG_TAG_RTC_CURRENT_DATE_AND_TIME != tag &&
+            SYS_CONFIG_TAG_LOGGING_FILE_SIZE != tag &&
+            SYS_CONFIG_TAG_LOGGING_FILE_TYPE != tag &&
+            SYS_CONFIG_TAG_LOGGING_START_END_SYNC_ENABLE != tag)
+        {
+            all_tags_unset = false;
+            break;
+        }
+    }
+
+    EXPECT_TRUE(all_tags_unset);
+}
+
+TEST_F(Sm_MainTest, CfgEraseOne)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    set_all_configuration_tags_RAM(); // Set all the configuration tags
+
+    // Generate log erase request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_CFG_ERASE_REQ);
+    req.p.cmd_cfg_erase_req.configuration_tag = SYS_CONFIG_TAG_LOGGING_GROUP_SENSOR_READINGS_ENABLE;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_cfg_erase_req_t));
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+
+    // Check the configuration tag has been unset
+    void * src;
+    int ret = sys_config_get(SYS_CONFIG_TAG_LOGGING_GROUP_SENSOR_READINGS_ENABLE, &src);
+
+    bool tag_unset = false;
+    if (SYS_CONFIG_ERROR_TAG_NOT_SET == ret)
+        tag_unset = true;
+
+    EXPECT_TRUE(tag_unset);
+}
+
+TEST_F(Sm_MainTest, LogEraseSuccess)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    // Generate the log file in FLASH
+    fs_t file_system;
+    fs_handle_t file_system_handle;
+
+    EXPECT_EQ(FS_NO_ERROR, fs_init(FS_DEVICE));
+    EXPECT_EQ(FS_NO_ERROR, fs_mount(FS_DEVICE, &file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_format(file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_open(file_system, &file_system_handle, FS_FILE_ID_LOG, FS_MODE_CREATE, NULL));
+    EXPECT_EQ(FS_NO_ERROR, fs_close(file_system_handle));
+
+    // Generate log erase request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_LOG_ERASE_REQ);
+    send_message((uint8_t *) &req, CMD_SIZE_HDR);
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+}
+
+TEST_F(Sm_MainTest, LogEraseNoFile)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    // Generate log erase request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_LOG_ERASE_REQ);
+    send_message((uint8_t *) &req, CMD_SIZE_HDR);
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_ERROR_FILE_NOT_FOUND, resp.p.cmd_generic_resp.error_code);
+}
+
+TEST_F(Sm_MainTest, LogCreateFill)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    // Generate log create request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_LOG_CREATE_REQ);
+    req.p.cmd_log_create_req.mode = CMD_LOG_CREATE_REQ_MODE_FILL;
+    req.p.cmd_log_create_req.sync_enable = false;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_log_create_req_t));
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+
+    // Check the log file has been created as is of the right mode
+    fs_t file_system;
+    fs_handle_t file_system_handle;
+    fs_stat_t file_stats;
+
+    EXPECT_EQ(FS_NO_ERROR, fs_init(FS_DEVICE));
+    EXPECT_EQ(FS_NO_ERROR, fs_mount(FS_DEVICE, &file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_stat(file_system, FS_FILE_ID_LOG, &file_stats));
+    EXPECT_FALSE(file_stats.is_circular);
+}
+
+TEST_F(Sm_MainTest, LogCreateCircular)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    // Generate log create request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_LOG_CREATE_REQ);
+    req.p.cmd_log_create_req.mode = CMD_LOG_CREATE_REQ_MODE_CIRCULAR;
+    req.p.cmd_log_create_req.sync_enable = false;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_log_create_req_t));
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+
+    // Check the log file has been created as is of the right mode
+    fs_t file_system;
+    fs_handle_t file_system_handle;
+    fs_stat_t file_stats;
+
+    EXPECT_EQ(FS_NO_ERROR, fs_init(FS_DEVICE));
+    EXPECT_EQ(FS_NO_ERROR, fs_mount(FS_DEVICE, &file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_stat(file_system, FS_FILE_ID_LOG, &file_stats));
+    EXPECT_TRUE(file_stats.is_circular);
+}
+
+TEST_F(Sm_MainTest, LogCreateAlreadyExists)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    // Create the log file
+    fs_t file_system;
+    fs_handle_t file_system_handle;
+
+    EXPECT_EQ(FS_NO_ERROR, fs_init(FS_DEVICE));
+    EXPECT_EQ(FS_NO_ERROR, fs_mount(FS_DEVICE, &file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_format(file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_open(file_system, &file_system_handle, FS_FILE_ID_LOG, FS_MODE_CREATE, NULL));
+    EXPECT_EQ(FS_NO_ERROR, fs_close(file_system_handle));
+
+    // Generate log create request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_LOG_CREATE_REQ);
+    req.p.cmd_log_create_req.mode = CMD_LOG_CREATE_REQ_MODE_CIRCULAR;
+    req.p.cmd_log_create_req.sync_enable = false;
+    send_message((uint8_t *) &req, CMD_SIZE(cmd_log_create_req_t));
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_ERROR_FILE_ALREADY_EXISTS, resp.p.cmd_generic_resp.error_code);
 }
