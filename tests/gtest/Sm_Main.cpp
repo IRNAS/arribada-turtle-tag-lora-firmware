@@ -844,6 +844,40 @@ TEST_F(Sm_MainTest, BatteryChargingUSBConnected)
     EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
 }
 
+TEST_F(Sm_MainTest, BatteryChargingBLEReedSwitchWithUSBTimeout)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_BATTERY_CHARGING);
+
+    SetVUSB(true);
+    BLETriggeredOnReedSwitchEnable(); // Ensure the BLE should be on by setting the Reed switch activation
+    SetGPIOPin(GPIO_REED_SW, 0); // Trigger the reed switch
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+    EXPECT_EQ(SM_MAIN_BATTERY_CHARGING, sm_get_current_state(&state_handle));
+
+    // Jump forward 5 seconds
+    syshal_time_get_ticks_ms_value = 5 * 1000;
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+    EXPECT_EQ(SM_MAIN_BATTERY_CHARGING, sm_get_current_state(&state_handle));
+
+    // Jump forward 100 seconds
+    syshal_time_get_ticks_ms_value = 100 * 1000;
+
+    sm_tick(&state_handle);
+    sm_tick(&state_handle);
+
+    // USB timed out but BLE should be running
+    EXPECT_EQ(CONFIG_IF_BACKEND_BLE, config_if_current());
+    EXPECT_EQ(SM_MAIN_BATTERY_CHARGING, sm_get_current_state(&state_handle));
+}
+
 //////////////////////////////////////////////////////////////////
 ////////////////////// Log File Full State ///////////////////////
 //////////////////////////////////////////////////////////////////
