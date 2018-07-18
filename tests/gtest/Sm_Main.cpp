@@ -432,15 +432,7 @@ class Sm_MainTest : public ::testing::Test
         battery_level = 100;
 
         // sys_config
-
-        // Unset all tags
-        uint16_t last_index = 0;
-        uint16_t tag;
-
-        while (!sys_config_iterate(&tag, &last_index))
-        {
-            sys_config_unset(tag);
-        }
+        unset_all_configuration_tags_RAM();
 
         // syshal_uart
         Mocksyshal_uart_Init();
@@ -655,6 +647,23 @@ public:
             {
                 break;
             }
+        }
+    }
+
+    static void unset_all_configuration_tags_RAM()
+    {
+        // Set all configuration tag data to random values
+        // This is to ensure the tests properly ignore them
+        for (auto i = 0; i < sizeof(sys_config); ++i)
+            ((uint8_t *)&sys_config)[i] = rand();
+
+        // Unset all the tags
+        uint16_t last_index = 0;
+        uint16_t tag;
+
+        while (!sys_config_iterate(&tag, &last_index))
+        {
+            sys_config_unset(tag);
         }
     }
 
@@ -973,7 +982,7 @@ TEST_F(Sm_MainTest, ProvisioningNeededBLEReedSwitchToggle)
 
     // Enable reed switch activation of BLE
     BLETriggeredOnReedSwitchEnable();
-    
+
     sm_tick(&state_handle);
 
     EXPECT_EQ(CONFIG_IF_BACKEND_NOT_SET, config_if_current());
