@@ -630,7 +630,18 @@ void manage_ble(void)
 
     if (!ble_state &&
         CONFIG_IF_BACKEND_BLE == config_if_current())
-        config_if_term();
+    {
+        config_if_term(); // Terminate the BLE interface
+
+        if (config_if_connected)
+        {
+            // If the BLE device was connected, trigger a disconnect event
+            config_if_event_t disconnectEvent;
+            disconnectEvent.backend = CONFIG_IF_BACKEND_BLE;
+            disconnectEvent.id = CONFIG_IF_EVENT_DISCONNECTED;
+            config_if_callback(&disconnectEvent);
+        }
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -3569,6 +3580,8 @@ static void sm_main_provisioning(sm_handle_t * state_handle)
         syshal_gpio_set_output_high(GPIO_LED2_RED);
         syshal_gpio_set_output_low(GPIO_LED1_GREEN);
     }
+
+    manage_ble();
 
     config_if_tick();
 

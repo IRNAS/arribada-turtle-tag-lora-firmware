@@ -176,15 +176,14 @@ void syshal_time_delay_us_GTest(uint32_t us, int cmock_num_calls) {}
 void syshal_time_delay_ms_GTest(uint32_t ms, int cmock_num_calls) {}
 
 // syshal_gpio
-bool GPIO_pin_input_state[GPIO_TOTAL_NUMBER];
-bool GPIO_pin_output_state[GPIO_TOTAL_NUMBER];
+bool GPIO_pin_state[GPIO_TOTAL_NUMBER];
 void (*GPIO_callback_function[GPIO_TOTAL_NUMBER])(void);
 
 int syshal_gpio_init_GTest(uint32_t pin, int cmock_num_calls) {return SYSHAL_GPIO_NO_ERROR;}
-bool syshal_gpio_get_input_GTest(uint32_t pin, int cmock_num_calls) {return GPIO_pin_input_state[pin];}
-void syshal_gpio_set_output_low_GTest(uint32_t pin, int cmock_num_calls) {GPIO_pin_output_state[pin] = 0;}
-void syshal_gpio_set_output_high_GTest(uint32_t pin, int cmock_num_calls) {GPIO_pin_output_state[pin] = 1;}
-void syshal_gpio_set_output_toggle_GTest(uint32_t pin, int cmock_num_calls) {GPIO_pin_output_state[pin] = !GPIO_pin_output_state[pin];}
+bool syshal_gpio_get_input_GTest(uint32_t pin, int cmock_num_calls) {return GPIO_pin_state[pin];}
+void syshal_gpio_set_output_low_GTest(uint32_t pin, int cmock_num_calls) {GPIO_pin_state[pin] = 0;}
+void syshal_gpio_set_output_high_GTest(uint32_t pin, int cmock_num_calls) {GPIO_pin_state[pin] = 1;}
+void syshal_gpio_set_output_toggle_GTest(uint32_t pin, int cmock_num_calls) {GPIO_pin_state[pin] = !GPIO_pin_state[pin];}
 void syshal_gpio_enable_interrupt_GTest(uint32_t pin, void (*callback_function)(void), int cmock_num_calls) {GPIO_callback_function[pin] = callback_function;}
 
 // syshal_ble
@@ -390,13 +389,9 @@ class Sm_MainTest : public ::testing::Test
         syshal_gpio_set_output_toggle_StubWithCallback(syshal_gpio_set_output_toggle_GTest);
         syshal_gpio_enable_interrupt_StubWithCallback(syshal_gpio_enable_interrupt_GTest);
 
-        // Set all gpio input pins low
+        // Set all gpio pin states to low
         for (unsigned int i = 0; i < GPIO_TOTAL_NUMBER; ++i)
-            GPIO_pin_input_state[i] = 0;
-
-        // Set all gpio output pins low
-        for (unsigned int i = 0; i < GPIO_TOTAL_NUMBER; ++i)
-            GPIO_pin_output_state[i] = 0;
+            GPIO_pin_state[i] = 0;
 
         // Clear all gpio interrupts
         for (unsigned int i = 0; i < GPIO_TOTAL_NUMBER; ++i)
@@ -575,7 +570,7 @@ public:
 
     void SetVUSB(bool state)
     {
-        GPIO_pin_input_state[GPIO_VUSB] = state;
+        SetGPIOPin(GPIO_VUSB, state);
     }
 
     void SetBatteryPercentage(int level)
@@ -587,6 +582,15 @@ public:
     {
         sys_config.sys_config_battery_low_threshold.hdr.set = true;
         sys_config.sys_config_battery_low_threshold.contents.threshold = level;
+    }
+
+    void SetGPIOPin(uint32_t pin, bool state)
+    {
+        GPIO_pin_state[pin] = state;
+
+        // If there's any interrupt on this pin, call it
+        if (GPIO_callback_function[pin])
+            GPIO_callback_function[pin]();
     }
 
     // Message handling //
@@ -605,6 +609,12 @@ public:
         event.id = CONFIG_IF_EVENT_DISCONNECTED;
         event.backend = CONFIG_IF_BACKEND_BLE;
         config_if_callback(&event);
+    }
+
+    static void BLETriggeredOnReedSwitchEnable(void)
+    {
+        sys_config.sys_config_tag_bluetooth_trigger_control.hdr.set = true;
+        sys_config.sys_config_tag_bluetooth_trigger_control.contents.flags |= SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_REED_SWITCH;
     }
 
     static void USBConnectionEvent(void)
@@ -869,11 +879,40 @@ TEST_F(Sm_MainTest, LogFileFullBLEConnection)
     EXPECT_EQ(SM_MAIN_LOG_FILE_FULL, sm_get_current_state(&state_handle));
 
     config_if_init(CONFIG_IF_BACKEND_BLE);
+    BLETriggeredOnReedSwitchEnable(); // Ensure the BLE should be on by setting the Reed switch activation
+    SetGPIOPin(GPIO_REED_SW, 0); // Trigger the reed switch
     BLEConnectionEvent();
 
     sm_tick(&state_handle);
 
     EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+}
+
+TEST_F(Sm_MainTest, LogFileFullBLEReedSwitchToggle)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_LOG_FILE_FULL);
+
+    EXPECT_EQ(CONFIG_IF_BACKEND_NOT_SET, config_if_current());
+
+    // Enable reed switch activation of BLE
+    BLETriggeredOnReedSwitchEnable();
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(CONFIG_IF_BACKEND_NOT_SET, config_if_current());
+    SetGPIOPin(GPIO_REED_SW, 0); // Trigger the reed switch
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(CONFIG_IF_BACKEND_BLE, config_if_current());
+    SetGPIOPin(GPIO_REED_SW, 1); // Release the reed switch
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(CONFIG_IF_BACKEND_NOT_SET, config_if_current());
+    EXPECT_EQ(SM_MAIN_LOG_FILE_FULL, sm_get_current_state(&state_handle));
 }
 
 //////////////////////////////////////////////////////////////////
@@ -915,11 +954,64 @@ TEST_F(Sm_MainTest, ProvisioningNeededToProvisioning)
     sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING_NEEDED);
 
     config_if_init(CONFIG_IF_BACKEND_BLE);
+    BLETriggeredOnReedSwitchEnable(); // Ensure the BLE should be on by setting the Reed switch activation
+    SetGPIOPin(GPIO_REED_SW, 0); // Trigger the reed switch
     BLEConnectionEvent();
 
     sm_tick(&state_handle);
 
     EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+}
+
+TEST_F(Sm_MainTest, ProvisioningNeededBLEReedSwitchToggle)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING_NEEDED);
+
+    EXPECT_EQ(CONFIG_IF_BACKEND_NOT_SET, config_if_current());
+
+    // Enable reed switch activation of BLE
+    BLETriggeredOnReedSwitchEnable();
+    
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(CONFIG_IF_BACKEND_NOT_SET, config_if_current());
+    SetGPIOPin(GPIO_REED_SW, 0); // Trigger the reed switch
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(CONFIG_IF_BACKEND_BLE, config_if_current());
+    SetGPIOPin(GPIO_REED_SW, 1); // Release the reed switch
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(CONFIG_IF_BACKEND_NOT_SET, config_if_current());
+    EXPECT_EQ(SM_MAIN_PROVISIONING_NEEDED, sm_get_current_state(&state_handle));
+}
+
+TEST_F(Sm_MainTest, ProvisioningNeededBLEReedSwitchToggleButDisabled)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING_NEEDED);
+
+    EXPECT_EQ(CONFIG_IF_BACKEND_NOT_SET, config_if_current());
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(CONFIG_IF_BACKEND_NOT_SET, config_if_current());
+    SetGPIOPin(GPIO_REED_SW, 0); // Trigger the reed switch
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(CONFIG_IF_BACKEND_NOT_SET, config_if_current());
+    SetGPIOPin(GPIO_REED_SW, 1); // Release the reed switch
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(CONFIG_IF_BACKEND_NOT_SET, config_if_current());
+    EXPECT_EQ(SM_MAIN_PROVISIONING_NEEDED, sm_get_current_state(&state_handle));
 }
 
 //////////////////////////////////////////////////////////////////
@@ -933,6 +1025,8 @@ TEST_F(Sm_MainTest, ProvisioningToProvisioningNeeded)
     sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
 
     config_if_init(CONFIG_IF_BACKEND_BLE);
+    BLETriggeredOnReedSwitchEnable(); // Ensure the BLE should be on by setting the Reed switch activation
+    SetGPIOPin(GPIO_REED_SW, 0); // Trigger the reed switch
     BLEConnectionEvent();
 
     sm_tick(&state_handle);
@@ -995,6 +1089,31 @@ TEST_F(Sm_MainTest, ProvisioningToOperationalState)
     EXPECT_EQ(SM_MAIN_OPERATIONAL, sm_get_current_state(&state_handle));
 }
 
+TEST_F(Sm_MainTest, ProvisioningBLEReedSwitchDisable)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    // Enable reed switch activation of BLE
+    BLETriggeredOnReedSwitchEnable();
+    SetGPIOPin(GPIO_REED_SW, 0); // Trigger the reed switch
+
+    config_if_init(CONFIG_IF_BACKEND_BLE);
+    BLEConnectionEvent();
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(CONFIG_IF_BACKEND_BLE, config_if_current());
+
+    SetGPIOPin(GPIO_REED_SW, 1); // Release the reed switch
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(CONFIG_IF_BACKEND_NOT_SET, config_if_current());
+    EXPECT_EQ(SM_MAIN_PROVISIONING_NEEDED, sm_get_current_state(&state_handle));
+}
+
 //////////////////////////////////////////////////////////////////
 /////////////////////// Operational State ////////////////////////
 //////////////////////////////////////////////////////////////////
@@ -1043,6 +1162,8 @@ TEST_F(Sm_MainTest, OperationalToProvisioning)
     sm_set_current_state(&state_handle, SM_MAIN_OPERATIONAL);
 
     config_if_init(CONFIG_IF_BACKEND_BLE);
+    BLETriggeredOnReedSwitchEnable(); // Ensure the BLE should be on by setting the Reed switch activation
+    SetGPIOPin(GPIO_REED_SW, 0); // Trigger the reed switch
     BLEConnectionEvent();
 
     // TODO: handle these ignored functions properly
@@ -1059,6 +1180,38 @@ TEST_F(Sm_MainTest, DISABLED_OperationalToLogFileFull)
 {
     // NEEDS IMPLEMENTING
     EXPECT_FALSE(true);
+}
+
+TEST_F(Sm_MainTest, OperationalBLEReedSwitchToggle)
+{
+    BootTagsSetAndLogFileCreated();
+
+    sm_set_current_state(&state_handle, SM_MAIN_OPERATIONAL);
+
+    // TODO: handle these ignored functions properly
+    syshal_pmu_set_level_Ignore();
+    syshal_axl_term_IgnoreAndReturn(0);
+    syshal_pressure_term_IgnoreAndReturn(0);
+
+    EXPECT_EQ(CONFIG_IF_BACKEND_NOT_SET, config_if_current());
+
+    // Enable reed switch activation of BLE
+    BLETriggeredOnReedSwitchEnable();
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(CONFIG_IF_BACKEND_NOT_SET, config_if_current());
+    SetGPIOPin(GPIO_REED_SW, 0); // Trigger the reed switch
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(CONFIG_IF_BACKEND_BLE, config_if_current());
+    SetGPIOPin(GPIO_REED_SW, 1); // Release the reed switch
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(CONFIG_IF_BACKEND_NOT_SET, config_if_current());
+    EXPECT_EQ(SM_MAIN_OPERATIONAL, sm_get_current_state(&state_handle));
 }
 
 //////////////////////////////////////////////////////////////////
