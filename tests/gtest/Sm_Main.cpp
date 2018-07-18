@@ -377,6 +377,9 @@ class Sm_MainTest : public ::testing::Test
 
         config_if_current_interface = CONFIG_IF_BACKEND_NOT_SET;
 
+        // syshal_axl
+        Mocksyshal_axl_Init();
+
         // syshal_gpio
         Mocksyshal_gpio_Init();
 
@@ -498,6 +501,8 @@ class Sm_MainTest : public ::testing::Test
     {
         Mockconfig_if_Verify();
         Mockconfig_if_Destroy();
+        Mocksyshal_axl_Verify();
+        Mocksyshal_axl_Destroy();
         Mocksyshal_gpio_Verify();
         Mocksyshal_gpio_Destroy();
         Mocksyshal_time_Verify();
@@ -994,17 +999,66 @@ TEST_F(Sm_MainTest, ProvisioningToOperationalState)
 /////////////////////// Operational State ////////////////////////
 //////////////////////////////////////////////////////////////////
 
-TEST_F(Sm_MainTest, Operational)
+TEST_F(Sm_MainTest, OperationalToBatteryLow)
 {
-    BootTagsNotSet();
+    BootTagsSetAndLogFileCreated();
 
     sm_set_current_state(&state_handle, SM_MAIN_OPERATIONAL);
 
+    SetBatteryPercentage(0);
+    SetBatteryLowThreshold(10);
+
+    // TODO: handle these ignored functions properly
     syshal_pmu_set_level_Ignore();
+    syshal_axl_term_IgnoreAndReturn(0);
+    syshal_pressure_term_IgnoreAndReturn(0);
 
     sm_tick(&state_handle);
 
-    EXPECT_EQ(SM_MAIN_OPERATIONAL, sm_get_current_state(&state_handle));
+    EXPECT_EQ(SM_MAIN_BATTERY_LEVEL_LOW, sm_get_current_state(&state_handle));
+}
+
+TEST_F(Sm_MainTest, OperationalToBatteryCharging)
+{
+    BootTagsSetAndLogFileCreated();
+
+    sm_set_current_state(&state_handle, SM_MAIN_OPERATIONAL);
+
+    SetVUSB(true);
+
+    // TODO: handle these ignored functions properly
+    syshal_pmu_set_level_Ignore();
+    syshal_axl_term_IgnoreAndReturn(0);
+    syshal_pressure_term_IgnoreAndReturn(0);
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_BATTERY_CHARGING, sm_get_current_state(&state_handle));
+}
+
+TEST_F(Sm_MainTest, OperationalToProvisioning)
+{
+    BootTagsSetAndLogFileCreated();
+
+    sm_set_current_state(&state_handle, SM_MAIN_OPERATIONAL);
+
+    config_if_init(CONFIG_IF_BACKEND_BLE);
+    BLEConnectionEvent();
+
+    // TODO: handle these ignored functions properly
+    syshal_pmu_set_level_Ignore();
+    syshal_axl_term_IgnoreAndReturn(0);
+    syshal_pressure_term_IgnoreAndReturn(0);
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+}
+
+TEST_F(Sm_MainTest, DISABLED_OperationalToLogFileFull)
+{
+    // NEEDS IMPLEMENTING
+    EXPECT_FALSE(true);
 }
 
 //////////////////////////////////////////////////////////////////
