@@ -19,7 +19,7 @@ extern "C" {
 #include "unity.h"
 #include <assert.h>
 #include <stdint.h>
-//#include "Mocksyshal_axl.h"
+#include "Mocksyshal_axl.h"
 #include "Mocksyshal_batt.h"
 #include "Mocksyshal_ble.h"
 #include "Mocksyshal_gpio.h"
@@ -31,6 +31,7 @@ extern "C" {
 #include "Mocksyshal_i2c.h"
 #include "Mocksyshal_rtc.h"
 #include "Mocksyshal_time.h"
+#include "Mocksyshal_pressure.h"
 #include "Mocksyshal_pmu.h"
 #include "Mockconfig_if.h"
 #include "fs_priv.h"
@@ -352,6 +353,11 @@ bool syshal_switch_state;
 int syshal_switch_init_GTest(int cmock_num_calls) {return SYSHAL_SWITCH_NO_ERROR;}
 bool syshal_switch_get_GTest(int cmock_num_calls) {return syshal_switch_state;}
 
+// syshal_pressure
+bool syshal_pressure_awake_GTest(int cmock_num_calls) {return false;}
+
+//// syshal_pmu
+
 class Sm_MainTest : public ::testing::Test
 {
 
@@ -475,6 +481,13 @@ class Sm_MainTest : public ::testing::Test
         syshal_switch_init_StubWithCallback(syshal_switch_init_GTest);
         syshal_switch_get_StubWithCallback(syshal_switch_get_GTest);
 
+        // syshal_pressure
+        Mocksyshal_pressure_Init();
+        syshal_pressure_awake_StubWithCallback(syshal_pressure_awake_GTest);
+
+        // syshal_pmu
+        Mocksyshal_pmu_Init();
+
         // Setup main state machine
         sm_init(&state_handle, sm_main_states);
 
@@ -505,6 +518,10 @@ class Sm_MainTest : public ::testing::Test
         Mocksyshal_flash_Destroy();
         Mocksyshal_gps_Verify();
         Mocksyshal_gps_Destroy();
+        Mocksyshal_pressure_Verify();
+        Mocksyshal_pressure_Destroy();
+        Mocksyshal_pmu_Verify();
+        Mocksyshal_pmu_Destroy();
     }
 
 public:
@@ -603,9 +620,7 @@ public:
 
     static void set_all_configuration_tags_RAM()
     {
-        uint8_t config_if_dummy_data[SYS_CONFIG_MAX_DATA_SIZE];
-        for (auto i = 0; i < SYS_CONFIG_MAX_DATA_SIZE; ++i)
-            config_if_dummy_data[i] = rand();
+        uint8_t config_if_dummy_data[SYS_CONFIG_MAX_DATA_SIZE] = {0};
 
         uint16_t tag, last_index = 0;
         uint32_t length = 0;
@@ -984,6 +999,8 @@ TEST_F(Sm_MainTest, Operational)
     BootTagsNotSet();
 
     sm_set_current_state(&state_handle, SM_MAIN_OPERATIONAL);
+
+    syshal_pmu_set_level_Ignore();
 
     sm_tick(&state_handle);
 

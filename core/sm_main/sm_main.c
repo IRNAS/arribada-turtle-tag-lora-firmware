@@ -3252,7 +3252,11 @@ static void sm_main_operational(sm_handle_t * state_handle)
           sys_config.sys_config_gps_log_ttff_enable.contents.enable) )
         syshal_gps_tick(); // Process GPS messages
 
-    syshal_axl_tick();
+    if (sys_config.sys_config_pressure_sensor_log_enable.contents.enable)
+        syshal_pressure_tick();
+
+    if (sys_config.sys_config_axl_log_enable.contents.enable)
+        syshal_axl_tick();
 
     // Determine how deep a sleep we should take
     if (!syshal_pressure_awake())

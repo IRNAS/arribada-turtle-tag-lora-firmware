@@ -44,6 +44,7 @@ TESTS += Buffer.test
 
 check_PROGRAMS += Fs
 nodist_Fs_SOURCES = $(gtest_srcdir)/Fs.cpp \
+                    $(gtest_srcdir)/mocks/unity.c \
                     $(gtest_srcdir)/mocks/cmock.c \
                     $(gtest_srcdir)/mocks/Mocksyshal_flash.c \
                     $(core_srcdir)/fs/fs.c
@@ -56,6 +57,7 @@ TESTS += Fs.test
 check_PROGRAMS += Flash
 nodist_Flash_SOURCES = $(gtest_srcdir)/Flash.cpp \
                        $(gtest_srcdir)/mocks/cmock.c \
+                       $(gtest_srcdir)/mocks/unity.c \
                        $(gtest_srcdir)/mocks/Mocksyshal_gpio.c \
                        $(gtest_srcdir)/mocks/Mocksyshal_spi.c \
                        $(devices_srcdir)/flash/S25FL128/S25FL128.c
@@ -92,6 +94,7 @@ TESTS += Ring_Buffer.test
 check_PROGRAMS += Sm_Main
 nodist_Sm_Main_SOURCES = $(gtest_srcdir)/Sm_Main.cpp \
                          $(gtest_srcdir)/mocks/cmock.c \
+                         $(gtest_srcdir)/mocks/unity.c \
                          $(gtest_srcdir)/mocks/Mocksyshal_axl.c \
                          $(gtest_srcdir)/mocks/Mocksyshal_batt.c \
                          $(gtest_srcdir)/mocks/Mockconfig_if.c \
