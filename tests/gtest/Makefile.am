@@ -23,7 +23,7 @@ HW_DEFS =
 AM_CXXFLAGS = -std=c++0x -g -pg -fprofile-arcs -ftest-coverage \
               -I$(GTEST_INCLUDE) -O0 $(HW_DEFS) -DGTEST -DDEBUG_DISABLED
 
-AM_CFLAGS = -std=gnu99 -fprofile-arcs -ftest-coverage -O0 $(HW_DEFS) -DGTEST -DCMOCK_MEM_SIZE=0x400000
+AM_CFLAGS = -std=gnu99 -fprofile-arcs -ftest-coverage -O0 $(HW_DEFS) -DGTEST -DCMOCK_MEM_SIZE=0x400000 -DUNITY_USE_FLUSH_STDOUT
 
 COMMON_LDADD = -L$(GTEST_LIBS) -lgtest -lgtest_main -lpthread -lgcov -lrt
 
@@ -35,7 +35,7 @@ check_PROGRAMS =
 
 check_PROGRAMS += Buffer
 nodist_Buffer_SOURCES = $(gtest_srcdir)/Buffer.cpp \
-                    $(core_srcdir)/buffer/buffer.c
+                        $(core_srcdir)/buffer/buffer.c
 
 Buffer_LDADD = $(COMMON_LDADD)
 Buffer_CPPFLAGS = $(AM_CPPFLAGS) -I$(core_srcdir)/buffer
