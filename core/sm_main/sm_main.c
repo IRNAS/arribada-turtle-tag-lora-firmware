@@ -771,7 +771,7 @@ void syshal_gps_callback(syshal_gps_event_t event)
             sys_config.sys_config_gps_last_known_position.contents.iTOW = event.event_data.location.iTOW;
             sys_config.sys_config_gps_last_known_position.contents.lon = event.event_data.location.lon;
             sys_config.sys_config_gps_last_known_position.contents.lat = event.event_data.location.lat;
-            sys_config.sys_config_gps_last_known_position.contents.height = event.event_data.location.height;
+            sys_config.sys_config_gps_last_known_position.contents.height = event.event_data.location.hMSL;
             sys_config.sys_config_gps_last_known_position.contents.hAcc = event.event_data.location.hAcc;
             sys_config.sys_config_gps_last_known_position.contents.vAcc = event.event_data.location.vAcc;
 
@@ -785,7 +785,7 @@ void syshal_gps_callback(syshal_gps_event_t event)
                 position.iTOW = event.event_data.location.iTOW;
                 position.lon = event.event_data.location.lon;
                 position.lat = event.event_data.location.lat;
-                position.height = event.event_data.location.height;
+                position.height = event.event_data.location.hMSL;
                 position.hAcc = event.event_data.location.hAcc;
                 position.vAcc = event.event_data.location.vAcc;
 
