@@ -299,11 +299,10 @@ int syshal_ble_get_version(uint32_t * version)
     return ret;
 }
 
-int syshal_ble_config_fw_upgrade(syshal_ble_fw_upgrade_type_t type, uint32_t size, uint32_t crc)
+int syshal_ble_config_fw_upgrade(uint32_t size, uint32_t crc)
 {
     int ret;
     ret = write_register(NRF52_REG_ADDR_FW_UPGRADE_SIZE, (uint8_t *)&size, sizeof(size));
-    ret |= write_register(NRF52_REG_ADDR_FW_UPGRADE_TYPE, (uint8_t *)&type, sizeof(uint8_t));
     ret |= write_register(NRF52_REG_ADDR_FW_UPGRADE_CRC, (uint8_t *)&crc, sizeof(crc));
 
     uint8_t mode = NRF52_MODE_FW_UPGRADE;

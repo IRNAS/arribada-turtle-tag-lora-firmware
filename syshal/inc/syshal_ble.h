@@ -45,12 +45,6 @@
 
 typedef enum
 {
-    SYSHAL_BLE_FW_UPGRADE_TYPE_APP,
-    SYSHAL_BLE_FW_UPGRADE_TYPE_SOFT_DEV,
-} syshal_ble_fw_upgrade_type_t;
-
-typedef enum
-{
     SYSHAL_BLE_EVENT_CONNECTED,
     SYSHAL_BLE_EVENT_DISCONNECTED,
     SYSHAL_BLE_EVENT_SEND_COMPLETE,
@@ -94,7 +88,7 @@ int syshal_ble_term(void);
 int syshal_ble_set_mode(syshal_ble_mode_t mode);
 int syshal_ble_get_mode(syshal_ble_mode_t *mode);
 int syshal_ble_get_version(uint32_t *version);
-int syshal_ble_config_fw_upgrade(syshal_ble_fw_upgrade_type_t type, uint32_t size, uint32_t crc);
+int syshal_ble_config_fw_upgrade(uint32_t size, uint32_t crc);
 int syshal_ble_fw_send(uint8_t * data, uint32_t size);
 int syshal_ble_reset(void);
 int syshal_ble_send(uint8_t *buffer, uint32_t size);

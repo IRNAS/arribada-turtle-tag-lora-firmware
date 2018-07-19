@@ -33,7 +33,6 @@
 #define NRF52_REG_ADDR_MODE                  0x02 // The current state the device is in
 #define NRF52_REG_ADDR_FW_UPGRADE_SIZE       0x10
 #define NRF52_REG_ADDR_FW_UPGRADE_CRC        0x11
-#define NRF52_REG_ADDR_FW_UPGRADE_TYPE       0x12
 #define NRF52_REG_ADDR_INT_STATUS            0x21
 #define NRF52_REG_ADDR_INT_ENABLE            0x22
 #define NRF52_REG_ADDR_ERROR_CODE            0x23

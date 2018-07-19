@@ -2092,8 +2092,7 @@ static void fw_send_image_req(cmd_t * req, uint16_t size)
     sm_context.fw_send_image.image_type = req->p.cmd_fw_send_image_req.image_type;
 
     if ( (sm_context.fw_send_image.image_type == FS_FILE_ID_STM32_IMAGE)
-         || (sm_context.fw_send_image.image_type == FS_FILE_ID_BLE_SOFT_IMAGE)
-         || (sm_context.fw_send_image.image_type == FS_FILE_ID_BLE_APP_IMAGE))
+         || (sm_context.fw_send_image.image_type == FS_FILE_ID_BLE_IMAGE) )
     {
         int ret = fs_delete(file_system, sm_context.fw_send_image.image_type); // Must first delete any current image
 
@@ -2238,8 +2237,7 @@ static void fw_apply_image_req(cmd_t * req, uint16_t size)
     uint8_t image_type = req->p.cmd_fw_apply_image_req.image_type;
 
     if ( (image_type == FS_FILE_ID_STM32_IMAGE)
-         || (image_type == FS_FILE_ID_BLE_SOFT_IMAGE)
-         || (image_type == FS_FILE_ID_BLE_APP_IMAGE))
+         || (image_type == FS_FILE_ID_BLE_IMAGE) )
     {
         // Check image exists
         int ret = fs_open(file_system, &file_handle, image_type, FS_MODE_READONLY, NULL);
@@ -2273,36 +2271,12 @@ static void fw_apply_image_req(cmd_t * req, uint16_t size)
                         // Program will never reach this point as the firmware upgrade resets the MCU
                         break;
 
-                    case FS_FILE_ID_BLE_APP_IMAGE:
-                        DEBUG_PR_TRACE("Apply FS_FILE_ID_BLE_APP_IMAGE");
+                    case FS_FILE_ID_BLE_IMAGE:
+                        DEBUG_PR_TRACE("Apply FS_FILE_ID_BLE_IMAGE");
 
-                        fs_stat(file_system, FS_FILE_ID_BLE_APP_IMAGE, &stat);
+                        fs_stat(file_system, FS_FILE_ID_BLE_IMAGE, &stat);
 
-                        syshal_ble_config_fw_upgrade(SYSHAL_BLE_FW_UPGRADE_TYPE_APP, stat.size, 0);
-
-                        do
-                        {
-                            uint8_t read_buffer[50];
-                            uint32_t bytes_actually_read;
-                            ret = fs_read(file_handle, &read_buffer, sizeof(read_buffer), &bytes_actually_read);
-                            syshal_ble_fw_send(read_buffer, bytes_actually_read);
-                        }
-                        while (FS_ERROR_END_OF_FILE != ret);
-
-                        fs_close(file_handle); // Close the file
-
-                        fs_delete(file_system, FS_FILE_ID_BLE_APP_IMAGE);
-
-                        DEBUG_PR_TRACE("Complete FS_FILE_ID_BLE_APP_IMAGE");
-
-                        break;
-
-                    case FS_FILE_ID_BLE_SOFT_IMAGE:
-                        DEBUG_PR_TRACE("Apply FS_FILE_ID_BLE_SOFT_IMAGE");
-
-                        fs_stat(file_system, FS_FILE_ID_BLE_SOFT_IMAGE, &stat);
-
-                        syshal_ble_config_fw_upgrade(SYSHAL_BLE_FW_UPGRADE_TYPE_SOFT_DEV, stat.size, 0);
+                        syshal_ble_config_fw_upgrade(stat.size, 0);
 
                         do
                         {
@@ -2315,10 +2289,9 @@ static void fw_apply_image_req(cmd_t * req, uint16_t size)
 
                         fs_close(file_handle); // Close the file
 
-                        fs_delete(file_system, FS_FILE_ID_BLE_SOFT_IMAGE);
+                        fs_delete(file_system, FS_FILE_ID_BLE_IMAGE);
 
-                        DEBUG_PR_TRACE("Complete FS_FILE_ID_BLE_SOFT_IMAGE");
-
+                        DEBUG_PR_TRACE("Complete FS_FILE_ID_BLE_IMAGE");
                         break;
                 }
 
@@ -3066,8 +3039,7 @@ static void sm_main_boot(sm_handle_t * state_handle)
 
     // Delete any firmware images we may have
     fs_delete(file_system, FS_FILE_ID_STM32_IMAGE);
-    fs_delete(file_system, FS_FILE_ID_BLE_APP_IMAGE);
-    fs_delete(file_system, FS_FILE_ID_BLE_SOFT_IMAGE);
+    fs_delete(file_system, FS_FILE_ID_BLE_IMAGE);
 
     // Init the peripheral devices after configuration data has been collected
 
