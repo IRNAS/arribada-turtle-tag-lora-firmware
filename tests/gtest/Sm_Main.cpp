@@ -1186,7 +1186,7 @@ TEST_F(Sm_MainTest, ProvisioningNeededBLEScheduled)
     const uint32_t duration = 5;
 
     BootTagsNotSet();
-    BLETriggeredOnSchedule(15, 5, 0);
+    BLETriggeredOnSchedule(interval, duration, 0);
 
     sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING_NEEDED);
 
@@ -1204,6 +1204,49 @@ TEST_F(Sm_MainTest, ProvisioningNeededBLEScheduled)
     IncrementSeconds(duration);
 
     sm_tick(&state_handle);
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(CONFIG_IF_BACKEND_NOT_SET, config_if_current());
+    EXPECT_EQ(SM_MAIN_PROVISIONING_NEEDED, sm_get_current_state(&state_handle));
+}
+
+TEST_F(Sm_MainTest, ProvisioningNeededBLEScheduledConnectionInactivityTimeout)
+{
+    const uint32_t interval = 30;
+    const uint32_t duration = 15;
+    const uint32_t timeout = 5;
+
+    BootTagsNotSet();
+    BLETriggeredOnSchedule(interval, duration, timeout);
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING_NEEDED);
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(CONFIG_IF_BACKEND_NOT_SET, config_if_current());
+
+    sm_tick(&state_handle);
+    sm_tick(&state_handle);
+
+    IncrementSeconds(interval);
+
+    BLEConnectionEvent();
+    syshal_gps_wake_up_Ignore();
+
+    sm_tick(&state_handle);
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(CONFIG_IF_BACKEND_BLE, config_if_current());
+
+    IncrementSeconds(1);
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(CONFIG_IF_BACKEND_BLE, config_if_current());
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+
+    IncrementSeconds(timeout);
+
     sm_tick(&state_handle);
 
     EXPECT_EQ(CONFIG_IF_BACKEND_NOT_SET, config_if_current());

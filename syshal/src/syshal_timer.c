@@ -106,6 +106,16 @@ int syshal_timer_set_ms(timer_handle_t handle, syshal_timer_mode_t mode, uint32_
     return SYSHAL_TIMER_NO_ERROR;
 }
 
+int syshal_timer_reset(timer_handle_t handle)
+{
+    if (handle >= SYSHAL_TIMER_NUMBER_OF_TIMERS)
+        return SYSHAL_TIMER_ERROR_INVALID_TIMER_HANDLE;
+
+    timers_priv[handle].start = syshal_timer_time_in_milliseconds_priv();
+
+    return SYSHAL_TIMER_NO_ERROR;
+}
+
 int syshal_timer_running(timer_handle_t handle)
 {
     if (handle >= SYSHAL_TIMER_NUMBER_OF_TIMERS)

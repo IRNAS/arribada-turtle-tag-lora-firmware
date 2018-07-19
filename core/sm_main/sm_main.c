@@ -230,6 +230,7 @@ static timer_handle_t timer_axl_interval;
 static timer_handle_t timer_axl_maximum_acquisition;
 static timer_handle_t timer_ble_interval;
 static timer_handle_t timer_ble_duration;
+static timer_handle_t timer_ble_timeout;
 
 // Timer callbacks
 static void timer_gps_interval_callback(void);
@@ -241,6 +242,9 @@ static void timer_pressure_interval_callback(void);
 static void timer_pressure_maximum_acquisition_callback(void);
 static void timer_axl_interval_callback(void);
 static void timer_axl_maximum_acquisition_callback(void);
+static void timer_ble_interval_callback(void);
+static void timer_ble_duration_callback(void);
+static void timer_ble_timeout_callback(void);
 
 ////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////// PROTOTYPES ///////////////////////////////////
@@ -1040,6 +1044,11 @@ static void timer_ble_interval_callback(void)
         sys_config.sys_config_tag_bluetooth_trigger_control.hdr.set &&
         sys_config.sys_config_tag_bluetooth_trigger_control.contents.flags | SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_SCHEDULED)
     {
+        // Should we be starting a BLE inactivity timer?
+        if (sys_config.sys_config_tag_bluetooth_connection_inactivity_timeout.hdr.set) {
+            syshal_timer_set(timer_ble_timeout, one_shot, sys_config.sys_config_tag_bluetooth_connection_inactivity_timeout.contents.seconds);
+        }
+
         ble_state |= SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_SCHEDULED;
         syshal_timer_set(timer_ble_duration, one_shot, sys_config.sys_config_tag_bluetooth_scheduled_duration.contents.seconds);
     }
@@ -1060,6 +1069,28 @@ static void timer_ble_duration_callback(void)
     }
 }
 
+static void timer_ble_timeout_callback(void)
+{
+    DEBUG_PR_TRACE("%s() called", __FUNCTION__);
+
+    // This has been triggered because we have a bluetooth connection but no data has been sent or received for a while
+
+    ble_state &= ~SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_SCHEDULED;
+
+    if (config_if_connected && // If we are currently connected
+        !ble_state && // And there is no other reason to keep the BLE interface running (e.g. reed switch)
+        CONFIG_IF_BACKEND_BLE == config_if_current()) // And we are currently using the bluetooth interface
+    {
+        // If so then terminate it
+        config_if_term();
+
+        // And generate a disconnect event
+        config_if_event_t disconnectEvent;
+        disconnectEvent.backend = CONFIG_IF_BACKEND_BLE;
+        disconnectEvent.id = CONFIG_IF_EVENT_DISCONNECTED;
+        config_if_callback(&disconnectEvent);
+    }
+}
 
 static void populate_log_file_size_tag(void)
 {
@@ -2741,11 +2772,19 @@ int config_if_callback(config_if_event_t * event)
         case CONFIG_IF_EVENT_SEND_COMPLETE:
             buffer_read_advance(&config_if_send_buffer, event->send.size); // Remove it from the buffer
             config_if_tx_pending = false;
+
+            // Should we be resetting a BLE inactivity timer?
+            if (syshal_timer_running(timer_ble_timeout))
+                syshal_timer_reset(timer_ble_timeout);
             break;
 
         case CONFIG_IF_EVENT_RECEIVE_COMPLETE:
             buffer_write_advance(&config_if_receive_buffer, event->receive.size); // Store it in the buffer
             config_if_rx_queued = false;
+
+            // Should we be resetting a BLE inactivity timer?
+            if (syshal_timer_running(timer_ble_timeout))
+                syshal_timer_reset(timer_ble_timeout);
             break;
 
         case CONFIG_IF_EVENT_CONNECTED:
@@ -2757,6 +2796,7 @@ int config_if_callback(config_if_event_t * event)
 
         case CONFIG_IF_EVENT_DISCONNECTED:
             DEBUG_PR_TRACE("CONFIG_IF_EVENT_DISCONNECTED");
+            syshal_timer_cancel(timer_ble_timeout);
             // Clear all pending transmissions/receptions
             config_if_session_cleanup();
             config_if_connected = false;
@@ -3073,6 +3113,7 @@ static void sm_main_boot(sm_handle_t * state_handle)
     syshal_timer_init(&timer_axl_maximum_acquisition, timer_axl_maximum_acquisition_callback);
     syshal_timer_init(&timer_ble_interval, timer_ble_interval_callback);
     syshal_timer_init(&timer_ble_duration, timer_ble_duration_callback);
+    syshal_timer_init(&timer_ble_timeout, timer_ble_timeout_callback);
 
     syshal_spi_init(SPI_1);
     syshal_spi_init(SPI_2);
@@ -3656,6 +3697,8 @@ static void sm_main_provisioning(sm_handle_t * state_handle)
     manage_ble();
 
     config_if_tick();
+
+    syshal_timer_tick();
 
     if (config_if_connected)
     {

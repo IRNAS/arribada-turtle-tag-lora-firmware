@@ -26,7 +26,7 @@
 #define SYSHAL_TIMER_ERROR_INVALID_TIMER_HANDLE  (-2)
 #define SYSHAL_TIMER_ERROR_INVALID_TIME          (-3)
 
-#define SYSHAL_TIMER_NUMBER_OF_TIMERS  (16)
+#define SYSHAL_TIMER_NUMBER_OF_TIMERS  (24)
 
 typedef enum
 {
@@ -40,6 +40,7 @@ int syshal_timer_init(timer_handle_t *handle, void (*callback)(void));
 int syshal_timer_term(timer_handle_t handle);
 int syshal_timer_set(timer_handle_t handle, syshal_timer_mode_t mode, uint32_t seconds);
 int syshal_timer_set_ms(timer_handle_t handle, syshal_timer_mode_t mode, uint32_t milliseconds);
+int syshal_timer_reset(timer_handle_t handle);
 int syshal_timer_running(timer_handle_t handle);
 int syshal_timer_cancel(timer_handle_t handle);
 int syshal_timer_cancel_all(void);
