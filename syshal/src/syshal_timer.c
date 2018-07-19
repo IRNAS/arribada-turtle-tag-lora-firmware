@@ -25,6 +25,7 @@
 
 typedef struct
 {
+    bool init;                // Is this timer init/used
     bool running;             // Is this timer running?
     syshal_timer_mode_t mode; // Is this timer a one-shot or continuous
     uint32_t start;           // A timestamp of when this timer was started
@@ -55,8 +56,9 @@ int syshal_timer_init(timer_handle_t *handle, void (*callback)(void))
     // Look for the first free timer
     for (uint32_t i = 0; i < SYSHAL_TIMER_NUMBER_OF_TIMERS; ++i)
     {
-        if (!timers_priv[i].callback)
+        if (!timers_priv[i].init)
         {
+            timers_priv[i].init = true;
             timers_priv[i].callback = callback;
             *handle = i; // Return a handle to this timer
             return SYSHAL_TIMER_NO_ERROR;
@@ -71,6 +73,7 @@ int syshal_timer_term(timer_handle_t handle)
     if (handle >= SYSHAL_TIMER_NUMBER_OF_TIMERS)
         return SYSHAL_TIMER_ERROR_INVALID_TIMER_HANDLE;
 
+    timers_priv[handle].init = false;
     timers_priv[handle].callback = NULL;
     timers_priv[handle].running = false;
     return SYSHAL_TIMER_NO_ERROR;

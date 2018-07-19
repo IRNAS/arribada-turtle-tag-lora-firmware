@@ -91,6 +91,17 @@ TESTS += Ring_Buffer.test
 #Ble_nRF52_CPPFLAGS = $(AM_CPPFLAGS) -I$(devices_srcdir)/ble/nRF52x
 #TESTS += Ble_nRF52.test
 
+check_PROGRAMS += Syshal_Timer
+nodist_Syshal_Timer_SOURCES = $(gtest_srcdir)/Syshal_Timer.cpp \
+                              $(gtest_srcdir)/mocks/Mocksyshal_rtc.c \
+                              $(gtest_srcdir)/mocks/cmock.c \
+                              $(gtest_srcdir)/mocks/unity.c \
+                              $(syshal_srcdir)/src/syshal_timer.c
+
+Syshal_Timer_LDADD = $(COMMON_LDADD)
+Syshal_Timer_CPPFLAGS = $(AM_CPPFLAGS) -I$(core_srcdir)/debug
+TESTS += Syshal_Timer.test
+
 check_PROGRAMS += Sm_Main
 nodist_Sm_Main_SOURCES = $(gtest_srcdir)/Sm_Main.cpp \
                          $(gtest_srcdir)/mocks/cmock.c \
