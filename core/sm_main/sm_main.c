@@ -2278,8 +2278,19 @@ static void fw_apply_image_req(cmd_t * req, uint16_t size)
 
                         syshal_ble_config_fw_upgrade(stat.size, 0);
 
+                        uint32_t toggleLedTime = syshal_time_get_ticks_ms();
+                        const uint32_t ledTogglePeriodMs = 1000;
+
                         do
                         {
+                            // Toggle LEDs to indicate status
+                            if (syshal_time_get_ticks_ms() - toggleLedTime > ledTogglePeriodMs)
+                            {
+                                syshal_gpio_set_output_toggle(GPIO_LED1_GREEN);
+                                syshal_gpio_set_output_toggle(GPIO_LED2_RED);
+                                toggleLedTime = syshal_time_get_ticks_ms();
+                            }
+
                             uint8_t read_buffer[50];
                             uint32_t bytes_actually_read;
                             ret = fs_read(file_handle, &read_buffer, sizeof(read_buffer), &bytes_actually_read);
@@ -2290,6 +2301,9 @@ static void fw_apply_image_req(cmd_t * req, uint16_t size)
                         fs_close(file_handle); // Close the file
 
                         fs_delete(file_system, FS_FILE_ID_BLE_IMAGE);
+
+                        syshal_gpio_set_output_low(GPIO_LED1_GREEN);
+                        syshal_gpio_set_output_low(GPIO_LED2_RED);
 
                         DEBUG_PR_TRACE("Complete FS_FILE_ID_BLE_IMAGE");
                         break;
