@@ -60,6 +60,7 @@ int syshal_timer_init(timer_handle_t *handle, void (*callback)(void))
         {
             timers_priv[i].init = true;
             timers_priv[i].callback = callback;
+            timers_priv[i].running = false;
             *handle = i; // Return a handle to this timer
             return SYSHAL_TIMER_NO_ERROR;
         }

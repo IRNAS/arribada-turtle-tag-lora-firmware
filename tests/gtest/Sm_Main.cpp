@@ -34,6 +34,7 @@ extern "C" {
 #include "Mocksyshal_pressure.h"
 #include "Mocksyshal_pmu.h"
 #include "Mockconfig_if.h"
+#include "syshal_timer.h"
 #include "fs_priv.h"
 #include "fs.h"
 #include "crc32.h"
@@ -47,6 +48,7 @@ extern "C" {
 
 #include "googletest.h"
 
+#include <ctime>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
@@ -229,19 +231,39 @@ int syshal_ble_read_register_GTest(uint8_t address, uint8_t * data, uint16_t len
 }
 
 // syshal_rtc
-syshal_rtc_data_and_time_t current_date_time;
+time_t current_date_time = time(0);
+uint32_t current_milliseconds = 0;
 
 int syshal_rtc_init_GTest(int cmock_num_calls) {return SYSHAL_RTC_NO_ERROR;}
 
 int syshal_rtc_set_date_and_time_GTest(syshal_rtc_data_and_time_t date_time, int cmock_num_calls)
 {
-    current_date_time = date_time;
+    struct tm * timeinfo = localtime(&current_date_time);
+
+    timeinfo->tm_sec = date_time.seconds; // seconds of minutes from 0 to 61
+    timeinfo->tm_min = date_time.minutes; // minutes of hour from 0 to 59
+    timeinfo->tm_hour = date_time.hours;  // hours of day from 0 to 24
+    timeinfo->tm_mday = date_time.day;    // day of month from 1 to 31
+    timeinfo->tm_mon = date_time.month;   // month of year from 0 to 11
+    timeinfo->tm_year = date_time.year;   // year since 1900
+
+    current_date_time = mktime(timeinfo);
+
     return SYSHAL_RTC_NO_ERROR;
 }
 
 int syshal_rtc_get_date_and_time_GTest(syshal_rtc_data_and_time_t * date_time, int cmock_num_calls)
 {
-    *date_time = current_date_time;
+    struct tm * timeinfo = localtime(&current_date_time);
+
+    date_time->milliseconds = current_milliseconds;
+    date_time->seconds = timeinfo->tm_sec; // seconds of minutes from 0 to 61
+    date_time->minutes = timeinfo->tm_min; // minutes of hour from 0 to 59
+    date_time->hours = timeinfo->tm_hour;  // hours of day from 0 to 24
+    date_time->day = timeinfo->tm_mday;    // day of month from 1 to 31
+    date_time->month = timeinfo->tm_mon;   // month of year from 0 to 11
+    date_time->year = timeinfo->tm_year;   // year since 1900
+
     return SYSHAL_RTC_NO_ERROR;
 }
 
@@ -486,6 +508,10 @@ class Sm_MainTest : public ::testing::Test
 
     virtual void TearDown()
     {
+        // Reset all syshal timers
+        for (timer_handle_t i = 0; i < SYSHAL_TIMER_NUMBER_OF_TIMERS; ++i)
+            syshal_timer_term(i);
+
         Mockconfig_if_Verify();
         Mockconfig_if_Destroy();
         Mocksyshal_axl_Verify();
@@ -585,6 +611,24 @@ public:
             GPIO_callback_function[pin]();
     }
 
+    static void IncrementMilliseconds(uint32_t milliseconds)
+    {
+        struct tm * timeinfo = localtime(&current_date_time);
+
+        timeinfo->tm_sec += (current_milliseconds + milliseconds) / 1000;
+
+        current_date_time = mktime(timeinfo);
+
+        current_milliseconds = (current_milliseconds + milliseconds) % 1000;
+
+        syshal_time_get_ticks_ms_value += milliseconds;
+    }
+
+    static void IncrementSeconds(uint32_t seconds)
+    {
+        IncrementMilliseconds(seconds * 1000);
+    }
+
     // Message handling //
 
     static void BLEConnectionEvent(void)
@@ -607,6 +651,21 @@ public:
     {
         sys_config.sys_config_tag_bluetooth_trigger_control.hdr.set = true;
         sys_config.sys_config_tag_bluetooth_trigger_control.contents.flags |= SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_REED_SWITCH;
+    }
+
+    static void BLETriggeredOnSchedule(uint32_t interval, uint32_t duration, uint32_t timeout)
+    {
+        sys_config.sys_config_tag_bluetooth_trigger_control.hdr.set = true;
+        sys_config.sys_config_tag_bluetooth_trigger_control.contents.flags |= SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_SCHEDULED;
+
+        sys_config.sys_config_tag_bluetooth_scheduled_interval.hdr.set = true;
+        sys_config.sys_config_tag_bluetooth_scheduled_interval.contents.seconds = interval;
+
+        sys_config.sys_config_tag_bluetooth_scheduled_duration.hdr.set = true;
+        sys_config.sys_config_tag_bluetooth_scheduled_duration.contents.seconds = duration;
+
+        sys_config.sys_config_tag_bluetooth_connection_inactivity_timeout.hdr.set = true;
+        sys_config.sys_config_tag_bluetooth_connection_inactivity_timeout.contents.seconds = timeout;
     }
 
     static void USBConnectionEvent(void)
@@ -644,9 +703,7 @@ public:
             length = 0;
 
             if (SYS_CONFIG_ERROR_NO_MORE_TAGS == ret)
-            {
                 break;
-            }
         }
     }
 
@@ -787,7 +844,7 @@ TEST_F(Sm_MainTest, BatteryChargingUSBTimeout)
     EXPECT_EQ(SM_MAIN_BATTERY_CHARGING, sm_get_current_state(&state_handle));
 
     // Jump forward 5 seconds
-    syshal_time_get_ticks_ms_value = 5 * 1000;
+    IncrementSeconds(5);
 
     sm_tick(&state_handle);
 
@@ -795,7 +852,7 @@ TEST_F(Sm_MainTest, BatteryChargingUSBTimeout)
     EXPECT_EQ(SM_MAIN_BATTERY_CHARGING, sm_get_current_state(&state_handle));
 
     // Jump forward 100 seconds
-    syshal_time_get_ticks_ms_value = 100 * 1000;
+    IncrementSeconds(100);
 
     sm_tick(&state_handle);
 
@@ -860,7 +917,7 @@ TEST_F(Sm_MainTest, BatteryChargingBLEReedSwitchWithUSBTimeout)
     EXPECT_EQ(SM_MAIN_BATTERY_CHARGING, sm_get_current_state(&state_handle));
 
     // Jump forward 5 seconds
-    syshal_time_get_ticks_ms_value = 5 * 1000;
+    IncrementSeconds(5);
 
     sm_tick(&state_handle);
 
@@ -868,7 +925,42 @@ TEST_F(Sm_MainTest, BatteryChargingBLEReedSwitchWithUSBTimeout)
     EXPECT_EQ(SM_MAIN_BATTERY_CHARGING, sm_get_current_state(&state_handle));
 
     // Jump forward 100 seconds
-    syshal_time_get_ticks_ms_value = 100 * 1000;
+    IncrementSeconds(100);
+
+    sm_tick(&state_handle);
+    sm_tick(&state_handle);
+
+    // USB timed out but BLE should be running
+    EXPECT_EQ(CONFIG_IF_BACKEND_BLE, config_if_current());
+    EXPECT_EQ(SM_MAIN_BATTERY_CHARGING, sm_get_current_state(&state_handle));
+}
+
+TEST_F(Sm_MainTest, BatteryChargingBLEScheduledWithUSBTimeout)
+{
+    const uint32_t interval = 15;
+    const uint32_t duration = 10;
+
+    SetVUSB(true);
+    BootTagsNotSet();
+    BLETriggeredOnSchedule(15, 5, 0);
+
+    sm_set_current_state(&state_handle, SM_MAIN_BATTERY_CHARGING);
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+    EXPECT_EQ(SM_MAIN_BATTERY_CHARGING, sm_get_current_state(&state_handle));
+
+    // Jump forward 5 seconds
+    IncrementSeconds(5);
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+    EXPECT_EQ(SM_MAIN_BATTERY_CHARGING, sm_get_current_state(&state_handle));
+
+    // Jump forward 15 seconds
+    IncrementSeconds(15);
 
     sm_tick(&state_handle);
     sm_tick(&state_handle);
@@ -952,6 +1044,36 @@ TEST_F(Sm_MainTest, LogFileFullBLEReedSwitchToggle)
     EXPECT_EQ(CONFIG_IF_BACKEND_BLE, config_if_current());
     SetGPIOPin(GPIO_REED_SW, 1); // Release the reed switch
 
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(CONFIG_IF_BACKEND_NOT_SET, config_if_current());
+    EXPECT_EQ(SM_MAIN_LOG_FILE_FULL, sm_get_current_state(&state_handle));
+}
+
+TEST_F(Sm_MainTest, LogFileFullBLEScheduled)
+{
+    const uint32_t interval = 15;
+    const uint32_t duration = 5;
+
+    BootTagsNotSet();
+    BLETriggeredOnSchedule(15, 5, 0);
+
+    sm_set_current_state(&state_handle, SM_MAIN_LOG_FILE_FULL);
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(CONFIG_IF_BACKEND_NOT_SET, config_if_current());
+
+    IncrementSeconds(interval);
+
+    sm_tick(&state_handle);
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(CONFIG_IF_BACKEND_BLE, config_if_current());
+
+    IncrementSeconds(duration);
+
+    sm_tick(&state_handle);
     sm_tick(&state_handle);
 
     EXPECT_EQ(CONFIG_IF_BACKEND_NOT_SET, config_if_current());
@@ -1051,6 +1173,36 @@ TEST_F(Sm_MainTest, ProvisioningNeededBLEReedSwitchToggleButDisabled)
     EXPECT_EQ(CONFIG_IF_BACKEND_NOT_SET, config_if_current());
     SetGPIOPin(GPIO_REED_SW, 1); // Release the reed switch
 
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(CONFIG_IF_BACKEND_NOT_SET, config_if_current());
+    EXPECT_EQ(SM_MAIN_PROVISIONING_NEEDED, sm_get_current_state(&state_handle));
+}
+
+TEST_F(Sm_MainTest, ProvisioningNeededBLEScheduled)
+{
+    const uint32_t interval = 15;
+    const uint32_t duration = 5;
+
+    BootTagsNotSet();
+    BLETriggeredOnSchedule(15, 5, 0);
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING_NEEDED);
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(CONFIG_IF_BACKEND_NOT_SET, config_if_current());
+
+    IncrementSeconds(interval);
+
+    sm_tick(&state_handle);
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(CONFIG_IF_BACKEND_BLE, config_if_current());
+
+    IncrementSeconds(duration);
+
+    sm_tick(&state_handle);
     sm_tick(&state_handle);
 
     EXPECT_EQ(CONFIG_IF_BACKEND_NOT_SET, config_if_current());
@@ -1290,6 +1442,38 @@ TEST_F(Sm_MainTest, DISABLED_OperationalPressureLogging)
     //////////////////////////////////////////////////////////////////
     //TEST THE LOG FILE CONTAINS THE PRESSURE READING!!!
     //////////////////////////////////////////////////////////////////
+}
+
+TEST_F(Sm_MainTest, OperationalBLEScheduled)
+{
+    const uint32_t interval = 15;
+    const uint32_t duration = 5;
+
+    BootTagsSetAndLogFileCreated();
+    BLETriggeredOnSchedule(15, 5, 0);
+
+    sm_set_current_state(&state_handle, SM_MAIN_OPERATIONAL);
+
+    syshal_pmu_set_level_Ignore(); // TODO: handle this ignored function properly
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(CONFIG_IF_BACKEND_NOT_SET, config_if_current());
+
+    IncrementSeconds(interval);
+
+    sm_tick(&state_handle);
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(CONFIG_IF_BACKEND_BLE, config_if_current());
+
+    IncrementSeconds(duration);
+
+    sm_tick(&state_handle);
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(CONFIG_IF_BACKEND_NOT_SET, config_if_current());
+    EXPECT_EQ(SM_MAIN_OPERATIONAL, sm_get_current_state(&state_handle));
 }
 
 //////////////////////////////////////////////////////////////////

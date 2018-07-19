@@ -223,6 +223,8 @@ static timer_handle_t timer_pressure_sampling;
 static timer_handle_t timer_pressure_maximum_acquisition;
 static timer_handle_t timer_axl_interval;
 static timer_handle_t timer_axl_maximum_acquisition;
+static timer_handle_t timer_ble_interval;
+static timer_handle_t timer_ble_duration;
 
 // Timer callbacks
 static void timer_gps_interval_callback(void);
@@ -624,24 +626,25 @@ void logging_add_to_buffer(uint8_t * data, uint32_t size)
 // Start or stop BLE based on ble_state triggers
 void manage_ble(void)
 {
+    // Should we start out BLE scheduled timer?
+    if (sys_config.sys_config_tag_bluetooth_scheduled_interval.hdr.set &&
+        sys_config.sys_config_tag_bluetooth_scheduled_duration.hdr.set &&
+        sys_config.sys_config_tag_bluetooth_trigger_control.hdr.set &&
+        sys_config.sys_config_tag_bluetooth_trigger_control.contents.flags | SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_SCHEDULED)
+    {
+        if (!syshal_timer_running(timer_ble_interval))
+        {
+            syshal_timer_set(timer_ble_interval, periodic, sys_config.sys_config_tag_bluetooth_scheduled_interval.contents.seconds);
+        }
+    }
+    else
+    {
+        syshal_timer_cancel(timer_ble_interval);
+    }
+
     if (ble_state &&
         CONFIG_IF_BACKEND_NOT_SET == config_if_current())
         config_if_init(CONFIG_IF_BACKEND_BLE);
-
-    if (!ble_state &&
-        CONFIG_IF_BACKEND_BLE == config_if_current())
-    {
-        config_if_term(); // Terminate the BLE interface
-
-        if (config_if_connected)
-        {
-            // If the BLE device was connected, trigger a disconnect event
-            config_if_event_t disconnectEvent;
-            disconnectEvent.backend = CONFIG_IF_BACKEND_BLE;
-            disconnectEvent.id = CONFIG_IF_EVENT_DISCONNECTED;
-            config_if_callback(&disconnectEvent);
-        }
-    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -863,9 +866,30 @@ static void gpio_reed_sw_callback(void)
         sys_config.sys_config_tag_bluetooth_trigger_control.contents.flags | SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_REED_SWITCH)
     {
         if (!syshal_gpio_get_input(GPIO_REED_SW))
+        {
             ble_state |= SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_REED_SWITCH;
+        }
         else
+        {
             ble_state &= ~SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_REED_SWITCH;
+
+            // Was the reed switch the only reason the the BLE interface was running?
+            if (!ble_state &&
+                CONFIG_IF_BACKEND_BLE == config_if_current())
+            {
+                // If so then terminate it
+                config_if_term();
+
+                if (config_if_connected)
+                {
+                    // If the BLE device was connected, trigger a disconnect event
+                    config_if_event_t disconnectEvent;
+                    disconnectEvent.backend = CONFIG_IF_BACKEND_BLE;
+                    disconnectEvent.id = CONFIG_IF_EVENT_DISCONNECTED;
+                    config_if_callback(&disconnectEvent);
+                }
+            }
+        }
     }
 }
 
@@ -1000,6 +1024,37 @@ static void timer_axl_maximum_acquisition_callback(void)
 
     syshal_axl_sleep();
 }
+
+static void timer_ble_interval_callback(void)
+{
+    DEBUG_PR_TRACE("%s() called", __FUNCTION__);
+
+    // Should we be using the reed switch to trigger BLE activation?
+    if (sys_config.sys_config_tag_bluetooth_scheduled_interval.hdr.set &&
+        sys_config.sys_config_tag_bluetooth_scheduled_duration.hdr.set &&
+        sys_config.sys_config_tag_bluetooth_trigger_control.hdr.set &&
+        sys_config.sys_config_tag_bluetooth_trigger_control.contents.flags | SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_SCHEDULED)
+    {
+        ble_state |= SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_SCHEDULED;
+        syshal_timer_set(timer_ble_duration, one_shot, sys_config.sys_config_tag_bluetooth_scheduled_duration.contents.seconds);
+    }
+}
+
+static void timer_ble_duration_callback(void)
+{
+    DEBUG_PR_TRACE("%s() called", __FUNCTION__);
+
+    ble_state &= ~SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_SCHEDULED;
+
+    // If we've not managed to connect during the duration period
+    if (!config_if_connected &&
+        !ble_state) // And there is no other reason to keep the BLE interface running
+    {
+        // Then terminate it
+        config_if_term();
+    }
+}
+
 
 static void populate_log_file_size_tag(void)
 {
@@ -3011,6 +3066,8 @@ static void sm_main_boot(sm_handle_t * state_handle)
     syshal_timer_init(&timer_pressure_maximum_acquisition, timer_pressure_maximum_acquisition_callback);
     syshal_timer_init(&timer_axl_interval, timer_axl_interval_callback);
     syshal_timer_init(&timer_axl_maximum_acquisition, timer_axl_maximum_acquisition_callback);
+    syshal_timer_init(&timer_ble_interval, timer_ble_interval_callback);
+    syshal_timer_init(&timer_ble_duration, timer_ble_duration_callback);
 
     syshal_spi_init(SPI_1);
     syshal_spi_init(SPI_2);
@@ -3063,22 +3120,21 @@ static void sm_main_boot(sm_handle_t * state_handle)
     syshal_switch_init();
     tracker_above_water = !syshal_switch_get();
 
-    // Branch to Battery Charging state if VUSB is present
     if (syshal_gpio_get_input(GPIO_VUSB))
     {
+        // Branch to Battery Charging state if VUSB is present
         sm_set_next_state(state_handle, SM_MAIN_BATTERY_CHARGING);
-        return;
     }
-
-    // Branch to Operational state if log file exists and configuration tags are set
-    if (check_configuration_tags_set() && log_file_created)
+    else if (check_configuration_tags_set() && log_file_created)
     {
+        // Branch to Operational state if log file exists and configuration tags are set
         sm_set_next_state(state_handle, SM_MAIN_OPERATIONAL);
-        return;
     }
-
-    // Branch to Provisioning Needed state
-    sm_set_next_state(state_handle, SM_MAIN_PROVISIONING_NEEDED);
+    else
+    {
+        // Branch to Provisioning Needed state
+        sm_set_next_state(state_handle, SM_MAIN_PROVISIONING_NEEDED);
+    }
 }
 
 static void sm_main_operational(sm_handle_t * state_handle)
@@ -3408,6 +3464,8 @@ static void sm_main_log_file_full(sm_handle_t * state_handle)
                       sm_main_state_str[sm_get_current_state(state_handle)],
                       sm_main_state_str[sm_get_last_state(state_handle)]);
     }
+
+    syshal_timer_tick();
 
     manage_ble();
 

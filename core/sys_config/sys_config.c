@@ -411,6 +411,7 @@ int sys_config_set(uint16_t tag, void * value, uint32_t length)
         date_time.hours = sys_config.sys_config_rtc_current_date_and_time.contents.hours;
         date_time.minutes = sys_config.sys_config_rtc_current_date_and_time.contents.minutes;
         date_time.seconds = sys_config.sys_config_rtc_current_date_and_time.contents.seconds;
+        date_time.milliseconds = 0;
 
         syshal_rtc_set_date_and_time(date_time);
     }
