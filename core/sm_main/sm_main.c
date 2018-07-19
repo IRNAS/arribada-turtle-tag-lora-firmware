@@ -2353,20 +2353,41 @@ static void reset_req(cmd_t * req, uint16_t size)
         Throw(EXCEPTION_TX_BUFFER_FULL);
     CMD_SET_HDR(resp, CMD_GENERIC_RESP);
 
-    resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
+    bool STM32_going_to_reset = false;
+
+    switch (req->p.cmd_reset_req.reset_type)
+    {
+        case RESET_REQ_STM32:
+            resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
+            STM32_going_to_reset = true;
+            break;
+
+        case RESET_REQ_FLASH_ERASE_ALL:
+            resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
+            fs_format(file_system);
+            break;
+
+        default:
+            resp->p.cmd_generic_resp.error_code = CMD_ERROR_INVALID_PARAMETER;
+            break;
+    }
 
     buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_generic_resp_t));
     config_if_send_priv(&config_if_send_buffer);
 
-    // Wait for response to have been sent
-#ifndef GTEST // Prevent an infinite loop in unit tests
-    while (config_if_tx_pending)
-#endif
+    if (STM32_going_to_reset)
     {
-        config_if_tick();
-    }
+        // Wait for response to have been sent
+        // Prevent an infinite loop in unit tests
+#ifndef GTEST
+        while (config_if_tx_pending )
+#endif
+        {
+            config_if_tick();
+        }
 
-    syshal_pmu_reset();
+        syshal_pmu_reset();
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////

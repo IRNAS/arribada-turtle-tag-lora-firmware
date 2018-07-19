@@ -86,6 +86,11 @@ bool syshal_pressure_awake(void)
     return syshal_timer_running(MS5803_sampling_timer_priv);
 }
 
+int syshal_pressure_tick(void)
+{
+    return SYSHAL_PRESSURE_NO_ERROR;
+}
+
 uint8_t MS5803_xBA_calculate_crc4(uint16_t prom[])
 {
     uint32_t n_rem = 0; // crc reminder

@@ -39,6 +39,9 @@
 #define CFG_READ_REQ_READ_ALL (0xFFFF) // Read all configuration tags
 #define CFG_ERASE_REQ_ERASE_ALL (CFG_READ_REQ_READ_ALL) // Erase all configuration tags
 
+#define RESET_REQ_STM32           (0) // Reset the STM32 device
+#define RESET_REQ_FLASH_ERASE_ALL (1) // Erase all of the FLASH
+
 typedef struct __attribute__((__packed__))
 {
     uint8_t sync; // Start of command synchronization byte

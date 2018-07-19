@@ -1257,6 +1257,41 @@ TEST_F(Sm_MainTest, OperationalBLEReedSwitchToggle)
     EXPECT_EQ(SM_MAIN_OPERATIONAL, sm_get_current_state(&state_handle));
 }
 
+TEST_F(Sm_MainTest, DISABLED_OperationalPressureLogging)
+{
+    BootTagsSetAndLogFileCreated();
+
+    sm_set_current_state(&state_handle, SM_MAIN_OPERATIONAL);
+
+    // Enable general logging
+    sys_config.sys_config_logging_enable.hdr.set = true;
+    sys_config.sys_config_logging_enable.contents.enable = true;
+
+    // Enable the pressure sensor
+    sys_config.sys_config_pressure_sensor_log_enable.hdr.set = true;
+    sys_config.sys_config_pressure_sensor_log_enable.contents.enable = true;
+
+    // TODO: handle these ignored functions properly
+    syshal_pmu_set_level_Ignore();
+    syshal_pressure_init_ExpectAndReturn(SYSHAL_PRESSURE_NO_ERROR);
+    syshal_pressure_tick_ExpectAndReturn(SYSHAL_PRESSURE_NO_ERROR);
+
+    sm_tick(&state_handle);
+
+    syshal_pressure_callback(100);
+
+    syshal_pmu_set_level_Ignore();
+    syshal_pressure_tick_ExpectAndReturn(SYSHAL_PRESSURE_NO_ERROR);
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_OPERATIONAL, sm_get_current_state(&state_handle));
+
+    //////////////////////////////////////////////////////////////////
+    //TEST THE LOG FILE CONTAINS THE PRESSURE READING!!!
+    //////////////////////////////////////////////////////////////////
+}
+
 //////////////////////////////////////////////////////////////////
 //////////////////////// Message Handling ////////////////////////
 //////////////////////////////////////////////////////////////////
@@ -1294,7 +1329,7 @@ TEST_F(Sm_MainTest, StatusRequest)
     EXPECT_EQ(SYS_CONFIG_FORMAT_VERSION, resp.p.cmd_status_resp.configuration_format_version);
 }
 
-TEST_F(Sm_MainTest, ResetRequest)
+TEST_F(Sm_MainTest, ResetRequestSTM32)
 {
     BootTagsNotSet();
 
@@ -1309,10 +1344,10 @@ TEST_F(Sm_MainTest, ResetRequest)
     EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
     EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
 
-    // Generate status request message
+    // Generate reset request message
     cmd_t req;
     CMD_SET_HDR((&req), CMD_RESET_REQ);
-    req.p.cmd_reset_req.reset_type = 0;
+    req.p.cmd_reset_req.reset_type = RESET_REQ_STM32;
     send_message(&req, CMD_SIZE(cmd_reset_req_t));
 
     syshal_pmu_reset_Expect();
@@ -1325,6 +1360,48 @@ TEST_F(Sm_MainTest, ResetRequest)
     EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
     EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
     EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+}
+
+TEST_F(Sm_MainTest, ResetRequestFlashErase)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+
+    // Generate reset request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_RESET_REQ);
+    req.p.cmd_reset_req.reset_type = RESET_REQ_FLASH_ERASE_ALL;
+    send_message(&req, CMD_SIZE(cmd_reset_req_t));
+
+    CreateEmptyLogfile(); // Create file in the file system
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_GENERIC_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_NO_ERROR, resp.p.cmd_generic_resp.error_code);
+
+    fs_t file_system;
+    fs_handle_t file_system_handle;
+    EXPECT_EQ(FS_NO_ERROR, fs_init(FS_DEVICE));
+    EXPECT_EQ(FS_NO_ERROR, fs_mount(FS_DEVICE, &file_system));
+
+    // Check the FLASH has been erased
+    for (unsigned int id = 0; id <= 255; ++id)
+        EXPECT_EQ(FS_ERROR_FILE_NOT_FOUND, fs_open(file_system, &file_system_handle, id, FS_MODE_READONLY, NULL));
 }
 
 TEST_F(Sm_MainTest, CfgWriteOne)
