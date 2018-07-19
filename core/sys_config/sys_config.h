@@ -210,6 +210,8 @@ typedef struct __attribute__((__packed__))
         int32_t lon;     // Longitude (10^-7)
         int32_t lat;     // Latitude (10^-7)
         int32_t height;  // Height in mm
+        uint32_t hAcc;   // Horizontal accuracy estimate
+        uint32_t vAcc;   // Vertical accuracy estimate
     } contents;
 } sys_config_gps_last_known_position_t;
 

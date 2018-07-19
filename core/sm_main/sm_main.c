@@ -772,6 +772,8 @@ void syshal_gps_callback(syshal_gps_event_t event)
             sys_config.sys_config_gps_last_known_position.contents.lon = event.event_data.location.lon;
             sys_config.sys_config_gps_last_known_position.contents.lat = event.event_data.location.lat;
             sys_config.sys_config_gps_last_known_position.contents.height = event.event_data.location.height;
+            sys_config.sys_config_gps_last_known_position.contents.hAcc = event.event_data.location.hAcc;
+            sys_config.sys_config_gps_last_known_position.contents.vAcc = event.event_data.location.vAcc;
 
             // Add data to be logged
             if ( (SM_GPS_STATE_FIXED == sm_gps_state) &&
@@ -784,6 +786,8 @@ void syshal_gps_callback(syshal_gps_event_t event)
                 position.lon = event.event_data.location.lon;
                 position.lat = event.event_data.location.lat;
                 position.height = event.event_data.location.height;
+                position.hAcc = event.event_data.location.hAcc;
+                position.vAcc = event.event_data.location.vAcc;
 
                 logging_add_to_buffer((uint8_t *) &position, sizeof(position));
             }
