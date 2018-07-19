@@ -3374,21 +3374,19 @@ static void sm_main_operational(sm_handle_t * state_handle)
             printf("\r\n");
 #endif
 
-            switch (ret)
+            if (FS_NO_ERROR == ret)
             {
-                case FS_NO_ERROR:
-                    buffer_read_advance(&logging_buffer, length);
-                    break;
-
-                case FS_ERROR_FILESYSTEM_FULL:
-                    // Branch to Log File Full state if log file is full
-                    sm_set_next_state(state_handle, SM_MAIN_LOG_FILE_FULL);
-                    break;
-
-                case FS_ERROR_FLASH_MEDIA:
-                default:
-                    Throw(EXCEPTION_FS_ERROR);
-                    break;
+                buffer_read_advance(&logging_buffer, length);
+            }
+            else if (FS_ERROR_FILESYSTEM_FULL == ret)
+            {
+                // Branch to Log File Full state if log file is full
+                sm_set_next_state(state_handle, SM_MAIN_LOG_FILE_FULL);
+                break;
+            }
+            else
+            {
+                Throw(EXCEPTION_FS_ERROR);
             }
 
             length = buffer_read(&logging_buffer, (uintptr_t *)&read_buffer);

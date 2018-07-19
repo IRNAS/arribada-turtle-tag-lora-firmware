@@ -1372,10 +1372,58 @@ TEST_F(Sm_MainTest, OperationalToProvisioning)
     EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
 }
 
-TEST_F(Sm_MainTest, DISABLED_OperationalToLogFileFull)
+TEST_F(Sm_MainTest, OperationalToLogFileFull)
 {
-    // NEEDS IMPLEMENTING
-    EXPECT_FALSE(true);
+    int32_t pressureReading = rand();
+
+    BootTagsSetAndLogFileCreated();
+
+    // Fill the log file completely
+    fs_t file_system;
+    fs_handle_t file_system_handle;
+    EXPECT_EQ(FS_NO_ERROR, fs_init(FS_DEVICE));
+    EXPECT_EQ(FS_NO_ERROR, fs_mount(FS_DEVICE, &file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_open(file_system, &file_system_handle, FS_FILE_ID_LOG, FS_MODE_WRITEONLY, NULL));
+
+    int writeResult;
+    uint8_t dummyData[2048];
+    uint32_t bytes_written;
+
+    do
+    {
+        writeResult = fs_write(file_handle, dummyData, sizeof(dummyData), &bytes_written);
+    } while (writeResult == FS_NO_ERROR);
+
+    EXPECT_EQ(FS_ERROR_FILESYSTEM_FULL, writeResult);
+    EXPECT_EQ(FS_NO_ERROR, fs_close(file_system_handle));
+
+    sm_set_current_state(&state_handle, SM_MAIN_OPERATIONAL);
+
+    // Enable general logging
+    sys_config.sys_config_logging_enable.hdr.set = true;
+    sys_config.sys_config_logging_enable.contents.enable = true;
+
+    // Enable the pressure sensor
+    sys_config.sys_config_pressure_sensor_log_enable.hdr.set = true;
+    sys_config.sys_config_pressure_sensor_log_enable.contents.enable = true;
+
+    // TODO: handle these ignored functions properly
+    syshal_pmu_set_level_Ignore();
+    syshal_pressure_init_ExpectAndReturn(SYSHAL_PRESSURE_NO_ERROR);
+    syshal_pressure_tick_ExpectAndReturn(SYSHAL_PRESSURE_NO_ERROR);
+
+    sm_tick(&state_handle);
+
+    syshal_pressure_callback(pressureReading);
+
+    syshal_pressure_tick_ExpectAndReturn(SYSHAL_PRESSURE_NO_ERROR);
+
+    syshal_axl_term_IgnoreAndReturn(SYSHAL_AXL_NO_ERROR);
+    syshal_pressure_term_IgnoreAndReturn(SYSHAL_PRESSURE_NO_ERROR);
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_LOG_FILE_FULL, sm_get_current_state(&state_handle));
 }
 
 TEST_F(Sm_MainTest, OperationalBLEReedSwitchToggle)
