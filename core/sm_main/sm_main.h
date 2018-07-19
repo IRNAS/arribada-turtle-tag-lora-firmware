@@ -20,6 +20,7 @@
 #define _SM_MAIN_H_
 
 #include "sm.h"
+#include "fs.h"
 #include "cexception.h"
 
 #define STM32_FIRMWARE_VERSION (2) // The current version of the firmware
@@ -43,5 +44,9 @@ typedef enum
 } sm_main_states_t;
 
 void sm_main_exception_handler(CEXCEPTION_T e);
+
+#ifdef GTEST
+extern fs_handle_t file_handle;
+#endif
 
 #endif /* _SM_MAIN_H_ */

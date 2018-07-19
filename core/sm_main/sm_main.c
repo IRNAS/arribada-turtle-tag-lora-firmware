@@ -210,7 +210,12 @@ static volatile bool     gps_ttff_reading_logged = false; // Have we read the mo
 static uint8_t           last_battery_reading;
 static volatile bool     sensor_logging_enabled = false; // Are sensors currently allowed to log
 static uint8_t           ble_state;
+
+#ifndef GTEST
 static fs_handle_t       file_handle = NULL; // The global file handle we have open. Only allow one at once
+#else
+fs_handle_t file_handle = NULL; // non-static to allow unit tests access to it
+#endif
 
 // Timer handles
 static timer_handle_t timer_gps_interval;

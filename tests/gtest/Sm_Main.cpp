@@ -35,6 +35,7 @@ extern "C" {
 #include "Mocksyshal_pmu.h"
 #include "Mockconfig_if.h"
 #include "syshal_timer.h"
+#include "logging.h"
 #include "fs_priv.h"
 #include "fs.h"
 #include "crc32.h"
@@ -1409,8 +1410,10 @@ TEST_F(Sm_MainTest, OperationalBLEReedSwitchToggle)
     EXPECT_EQ(SM_MAIN_OPERATIONAL, sm_get_current_state(&state_handle));
 }
 
-TEST_F(Sm_MainTest, DISABLED_OperationalPressureLogging)
+TEST_F(Sm_MainTest, OperationalPressureLogging)
 {
+    int32_t pressureReading = rand();
+
     BootTagsSetAndLogFileCreated();
 
     sm_set_current_state(&state_handle, SM_MAIN_OPERATIONAL);
@@ -1430,18 +1433,85 @@ TEST_F(Sm_MainTest, DISABLED_OperationalPressureLogging)
 
     sm_tick(&state_handle);
 
-    syshal_pressure_callback(100);
+    syshal_pressure_callback(pressureReading);
 
-    syshal_pmu_set_level_Ignore();
     syshal_pressure_tick_ExpectAndReturn(SYSHAL_PRESSURE_NO_ERROR);
 
     sm_tick(&state_handle);
 
     EXPECT_EQ(SM_MAIN_OPERATIONAL, sm_get_current_state(&state_handle));
 
-    //////////////////////////////////////////////////////////////////
-    //TEST THE LOG FILE CONTAINS THE PRESSURE READING!!!
-    //////////////////////////////////////////////////////////////////
+    EXPECT_EQ(FS_NO_ERROR, fs_flush(file_handle)); // Flush any content that hasn't been written yet
+
+    fs_t file_system;
+    fs_handle_t file_system_handle;
+    uint32_t bytes_read;
+    logging_pressure_t pressureLog;
+
+    EXPECT_EQ(FS_NO_ERROR, fs_init(FS_DEVICE));
+    EXPECT_EQ(FS_NO_ERROR, fs_mount(FS_DEVICE, &file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_open(file_system, &file_system_handle, FS_FILE_ID_LOG, FS_MODE_READONLY, NULL));
+    EXPECT_EQ(FS_NO_ERROR, fs_read(file_system_handle, (uint8_t *) &pressureLog, sizeof(logging_pressure_t), &bytes_read));
+    EXPECT_EQ(FS_NO_ERROR, fs_close(file_system_handle));
+
+    EXPECT_EQ(sizeof(logging_pressure_t), bytes_read);
+    EXPECT_EQ(LOGGING_PRESSURE, pressureLog.h.id);
+    EXPECT_EQ(pressureReading, pressureLog.pressure);
+}
+
+TEST_F(Sm_MainTest, OperationalAXLLogging)
+{
+    syshal_axl_data_t axlReading;
+    axlReading.x = rand();
+    axlReading.y = rand();
+    axlReading.z = rand();
+
+    BootTagsSetAndLogFileCreated();
+
+    sm_set_current_state(&state_handle, SM_MAIN_OPERATIONAL);
+
+    // Enable general logging
+    sys_config.sys_config_logging_enable.hdr.set = true;
+    sys_config.sys_config_logging_enable.contents.enable = true;
+
+    // Enable the axl sensor
+    sys_config.sys_config_axl_log_enable.hdr.set = true;
+    sys_config.sys_config_axl_log_enable.contents.enable = true;
+
+    // TODO: handle these ignored functions properly
+    syshal_pmu_set_level_Ignore();
+    syshal_axl_init_ExpectAndReturn(SYSHAL_AXL_NO_ERROR);
+    syshal_axl_wake_ExpectAndReturn(SYSHAL_AXL_NO_ERROR);
+    syshal_axl_tick_ExpectAndReturn(SYSHAL_AXL_NO_ERROR);
+
+    sm_tick(&state_handle);
+
+    syshal_axl_callback(axlReading);
+
+    syshal_axl_tick_ExpectAndReturn(SYSHAL_AXL_NO_ERROR);
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_OPERATIONAL, sm_get_current_state(&state_handle));
+
+    EXPECT_EQ(FS_NO_ERROR, fs_flush(file_handle)); // Flush any content that hasn't been written yet
+
+    fs_t file_system;
+    fs_handle_t file_system_handle;
+    uint32_t bytes_read;
+    logging_axl_xyz_t axlLog;
+
+    EXPECT_EQ(FS_NO_ERROR, fs_init(FS_DEVICE));
+    EXPECT_EQ(FS_NO_ERROR, fs_mount(FS_DEVICE, &file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_open(file_system, &file_system_handle, FS_FILE_ID_LOG, FS_MODE_READONLY, NULL));
+    EXPECT_EQ(FS_NO_ERROR, fs_read(file_system_handle, (uint8_t *) &axlLog, sizeof(logging_axl_xyz_t), &bytes_read));
+    EXPECT_EQ(FS_NO_ERROR, fs_close(file_system_handle));
+
+    EXPECT_EQ(sizeof(logging_axl_xyz_t), bytes_read);
+    EXPECT_EQ(LOGGING_AXL_XYZ, axlLog.h.id);
+    EXPECT_EQ(axlReading.x, axlLog.x);
+    EXPECT_EQ(axlReading.y, axlLog.y);
+    EXPECT_EQ(axlReading.z, axlLog.z);
 }
 
 TEST_F(Sm_MainTest, OperationalBLEScheduled)
