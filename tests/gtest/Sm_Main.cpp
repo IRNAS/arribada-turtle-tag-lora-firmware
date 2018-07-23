@@ -1605,6 +1605,50 @@ TEST_F(Sm_MainTest, OperationalAXLLogging)
     EXPECT_EQ(axlReading.z, axlLog.z);
 }
 
+TEST_F(Sm_MainTest, OperationalBatteryLogging)
+{
+    int32_t batteryLevel = rand() % 100;
+
+    BootTagsSetAndLogFileCreated();
+
+    sm_set_current_state(&state_handle, SM_MAIN_OPERATIONAL);
+
+    // Enable general logging
+    sys_config.sys_config_logging_enable.hdr.set = true;
+    sys_config.sys_config_logging_enable.contents.enable = true;
+
+    // Enable battery level logging
+    sys_config.sys_config_battery_log_enable.hdr.set = true;
+    sys_config.sys_config_battery_log_enable.contents.enable = true;
+
+    // TODO: handle these ignored functions properly
+    syshal_pmu_set_level_Ignore();
+
+    SetBatteryPercentage(batteryLevel);
+
+    sm_tick(&state_handle);
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_OPERATIONAL, sm_get_current_state(&state_handle));
+
+    EXPECT_EQ(FS_NO_ERROR, fs_flush(file_handle)); // Flush any content that hasn't been written yet
+
+    fs_t file_system;
+    fs_handle_t file_system_handle;
+    uint32_t bytes_read;
+    logging_battery_t batteryCharge;
+
+    EXPECT_EQ(FS_NO_ERROR, fs_init(FS_DEVICE));
+    EXPECT_EQ(FS_NO_ERROR, fs_mount(FS_DEVICE, &file_system));
+    EXPECT_EQ(FS_NO_ERROR, fs_open(file_system, &file_system_handle, FS_FILE_ID_LOG, FS_MODE_READONLY, NULL));
+    EXPECT_EQ(FS_NO_ERROR, fs_read(file_system_handle, (uint8_t *) &batteryCharge, sizeof(batteryCharge), &bytes_read));
+    EXPECT_EQ(FS_NO_ERROR, fs_close(file_system_handle));
+
+    EXPECT_EQ(sizeof(logging_battery_t), bytes_read);
+    EXPECT_EQ(LOGGING_BATTERY, batteryCharge.h.id);
+    EXPECT_EQ(batteryLevel, batteryCharge.charge);
+}
+
 TEST_F(Sm_MainTest, OperationalBLEScheduled)
 {
     const uint32_t interval = 15;
