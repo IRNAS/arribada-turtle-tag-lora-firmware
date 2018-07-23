@@ -1621,6 +1621,9 @@ TEST_F(Sm_MainTest, OperationalBatteryLogging)
     sys_config.sys_config_battery_log_enable.hdr.set = true;
     sys_config.sys_config_battery_log_enable.contents.enable = true;
 
+    // Disable battery low threshold
+    sys_config.sys_config_battery_low_threshold.hdr.set = false;
+
     // TODO: handle these ignored functions properly
     syshal_pmu_set_level_Ignore();
 
