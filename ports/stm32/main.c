@@ -62,6 +62,80 @@ int main(void)
     HAL_GPIO_Init(GPIOE, &GPIO_Init);
     HAL_GPIO_Init(GPIOF, &GPIO_Init);
 
+    // PORT A
+    GPIO_Init.Pin = GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7 | GPIO_PIN_9 | GPIO_PIN_11 | GPIO_PIN_12 | GPIO_PIN_13 | GPIO_PIN_14;
+    GPIO_Init.Mode = GPIO_MODE_INPUT;
+    GPIO_Init.Pull = GPIO_PULLDOWN;
+    GPIO_Init.Speed = GPIO_SPEED_FREQ_LOW;
+    GPIO_Init.Alternate = 0;
+
+    HAL_GPIO_Init(GPIOA, &GPIO_Init);
+
+    // PORT B
+    GPIO_Init.Pin = GPIO_PIN_1 | GPIO_PIN_6 | GPIO_PIN_7 | GPIO_PIN_13;
+    GPIO_Init.Mode = GPIO_MODE_INPUT;
+    GPIO_Init.Pull = GPIO_PULLDOWN;
+    GPIO_Init.Speed = GPIO_SPEED_FREQ_LOW;
+    GPIO_Init.Alternate = 0;
+
+    HAL_GPIO_Init(GPIOB, &GPIO_Init);
+
+    // PORT C
+    GPIO_Init.Pin = GPIO_PIN_6 | GPIO_PIN_11 | GPIO_PIN_14 | GPIO_PIN_15;
+    GPIO_Init.Mode = GPIO_MODE_INPUT;
+    GPIO_Init.Pull = GPIO_PULLDOWN;
+    GPIO_Init.Speed = GPIO_SPEED_FREQ_LOW;
+    GPIO_Init.Alternate = 0;
+
+    HAL_GPIO_Init(GPIOC, &GPIO_Init);
+
+    // PORT D
+    GPIO_Init.Pin = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_8 | GPIO_PIN_9 | GPIO_PIN_11 | GPIO_PIN_12;
+    GPIO_Init.Mode = GPIO_MODE_INPUT;
+    GPIO_Init.Pull = GPIO_PULLDOWN;
+    GPIO_Init.Speed = GPIO_SPEED_FREQ_LOW;
+    GPIO_Init.Alternate = 0;
+
+    HAL_GPIO_Init(GPIOD, &GPIO_Init);
+
+    // PORT E
+    GPIO_Init.Pin = GPIO_PIN_3;
+    GPIO_Init.Mode = GPIO_MODE_INPUT;
+    GPIO_Init.Pull = GPIO_PULLDOWN;
+    GPIO_Init.Speed = GPIO_SPEED_FREQ_LOW;
+    GPIO_Init.Alternate = 0;
+
+    HAL_GPIO_Init(GPIOE, &GPIO_Init);
+
+    // PORT F
+    GPIO_Init.Pin = GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_6;
+    GPIO_Init.Mode = GPIO_MODE_INPUT;
+    GPIO_Init.Pull = GPIO_PULLDOWN;
+    GPIO_Init.Speed = GPIO_SPEED_FREQ_LOW;
+    GPIO_Init.Alternate = 0;
+
+    HAL_GPIO_Init(GPIOF, &GPIO_Init);
+
+    // GPIO_SPI1_CS_BT
+    GPIO_Init.Pin = GPIO_PIN_4;
+    GPIO_Init.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_Init.Pull = GPIO_NOPULL;
+    GPIO_Init.Speed = GPIO_SPEED_FREQ_LOW;
+    GPIO_Init.Alternate = 0;
+
+    HAL_GPIO_Init(GPIOA, &GPIO_Init);
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
+
+    // GPIO_SPI2_CS_FLASH
+    GPIO_Init.Pin = GPIO_PIN_0;
+    GPIO_Init.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_Init.Pull = GPIO_NOPULL;
+    GPIO_Init.Speed = GPIO_SPEED_FREQ_LOW;
+    GPIO_Init.Alternate = 0;
+
+    HAL_GPIO_Init(GPIOD, &GPIO_Init);
+    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_0, GPIO_PIN_SET);
+
     __HAL_RCC_GPIOA_CLK_DISABLE();
     __HAL_RCC_GPIOB_CLK_DISABLE();
     __HAL_RCC_GPIOC_CLK_DISABLE();
