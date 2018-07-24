@@ -1974,6 +1974,37 @@ TEST_F(Sm_MainTest, CfgReadOne)
     EXPECT_TRUE(message[2]);
 }
 
+TEST_F(Sm_MainTest, CfgReadInvalidTag)
+{
+    BootTagsNotSet();
+
+    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
+
+    config_if_init(CONFIG_IF_BACKEND_USB);
+    USBConnectionEvent();
+
+    SetVUSB(true);
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_PROVISIONING, sm_get_current_state(&state_handle));
+    EXPECT_EQ(CONFIG_IF_BACKEND_USB, config_if_current());
+
+    // Generate cfg read request message
+    cmd_t req;
+    CMD_SET_HDR((&req), CMD_CFG_READ_REQ);
+    req.p.cmd_cfg_read_req.configuration_tag = 0xABAB;
+    send_message(&req, CMD_SIZE(cmd_cfg_read_req_t));
+
+    sm_tick(&state_handle); // Process the message
+
+    // Check the response
+    cmd_t resp;
+    receive_message(&resp);
+    EXPECT_EQ(CMD_SYNCWORD, resp.h.sync);
+    EXPECT_EQ(CMD_CFG_READ_RESP, resp.h.cmd);
+    EXPECT_EQ(CMD_ERROR_INVALID_CONFIG_TAG, resp.p.cmd_cfg_read_resp.error_code);
+}
+
 TEST_F(Sm_MainTest, CfgSaveSuccess)
 {
     BootTagsNotSet();
