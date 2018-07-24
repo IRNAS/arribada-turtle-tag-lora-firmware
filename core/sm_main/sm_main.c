@@ -224,7 +224,6 @@ static timer_handle_t timer_gps_maximum_acquisition;
 static timer_handle_t timer_log_flush;
 static timer_handle_t timer_switch_hysteresis;
 static timer_handle_t timer_pressure_interval;
-static timer_handle_t timer_pressure_sampling;
 static timer_handle_t timer_pressure_maximum_acquisition;
 static timer_handle_t timer_axl_interval;
 static timer_handle_t timer_axl_maximum_acquisition;
@@ -3351,7 +3350,7 @@ static void sm_main_operational(sm_handle_t * state_handle)
                 if (sys_config.sys_config_pressure_scheduled_acquisition_interval.contents.seconds)
                     syshal_timer_set(timer_pressure_interval, periodic, sys_config.sys_config_pressure_scheduled_acquisition_interval.contents.seconds);
                 else
-                    syshal_timer_set_ms(timer_pressure_sampling, periodic, round((float) 1000.0f / sys_config.sys_config_pressure_sample_rate.contents.sample_rate));
+                    syshal_pressure_wake();
             }
         }
 

@@ -1453,6 +1453,7 @@ TEST_F(Sm_MainTest, OperationalToLogFileFull)
     // TODO: handle these ignored functions properly
     syshal_pmu_set_level_Ignore();
     syshal_pressure_init_ExpectAndReturn(SYSHAL_PRESSURE_NO_ERROR);
+    syshal_pressure_wake_ExpectAndReturn(SYSHAL_PRESSURE_NO_ERROR);
     syshal_pressure_tick_ExpectAndReturn(SYSHAL_PRESSURE_NO_ERROR);
 
     sm_tick(&state_handle);
@@ -1520,6 +1521,7 @@ TEST_F(Sm_MainTest, OperationalPressureLogging)
     // TODO: handle these ignored functions properly
     syshal_pmu_set_level_Ignore();
     syshal_pressure_init_ExpectAndReturn(SYSHAL_PRESSURE_NO_ERROR);
+    syshal_pressure_wake_ExpectAndReturn(SYSHAL_PRESSURE_NO_ERROR);
     syshal_pressure_tick_ExpectAndReturn(SYSHAL_PRESSURE_NO_ERROR);
 
     sm_tick(&state_handle);
