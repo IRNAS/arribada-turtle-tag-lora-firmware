@@ -199,14 +199,17 @@ void syshal_gpio_disable_interrupt(uint32_t pin)
   *
   * @param      GPIO_Pin  : one of the gpio pins
   */
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+inline void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
+    if (RESET == __HAL_GPIO_EXTI_GET_IT(GPIO_Pin))
+        return;
+
+    __HAL_GPIO_EXTI_CLEAR_IT(GPIO_Pin);
+
     uint8_t irq_id = syshal_gpio_get_pin_id_priv(GPIO_Pin);
 
-    if (syshal_gpio_irq_conf[irq_id].callback != NULL)
-    {
+    if (syshal_gpio_irq_conf[irq_id].callback)
         syshal_gpio_irq_conf[irq_id].callback();
-    }
 }
 
 /**
@@ -214,11 +217,8 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
   */
 void EXTI0_1_IRQHandler(void)
 {
-    uint32_t pin;
-    for (pin = GPIO_PIN_0; pin <= GPIO_PIN_1; pin = pin << 1)
-    {
-        HAL_GPIO_EXTI_IRQHandler(pin);
-    }
+    for (uint32_t pin = GPIO_PIN_0; pin <= GPIO_PIN_1; pin = pin << 1)
+        HAL_GPIO_EXTI_Callback(pin);
 }
 
 /**
@@ -226,11 +226,8 @@ void EXTI0_1_IRQHandler(void)
   */
 void EXTI2_3_IRQHandler(void)
 {
-    uint32_t pin;
-    for (pin = GPIO_PIN_2; pin <= GPIO_PIN_3; pin = pin << 1)
-    {
-        HAL_GPIO_EXTI_IRQHandler(pin);
-    }
+    for (uint32_t pin = GPIO_PIN_2; pin <= GPIO_PIN_3; pin = pin << 1)
+        HAL_GPIO_EXTI_Callback(pin);
 }
 
 /**
@@ -238,9 +235,6 @@ void EXTI2_3_IRQHandler(void)
   */
 void EXTI4_15_IRQHandler(void)
 {
-    uint32_t pin;
-    for (pin = GPIO_PIN_4; pin <= GPIO_PIN_15; pin = pin << 1)
-    {
-        HAL_GPIO_EXTI_IRQHandler(pin);
-    }
+    for (uint32_t pin = GPIO_PIN_4; pin <= GPIO_PIN_15; pin = pin << 1)
+        HAL_GPIO_EXTI_Callback(pin);
 }
