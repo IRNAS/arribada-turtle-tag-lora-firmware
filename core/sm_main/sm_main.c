@@ -661,15 +661,15 @@ void manage_ble(void)
 
 void syshal_axl_callback(syshal_axl_data_t data)
 {
-    DEBUG_PR_TRACE("%s() called", __FUNCTION__);
-
     // If accelerometer data logging is disabled
-    if (!sys_config.sys_config_axl_log_enable.contents.enable ||
-        !sensor_logging_enabled)
+    if (!sys_config.sys_config_axl_log_enable.contents.enable)
     {
         syshal_axl_sleep(); // Sleep the accelerometer device
         return;
     }
+
+    if (!sensor_logging_enabled)
+        return;
 
     switch (sys_config.sys_config_axl_mode.contents.mode)
     {
@@ -696,16 +696,20 @@ void syshal_axl_callback(syshal_axl_data_t data)
 
 void syshal_pressure_callback(int32_t pressure)
 {
-    if (sensor_logging_enabled)
+    // If pressure logging is disabled
+    if (!sys_config.sys_config_pressure_sensor_log_enable.contents.enable)
     {
-        if (sys_config.sys_config_pressure_sensor_log_enable.contents.enable)
-        {
-            logging_pressure_t pressure_data;
-            LOGGING_SET_HDR(&pressure_data, LOGGING_PRESSURE);
-            pressure_data.pressure = pressure;
-            logging_add_to_buffer((uint8_t *) &pressure_data, sizeof(pressure_data));
-        }
+        syshal_pressure_sleep(); // Sleep the accelerometer device
+        return;
     }
+
+    if (!sensor_logging_enabled)
+        return;
+
+    logging_pressure_t pressure_data;
+    LOGGING_SET_HDR(&pressure_data, LOGGING_PRESSURE);
+    pressure_data.pressure = pressure;
+    logging_add_to_buffer((uint8_t *) &pressure_data, sizeof(pressure_data));
 }
 
 void syshal_gps_callback(syshal_gps_event_t event)
@@ -718,6 +722,9 @@ void syshal_gps_callback(syshal_gps_event_t event)
         syshal_gps_shutdown(); // Sleep the gps device
         return;
     }
+
+    if (!sensor_logging_enabled)
+        return;
 
     switch (event.event_id)
     {
@@ -1044,7 +1051,8 @@ static void timer_ble_interval_callback(void)
         sys_config.sys_config_tag_bluetooth_trigger_control.contents.flags | SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_SCHEDULED)
     {
         // Should we be starting a BLE inactivity timer?
-        if (sys_config.sys_config_tag_bluetooth_connection_inactivity_timeout.hdr.set) {
+        if (sys_config.sys_config_tag_bluetooth_connection_inactivity_timeout.hdr.set)
+        {
             syshal_timer_set(timer_ble_timeout, one_shot, sys_config.sys_config_tag_bluetooth_connection_inactivity_timeout.contents.seconds);
         }
 
@@ -2712,7 +2720,7 @@ static void log_read_next_state()
     uint32_t bytes_actually_read;
     int ret;
 
-    DEBUG_PR_TRACE("Bytes left to write: %lu", sm_context.log_read.length);
+    //DEBUG_PR_TRACE("Bytes left to write: %lu", sm_context.log_read.length);
 
     // Get write buffer
     uint8_t * read_buffer;
@@ -3230,6 +3238,9 @@ static void sm_main_operational(sm_handle_t * state_handle)
         }
         syshal_gpio_set_output_low(GPIO_LED1_GREEN);
 
+        if (sys_config.sys_config_logging_enable.contents.enable)
+            sensor_logging_enabled = true;
+
         if (sys_config.sys_config_gps_log_position_enable.contents.enable ||
             sys_config.sys_config_gps_log_ttff_enable.contents.enable)
         {
@@ -3395,8 +3406,6 @@ static void sm_main_operational(sm_handle_t * state_handle)
     // Is global logging enabled?
     if (sys_config.sys_config_logging_enable.contents.enable)
     {
-        sensor_logging_enabled = true;
-
         // Is there any data waiting to be written to the log file?
         uint8_t * read_buffer;
         uint32_t length = buffer_read(&logging_buffer, (uintptr_t *)&read_buffer);
