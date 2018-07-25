@@ -733,10 +733,10 @@ void syshal_gps_callback(syshal_gps_event_t event)
 
             if (event.event_data.status.gpsFix > 0)
             {
-
+                
                 if (SM_GPS_STATE_ASLEEP != sm_gps_state) // If we haven't already slept the GPS
                 {
-                    syshal_timer_cancel(timer_gps_interval); // Clear any no fix timer
+                    syshal_timer_cancel(timer_gps_no_fix); // Clear any no fix timer
                     sm_gps_state = SM_GPS_STATE_FIXED;
                 }
 
