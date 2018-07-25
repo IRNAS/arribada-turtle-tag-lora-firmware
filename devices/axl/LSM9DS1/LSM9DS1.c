@@ -212,6 +212,7 @@ int syshal_axl_tick(void)
         // Read the avaliable data from the accelerometer
         uint8_t temp[6];
         syshal_axl_data_t accl_data;
+        new_data_pending = false;
         uint32_t bytes_read = syshal_i2c_read_reg(I2C_AXL, LSM9D1_AG_ADDR, LSM9D1_OUT_X_L_XL, &temp[0], 6); // Read 6 bytes, beginning at OUT_X_L_XL
         if (6 == bytes_read)
         {
@@ -220,7 +221,6 @@ int syshal_axl_tick(void)
             accl_data.z = (temp[5] << 8) | temp[4];
             syshal_axl_callback(accl_data); // Generate a callback event
         }
-        new_data_pending = false;
     }
 
     return SYSHAL_AXL_NO_ERROR;
