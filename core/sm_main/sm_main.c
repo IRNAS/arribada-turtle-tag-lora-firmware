@@ -699,7 +699,7 @@ void syshal_pressure_callback(int32_t pressure)
     // If pressure logging is disabled
     if (!sys_config.sys_config_pressure_sensor_log_enable.contents.enable)
     {
-        syshal_pressure_sleep(); // Sleep the accelerometer device
+        syshal_pressure_sleep(); // Sleep the pressure device
         return;
     }
 
