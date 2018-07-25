@@ -40,7 +40,6 @@ static int hal_error_map[] =
 
 // Private variables
 static I2C_HandleTypeDef hi2c[I2C_TOTAL_NUMBER];
-static uint32_t last_transfer[I2C_TOTAL_NUMBER];
 
 /**
  * @brief      Initialise the given I2C instance
@@ -62,9 +61,6 @@ int syshal_i2c_init(uint32_t instance)
     // Populate internal handlers from bsp
     hi2c[instance].Instance = I2C_Inits[instance].Instance;
     hi2c[instance].Init = I2C_Inits[instance].Init;
-
-    // Reset the last transfer counter
-    last_transfer[instance] = 0;
 
     status = HAL_I2C_Init(&hi2c[instance]);
 
@@ -132,13 +128,7 @@ int syshal_i2c_read_reg(uint32_t instance, uint8_t slaveAddress, uint8_t regAddr
 {
     HAL_StatusTypeDef status = HAL_ERROR;
 
-    // Implement 2ms i2c delay between reads
-    while (last_transfer[instance] + 2 > syshal_time_get_ticks_ms())
-    {}
-
     status = HAL_I2C_Mem_Read(&hi2c[instance], (uint16_t)(slaveAddress << 1), regAddress, 1, data, size, I2C_TIMEOUT);
-
-    last_transfer[instance] = syshal_time_get_ticks_ms();
 
     // return number of bytes read as best we can tell
     if (HAL_OK != status)
@@ -163,13 +153,7 @@ void syshal_i2c_write_reg(uint32_t instance, uint8_t slaveAddress, uint8_t regAd
 {
     HAL_StatusTypeDef status = HAL_ERROR;
 
-    // Implement 2ms i2c delay between writes
-    while (last_transfer[instance] + 2 > syshal_time_get_ticks_ms())
-    {}
-
     status = HAL_I2C_Mem_Write(&hi2c[instance], (uint16_t)(slaveAddress << 1), regAddress, 1, data, size, I2C_TIMEOUT);
-
-    last_transfer[instance] = syshal_time_get_ticks_ms();
 
     if (HAL_OK != status)
     {
