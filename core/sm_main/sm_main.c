@@ -3504,6 +3504,10 @@ static void sm_main_operational(sm_handle_t * state_handle)
         }
 
         // Stop any unnecessary timers
+        syshal_timer_cancel(timer_gps_interval);
+        syshal_timer_cancel(timer_gps_no_fix);
+        syshal_timer_cancel(timer_gps_maximum_acquisition);
+        syshal_timer_cancel(timer_log_flush);
         syshal_timer_cancel(timer_pressure_interval);
         syshal_timer_cancel(timer_pressure_maximum_acquisition);
         syshal_timer_cancel(timer_axl_interval);
