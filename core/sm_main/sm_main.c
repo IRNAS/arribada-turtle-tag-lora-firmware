@@ -3503,6 +3503,12 @@ static void sm_main_operational(sm_handle_t * state_handle)
             syshal_gps_shutdown();
         }
 
+        // Stop any unnecessary timers
+        syshal_timer_cancel(timer_pressure_interval);
+        syshal_timer_cancel(timer_pressure_maximum_acquisition);
+        syshal_timer_cancel(timer_axl_interval);
+        syshal_timer_cancel(timer_axl_maximum_acquisition);
+
         sensor_logging_enabled = false; // Prevent any sensors from logging
     }
 }
