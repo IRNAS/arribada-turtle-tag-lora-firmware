@@ -638,7 +638,7 @@ void manage_ble(void)
     if (sys_config.sys_config_tag_bluetooth_scheduled_interval.hdr.set &&
         sys_config.sys_config_tag_bluetooth_scheduled_duration.hdr.set &&
         sys_config.sys_config_tag_bluetooth_trigger_control.hdr.set &&
-        sys_config.sys_config_tag_bluetooth_trigger_control.contents.flags | SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_SCHEDULED)
+        sys_config.sys_config_tag_bluetooth_trigger_control.contents.flags & SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_SCHEDULED)
     {
         if (!syshal_timer_running(timer_ble_interval))
         {
