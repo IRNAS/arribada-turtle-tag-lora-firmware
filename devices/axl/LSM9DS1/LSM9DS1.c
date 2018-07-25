@@ -213,14 +213,18 @@ int syshal_axl_tick(void)
         uint8_t temp[6];
         syshal_axl_data_t accl_data;
         new_data_pending = false;
-        uint32_t bytes_read = syshal_i2c_read_reg(I2C_AXL, LSM9D1_AG_ADDR, LSM9D1_OUT_X_L_XL, &temp[0], 6); // Read 6 bytes, beginning at OUT_X_L_XL
-        if (6 == bytes_read)
+        int bytes_read = syshal_i2c_read_reg(I2C_AXL, LSM9D1_AG_ADDR, LSM9D1_OUT_X_L_XL, &temp[0], 6); // Read 6 bytes, beginning at OUT_X_L_XL
+
+        if (bytes_read < 0)
         {
-            accl_data.x = (temp[1] << 8) | temp[0];
-            accl_data.y = (temp[3] << 8) | temp[2];
-            accl_data.z = (temp[5] << 8) | temp[4];
-            syshal_axl_callback(accl_data); // Generate a callback event
+            new_data_pending = true;
+            return SYSHAL_AXL_NO_ERROR;
         }
+
+        accl_data.x = (temp[1] << 8) | temp[0];
+        accl_data.y = (temp[3] << 8) | temp[2];
+        accl_data.z = (temp[5] << 8) | temp[4];
+        syshal_axl_callback(accl_data); // Generate a callback event
     }
 
     return SYSHAL_AXL_NO_ERROR;
