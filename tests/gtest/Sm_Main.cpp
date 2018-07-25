@@ -378,6 +378,9 @@ bool syshal_switch_get_GTest(int cmock_num_calls) {return syshal_switch_state;}
 // syshal_pressure
 bool syshal_pressure_awake_GTest(int cmock_num_calls) {return false;}
 
+// syshal_axl
+bool syshal_axl_awake_GTest(int cmock_num_calls) {return false;}
+
 //// syshal_pmu
 
 class Sm_MainTest : public ::testing::Test
@@ -401,6 +404,8 @@ class Sm_MainTest : public ::testing::Test
 
         // syshal_axl
         Mocksyshal_axl_Init();
+
+        syshal_axl_awake_StubWithCallback(syshal_axl_awake_GTest);
 
         // syshal_gpio
         Mocksyshal_gpio_Init();
