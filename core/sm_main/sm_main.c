@@ -3192,6 +3192,9 @@ static void sm_main_boot(sm_handle_t * state_handle)
 
 static void sm_main_operational(sm_handle_t * state_handle)
 {
+    static bool leds_flashing = true;
+    static uint32_t led_flashing_start_time = 0;
+
     if (sm_is_first_entry(state_handle))
     {
         DEBUG_PR_INFO("Entered state %s from %s",
@@ -3214,6 +3217,9 @@ static void sm_main_operational(sm_handle_t * state_handle)
         // Clear any current timers
         syshal_timer_cancel_all();
 
+        leds_flashing = true;
+        led_flashing_start_time = 0;
+
         // Ensure the GPS module is off
         if (SM_GPS_STATE_ASLEEP != sm_gps_state)
             syshal_gps_shutdown();
@@ -3224,19 +3230,6 @@ static void sm_main_operational(sm_handle_t * state_handle)
 
         gps_ttff_reading_logged = false; // Make sure we read/log the first TTFF reading
         last_battery_reading = 0xFF; // Ensure the first battery reading is logged
-
-        // Flash the green LED for 5 seconds to indicate this state
-        syshal_gpio_set_output_low(GPIO_LED2_RED);
-        syshal_gpio_set_output_low(GPIO_LED1_GREEN);
-
-        const uint32_t number_of_blinks = 50;
-        const uint32_t milliseconds_to_blink = 5000;
-        for (uint32_t i = 0; i < number_of_blinks; ++i)
-        {
-            syshal_time_delay_ms(milliseconds_to_blink / number_of_blinks);
-            syshal_gpio_set_output_toggle(GPIO_LED1_GREEN);
-        }
-        syshal_gpio_set_output_low(GPIO_LED1_GREEN);
 
         if (sys_config.sys_config_logging_enable.contents.enable)
             sensor_logging_enabled = true;
@@ -3380,6 +3373,32 @@ static void sm_main_operational(sm_handle_t * state_handle)
         }
     }
 
+    if (leds_flashing)
+    {
+        // Flash the green LED for 5 seconds to indicate this state
+        static uint32_t led_flashing_elapsed_time;
+
+        if (!led_flashing_start_time)
+        {
+            led_flashing_start_time = syshal_time_get_ticks_ms();
+            led_flashing_elapsed_time = led_flashing_start_time;
+
+            syshal_gpio_set_output_high(GPIO_LED1_GREEN);
+        }
+
+        if (syshal_time_get_ticks_ms() > led_flashing_elapsed_time + 200)
+        {
+            led_flashing_elapsed_time += 200;
+            syshal_gpio_set_output_toggle(GPIO_LED1_GREEN);
+        }
+
+        if (syshal_time_get_ticks_ms() > led_flashing_start_time + 5000)
+        {
+            leds_flashing = false;
+            syshal_gpio_set_output_low(GPIO_LED1_GREEN);
+        }
+    }
+
     // If GPS bridging is disabled and GPS logging enabled
     if ( (!syshal_gps_bridging) &&
          (sys_config.sys_config_gps_log_position_enable.contents.enable ||
@@ -3393,7 +3412,7 @@ static void sm_main_operational(sm_handle_t * state_handle)
         syshal_axl_tick();
 
     // Determine how deep a sleep we should take
-    if (!syshal_pressure_awake() && !syshal_axl_awake())
+    if (!syshal_pressure_awake() && !syshal_axl_awake() && !leds_flashing)
     {
         if (SM_GPS_STATE_ASLEEP == sm_gps_state &&
             sys_config.sys_config_axl_scheduled_acquisition_interval.contents.seconds)
@@ -3502,6 +3521,9 @@ static void sm_main_operational(sm_handle_t * state_handle)
             sm_gps_state = SM_GPS_STATE_ASLEEP;
             syshal_gps_shutdown();
         }
+
+        // Turn off the green LED incase we've left it on
+        syshal_gpio_set_output_low(GPIO_LED1_GREEN);
 
         // Stop any unnecessary timers
         syshal_timer_cancel(timer_gps_interval);
