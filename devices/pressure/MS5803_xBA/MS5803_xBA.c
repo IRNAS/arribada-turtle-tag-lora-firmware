@@ -29,6 +29,7 @@
 uint16_t MS5803_xBA_coefficient[8];
 const uint8_t resolution_priv = CMD_ADC_256; // The conversion resolution
 static timer_handle_t MS5803_sampling_timer_priv;
+static bool initialised_priv = false;
 
 static void MS5803_timer_callback(void);
 
@@ -53,6 +54,8 @@ int syshal_pressure_init(void)
     // Create timer for sampling with
     syshal_timer_init(&MS5803_sampling_timer_priv, MS5803_timer_callback);
 
+    initialised_priv = true;
+
     return SYSHAL_PRESSURE_NO_ERROR;
 }
 
@@ -60,6 +63,8 @@ int syshal_pressure_term(void)
 {
     // Delete sampling timer
     syshal_timer_term(MS5803_sampling_timer_priv);
+
+    initialised_priv = false;
 
     return SYSHAL_PRESSURE_NO_ERROR;
 }
@@ -83,7 +88,7 @@ int syshal_pressure_wake(void)
 
 bool syshal_pressure_awake(void)
 {
-    return syshal_timer_running(MS5803_sampling_timer_priv);
+    return syshal_timer_running(MS5803_sampling_timer_priv) && initialised_priv;
 }
 
 int syshal_pressure_tick(void)
