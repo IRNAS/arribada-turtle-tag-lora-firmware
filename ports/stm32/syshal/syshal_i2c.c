@@ -68,6 +68,29 @@ int syshal_i2c_init(uint32_t instance)
 }
 
 /**
+ * @brief      Terminate the given I2C instance
+ *
+ * @param[in]  instance  The I2C instance
+ *
+ * @return SYSHAL_I2C_ERROR_INVALID_INSTANCE if instance doesn't exist.
+ * @return SYSHAL_I2C_ERROR_DEVICE on HAL error.
+ * @return SYSHAL_I2C_ERROR_BUSY if the HW is busy.
+ * @return SYSHAL_I2C_ERROR_TIMEOUT if a timeout occurred.
+ */
+int syshal_i2c_term(uint32_t instance)
+{
+    HAL_StatusTypeDef status;
+
+    if (instance >= I2C_TOTAL_NUMBER)
+        return SYSHAL_I2C_ERROR_INVALID_INSTANCE;
+
+    // Terminate the I2C device
+    status = HAL_I2C_DeInit(&hi2c[instance]);
+
+    return hal_error_map[status];
+}
+
+/**
  * @brief      Transfer the given data to a slave
  *
  * @param[in]  instance      The I2C instance
