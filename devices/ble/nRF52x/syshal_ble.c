@@ -250,7 +250,7 @@ int syshal_ble_init(uint32_t comms_device)
 int syshal_ble_term(void)
 {
     /* Deep sleep the nRF52 device */
-    uint8_t mode = NRF52_MODE_DEEP_SLEEP;
+    uint8_t mode = NRF52_MODE_IDLE;
     write_register(NRF52_REG_ADDR_MODE, &mode, sizeof(mode));
 
     // Clear any pending transfers

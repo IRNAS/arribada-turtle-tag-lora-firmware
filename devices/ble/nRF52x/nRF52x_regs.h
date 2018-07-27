@@ -71,11 +71,7 @@
 /* Flags for NRF52_REG_ADDR_MODE */
 #define NRF52_MODE_IDLE                      0x00
 #define NRF52_MODE_FW_UPGRADE                0x01
-#define NRF52_MODE_BEACON                    0x02
 #define NRF52_MODE_GATT_SERVER               0x03
-#define NRF52_MODE_GATT_CLIENT               0x04
-#define NRF52_MODE_SCAN                      0x05
-#define NRF52_MODE_DEEP_SLEEP                0x06
 #define NRF52_MODE_RESET                     0x07
 #define NRF52_MODE_LOOPBACK                  0xFF
 
@@ -97,11 +93,5 @@
 /* Flags for NRF52_REG_ADDR_PHY_MODE */
 #define NRF52_PHY_MODE_1_MBPS                0
 #define NRF52_PHY_MODE_2_MBPS                1
-
-int spis_init();
-int spis_reg_install(uint8_t addr,
-                     uint16_t (*read_request)(uint8_t *buffer, uint16_t length),
-                     void (*read_complete)(uint16_t length),
-                     void (*write_complete)(uint8_t *buffer, uint16_t length));
 
 #endif /* _NRF52x_REGS_H_ */
