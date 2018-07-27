@@ -3154,6 +3154,8 @@ static void sm_main_boot(sm_handle_t * state_handle)
 
     syshal_flash_init(0, SPI_FLASH);
 
+    syshal_batt_init();
+
     // Re/Set global vars
     syshal_gps_bridging = false;
     syshal_ble_bridging = false;
