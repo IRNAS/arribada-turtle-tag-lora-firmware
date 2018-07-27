@@ -190,6 +190,8 @@ static volatile sm_gps_state_t sm_gps_state; // The current operating state of t
 
 #define SM_MAIN_INACTIVITY_TIMEOUT_MS (2000) // How many ms until the message state machine reverts back to idle
 
+#define REED_SWITCH_DEBOUNCE_TIME_S (2) // How many seconds to debounce the reed switch
+
 static volatile bool     config_if_tx_pending = false;
 static volatile bool     config_if_rx_queued = false;
 static bool              syshal_gps_bridging = false;
@@ -210,6 +212,7 @@ static volatile bool     gps_ttff_reading_logged = false; // Have we read the mo
 static uint8_t           last_battery_reading;
 static volatile bool     sensor_logging_enabled = false; // Are sensors currently allowed to log
 static uint8_t           ble_state;
+static volatile bool     reed_switch_debounce = false; // Debouncing on the reed switch
 
 #ifndef GTEST
 static fs_handle_t       file_handle = NULL; // The global file handle we have open. Only allow one at once
@@ -222,7 +225,8 @@ static timer_handle_t timer_gps_interval;
 static timer_handle_t timer_gps_no_fix;
 static timer_handle_t timer_gps_maximum_acquisition;
 static timer_handle_t timer_log_flush;
-static timer_handle_t timer_switch_hysteresis;
+static timer_handle_t timer_saltwater_switch_hysteresis;
+static timer_handle_t timer_reed_switch_hysteresis;
 static timer_handle_t timer_pressure_interval;
 static timer_handle_t timer_pressure_maximum_acquisition;
 static timer_handle_t timer_axl_interval;
@@ -236,7 +240,8 @@ static void timer_gps_interval_callback(void);
 static void timer_gps_no_fix_callback(void);
 static void timer_gps_maximum_acquisition_callback(void);
 static void timer_log_flush_callback(void);
-static void timer_switch_hysteresis_callback(void);
+static void timer_saltwater_switch_hysteresis_callback(void);
+static void timer_reed_switch_hysteresis_callback(void);
 static void timer_pressure_interval_callback(void);
 static void timer_pressure_maximum_acquisition_callback(void);
 static void timer_axl_interval_callback(void);
@@ -292,6 +297,7 @@ static void set_default_global_values(void)
     sensor_logging_enabled = false;
     ble_state = 0;
     file_handle = NULL;
+    reed_switch_debounce = false;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -823,7 +829,7 @@ void syshal_switch_callback(syshal_switch_event_id_t event)
     switch (event)
     {
         case SYSHAL_SWITCH_EVENT_OPEN:
-            syshal_timer_cancel(timer_switch_hysteresis);
+            syshal_timer_cancel(timer_saltwater_switch_hysteresis);
 
             // If we're in the operational state and we were previously underwater
             if (sensor_logging_enabled && !tracker_above_water)
@@ -861,9 +867,9 @@ void syshal_switch_callback(syshal_switch_event_id_t event)
             if (sys_config.sys_config_saltwater_switch_hysteresis_period.contents.seconds &&
                 sys_config.sys_config_saltwater_switch_hysteresis_period.hdr.set &&
                 sensor_logging_enabled)
-                syshal_timer_set(timer_switch_hysteresis, one_shot, sys_config.sys_config_saltwater_switch_hysteresis_period.contents.seconds);
+                syshal_timer_set(timer_saltwater_switch_hysteresis, one_shot, sys_config.sys_config_saltwater_switch_hysteresis_period.contents.seconds);
             else
-                timer_switch_hysteresis_callback(); // Trigger an instant switch timeout
+                timer_saltwater_switch_hysteresis_callback(); // Trigger an instant switch timeout
             break;
 
         default:
@@ -876,32 +882,38 @@ static void gpio_reed_sw_callback(void)
 {
     DEBUG_PR_TRACE("%s() state: %d", __FUNCTION__, syshal_gpio_get_input(GPIO_REED_SW));
 
-    // Should we be using the reed switch to trigger BLE activation?
-    if (sys_config.sys_config_tag_bluetooth_trigger_control.hdr.set &&
-        sys_config.sys_config_tag_bluetooth_trigger_control.contents.flags | SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_REED_SWITCH)
+    if (!reed_switch_debounce)
     {
-        if (!syshal_gpio_get_input(GPIO_REED_SW))
-        {
-            ble_state |= SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_REED_SWITCH;
-        }
-        else
-        {
-            ble_state &= ~SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_REED_SWITCH;
+        reed_switch_debounce = true;
+        syshal_timer_set(timer_reed_switch_hysteresis, one_shot, REED_SWITCH_DEBOUNCE_TIME_S);
 
-            // Was the reed switch the only reason the the BLE interface was running?
-            if (!ble_state &&
-                CONFIG_IF_BACKEND_BLE == config_if_current())
+        // Should we be using the reed switch to trigger BLE activation?
+        if (sys_config.sys_config_tag_bluetooth_trigger_control.hdr.set &&
+            sys_config.sys_config_tag_bluetooth_trigger_control.contents.flags | SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_REED_SWITCH)
+        {
+            if (!syshal_gpio_get_input(GPIO_REED_SW))
             {
-                // If so then terminate it
-                config_if_term();
+                ble_state |= SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_REED_SWITCH;
+            }
+            else
+            {
+                ble_state &= ~SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_REED_SWITCH;
 
-                if (config_if_connected)
+                // Was the reed switch the only reason the the BLE interface was running?
+                if (!ble_state &&
+                    CONFIG_IF_BACKEND_BLE == config_if_current())
                 {
-                    // If the BLE device was connected, trigger a disconnect event
-                    config_if_event_t disconnectEvent;
-                    disconnectEvent.backend = CONFIG_IF_BACKEND_BLE;
-                    disconnectEvent.id = CONFIG_IF_EVENT_DISCONNECTED;
-                    config_if_callback(&disconnectEvent);
+                    // If so then terminate it
+                    config_if_term();
+
+                    if (config_if_connected)
+                    {
+                        // If the BLE device was connected, trigger a disconnect event
+                        config_if_event_t disconnectEvent;
+                        disconnectEvent.backend = CONFIG_IF_BACKEND_BLE;
+                        disconnectEvent.id = CONFIG_IF_EVENT_DISCONNECTED;
+                        config_if_callback(&disconnectEvent);
+                    }
                 }
             }
         }
@@ -975,7 +987,7 @@ static void timer_log_flush_callback(void)
         fs_flush(file_handle);
 }
 
-static void timer_switch_hysteresis_callback(void)
+static void timer_saltwater_switch_hysteresis_callback(void)
 {
     DEBUG_PR_TRACE("%s() called", __FUNCTION__);
 
@@ -1005,6 +1017,17 @@ static void timer_switch_hysteresis_callback(void)
             }
         }
     }
+}
+
+static void timer_reed_switch_hysteresis_callback(void)
+{
+    DEBUG_PR_TRACE("%s() called", __FUNCTION__);
+
+    reed_switch_debounce = false;
+
+    gpio_reed_sw_callback(); // Check for any state changes
+    syshal_timer_cancel(timer_reed_switch_hysteresis);
+    reed_switch_debounce = false;
 }
 
 static void timer_pressure_interval_callback(void)
@@ -3113,7 +3136,8 @@ static void sm_main_boot(sm_handle_t * state_handle)
     syshal_timer_init(&timer_gps_no_fix, timer_gps_no_fix_callback);
     syshal_timer_init(&timer_gps_maximum_acquisition, timer_gps_maximum_acquisition_callback);
     syshal_timer_init(&timer_log_flush, timer_log_flush_callback);
-    syshal_timer_init(&timer_switch_hysteresis, timer_switch_hysteresis_callback);
+    syshal_timer_init(&timer_saltwater_switch_hysteresis, timer_saltwater_switch_hysteresis_callback);
+    syshal_timer_init(&timer_reed_switch_hysteresis, timer_reed_switch_hysteresis_callback);
     syshal_timer_init(&timer_pressure_interval, timer_pressure_interval_callback);
     syshal_timer_init(&timer_pressure_maximum_acquisition, timer_pressure_maximum_acquisition_callback);
     syshal_timer_init(&timer_axl_interval, timer_axl_interval_callback);
