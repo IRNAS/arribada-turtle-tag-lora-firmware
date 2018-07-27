@@ -3808,8 +3808,9 @@ static void sm_main_provisioning(sm_handle_t * state_handle)
             file_handle = NULL;
         }
 
-        // Close the configuration interface
-        config_if_term();
+        // Close the configuration interface if it's USB
+        if (CONFIG_IF_BACKEND_USB == config_if_current())
+            config_if_term();
     }
 }
 
