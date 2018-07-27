@@ -172,7 +172,7 @@ int syshal_i2c_read_reg(uint32_t instance, uint8_t slaveAddress, uint8_t regAddr
  * @param[in]  data          The data buffer to be sent
  * @param[in]  size          The size of the data buffer in bytes
  */
-void syshal_i2c_write_reg(uint32_t instance, uint8_t slaveAddress, uint8_t regAddress, uint8_t * data, uint32_t size)
+int syshal_i2c_write_reg(uint32_t instance, uint8_t slaveAddress, uint8_t regAddress, uint8_t * data, uint32_t size)
 {
     HAL_StatusTypeDef status = HAL_ERROR;
 
@@ -181,7 +181,10 @@ void syshal_i2c_write_reg(uint32_t instance, uint8_t slaveAddress, uint8_t regAd
     if (HAL_OK != status)
     {
         DEBUG_PR_ERROR("%s failed with %d", __FUNCTION__, status);
+        return hal_error_map[status];
     }
+
+    return size;
 }
 
 int syshal_i2c_is_device_ready(uint32_t instance, uint8_t slaveAddress)
