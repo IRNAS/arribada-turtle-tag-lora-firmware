@@ -3578,6 +3578,8 @@ static void sm_main_log_file_full(sm_handle_t * state_handle)
 
     config_if_tick();
 
+    syshal_pmu_set_level(POWER_STOP);
+
     // Branch to Provisioning state if config_if has connected
     if (config_if_connected)
         sm_set_next_state(state_handle, SM_MAIN_PROVISIONING);
@@ -3670,6 +3672,8 @@ static void sm_main_battery_level_low(sm_handle_t * state_handle)
             syshal_gps_shutdown();
         }
     }
+
+    syshal_pmu_set_level(POWER_STOP);
 
     // Branch to Battery Charging if VUSB is present
     if (syshal_gpio_get_input(GPIO_VUSB))
