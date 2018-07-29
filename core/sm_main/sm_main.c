@@ -1472,7 +1472,6 @@ static void cfg_write_req(cmd_t * req, uint16_t size)
 
 static void cfg_write_next_state(void)
 {
-    uint32_t read_buffer_offset = 0;
     uint32_t bytes_to_copy;
     uint8_t * read_buffer;
     uint32_t length = buffer_read(&config_if_receive_buffer, (uintptr_t *)&read_buffer);
@@ -1493,78 +1492,72 @@ static void cfg_write_next_state(void)
     while (length)
     {
 
-        // Does our temp buffer already contain a tag ID?
-        if (SYS_CONFIG_TAG_ID_SIZE > sm_context.cfg_write.buffer_occupancy)
+        // Do we have a tag ID in our working buffer?
+        if (sm_context.cfg_write.buffer_occupancy < SYS_CONFIG_TAG_ID_SIZE)
         {
             // If not then put as much of our tag ID into our temp buffer as possible
             bytes_to_copy = MIN(length, SYS_CONFIG_TAG_ID_SIZE - sm_context.cfg_write.buffer_occupancy);
 
-            memcpy(&sm_context.cfg_write.buffer[sm_context.cfg_write.buffer_occupancy], &read_buffer[read_buffer_offset], bytes_to_copy);
+            memcpy(&sm_context.cfg_write.buffer[sm_context.cfg_write.buffer_occupancy], read_buffer, bytes_to_copy);
 
-            read_buffer_offset += bytes_to_copy;
             sm_context.cfg_write.buffer_occupancy += bytes_to_copy;
-            sm_context.cfg_write.length -= bytes_to_copy;
+            read_buffer += bytes_to_copy;
             length -= bytes_to_copy;
         }
 
-        // If we don't have a full tag ID, then exit and wait for more data
         if (sm_context.cfg_write.buffer_occupancy < SYS_CONFIG_TAG_ID_SIZE)
-            break;
+            break; // If we still don't have at least a tag ID then wait for more data
 
-        // Extract the tag ID
+        // Fetch the configuration tag
         uint16_t tag = 0;
         tag |= (uint16_t) sm_context.cfg_write.buffer[0] & 0x00FF;
         tag |= (uint16_t) (sm_context.cfg_write.buffer[1] << 8) & 0xFF00;
 
+        // Determine the size of this configuration tag
         int tag_data_size = sys_config_size(tag);
 
-        // Check tag is valid
+        // If the tag is invalid
         if (tag_data_size < 0)
         {
-            // If it is not we should exit out and return an error
+            // Then we should exit out and return an error
             DEBUG_PR_ERROR("sys_config_size(0x%04X) returned: %d()", tag, tag_data_size);
             sm_context.cfg_write.error_code = CMD_ERROR_INVALID_CONFIG_TAG;
             message_set_state(SM_MESSAGE_STATE_CFG_WRITE_ERROR);
             Throw(EXCEPTION_BAD_SYS_CONFIG_ERROR_CONDITION);
         }
 
-        // Copy as much of this tags data as we can into our temp buffer
-        bytes_to_copy = MIN(length, tag_data_size);
-        memcpy(&sm_context.cfg_write.buffer[sm_context.cfg_write.buffer_occupancy], &read_buffer[read_buffer_offset], bytes_to_copy);
-        sm_context.cfg_write.length -= bytes_to_copy;
+        // Then lets put what we have into our working buffer, accounting for what we might already have in our buffer
+        bytes_to_copy = MIN( length, MIN(tag_data_size, tag_data_size - sm_context.cfg_write.buffer_occupancy + SYS_CONFIG_TAG_ID_SIZE));
+        memcpy(&sm_context.cfg_write.buffer[sm_context.cfg_write.buffer_occupancy], read_buffer, bytes_to_copy);
         sm_context.cfg_write.buffer_occupancy += bytes_to_copy;
-        read_buffer_offset += bytes_to_copy;
+        read_buffer += bytes_to_copy;
         length -= bytes_to_copy;
 
-        // Do we have all of the tag data?
-        uint32_t tag_full_size = tag_data_size + SYS_CONFIG_TAG_ID_SIZE;
-        if (sm_context.cfg_write.buffer_occupancy >= tag_full_size)
+        // Do we have all of the configuration tags data in our working buffer?
+        if (sm_context.cfg_write.buffer_occupancy < tag_data_size + SYS_CONFIG_TAG_ID_SIZE)
+            break; // Then wait until we do
+
+        // Process the tag
+        int ret = sys_config_set(tag, &sm_context.cfg_write.buffer[SYS_CONFIG_TAG_ID_SIZE], tag_data_size); // Set tag value
+
+        if (ret < 0)
         {
-            // Process the tag
-            int ret = sys_config_set(tag, &sm_context.cfg_write.buffer[SYS_CONFIG_TAG_ID_SIZE], tag_data_size); // Set tag value
-
-            if (ret < 0)
-            {
-                DEBUG_PR_ERROR("sys_config_set(0x%04X) returned: %d()", tag, ret);
-                message_set_state(SM_MESSAGE_STATE_IDLE);
-                Throw(EXCEPTION_BAD_SYS_CONFIG_ERROR_CONDITION); // Exit and fail silent
-            }
-
-            DEBUG_PR_TRACE("sys_config_set(0x%04X)", tag);
-
-            // Have we just changed our GPS baudrate
-            if (SYS_CONFIG_TAG_GPS_UART_BAUD_RATE == tag)
-            {
-                // If so update our UART HW baudrate
-                syshal_uart_change_baud(GPS_UART, sys_config.sys_config_gps_uart_baud_rate.contents.baudrate);
-            }
-
-            sm_context.cfg_write.buffer_occupancy = 0;
+            DEBUG_PR_ERROR("sys_config_set(0x%04X) returned: %d()", tag, ret);
+            message_set_state(SM_MESSAGE_STATE_IDLE);
+            Throw(EXCEPTION_BAD_SYS_CONFIG_ERROR_CONDITION); // Exit and fail silent
         }
-        else
+
+        DEBUG_PR_TRACE("sys_config_set(0x%04X)", tag);
+
+        // Have we just changed our GPS baudrate
+        if (SYS_CONFIG_TAG_GPS_UART_BAUD_RATE == tag)
         {
-            break; // We don't have a full tag so exit and wait for more data
+            // If so update our UART HW baudrate
+            syshal_uart_change_baud(GPS_UART, sys_config.sys_config_gps_uart_baud_rate.contents.baudrate);
         }
+
+        sm_context.cfg_write.length -= sm_context.cfg_write.buffer_occupancy;
+        sm_context.cfg_write.buffer_occupancy = 0;
 
     }
 
