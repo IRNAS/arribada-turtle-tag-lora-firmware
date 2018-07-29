@@ -79,7 +79,7 @@ USBD_ClassTypeDef USBD_VENDOR =
     USBD_Vendor_DeInit, // This callback is called when the clear configuration request has been received
     USBD_Vendor_Setup, // This callback is called to handle the specific class setup requests
     NULL, // EP0_TxSent This callback is called when the send status is finished
-    NULL, // EP0_RxSent This callback is called when the receive status is finished
+    NULL, // EP0_RxReady This callback is called when the receive status is finished
     USBD_Vendor_DataIn, // This callback is called to perform the data in stage relative to the non-control endpoints
     USBD_Vendor_DataOut, // This callback is called to perform the data out stage relative to the non-control endpoints
     NULL, // This callback is called when a SOF interrupt is received
