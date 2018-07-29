@@ -2550,7 +2550,7 @@ static void log_create_req(cmd_t * req, uint16_t size)
     if (CMD_LOG_CREATE_REQ_MODE_FILL == mode || CMD_LOG_CREATE_REQ_MODE_CIRCULAR == mode)
     {
         // Convert from create mode to fs_mode_t
-        fs_mode_t fs_mode;
+        fs_mode_t fs_mode = FS_MODE_CREATE;
         if (CMD_LOG_CREATE_REQ_MODE_FILL == mode)
             fs_mode = FS_MODE_CREATE;
         else if (CMD_LOG_CREATE_REQ_MODE_CIRCULAR == mode)
