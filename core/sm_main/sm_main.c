@@ -188,7 +188,7 @@ static volatile sm_gps_state_t sm_gps_state; // The current operating state of t
 
 #define USB_ENUMERATION_TIMEOUT_MS (10000) // Time in ms to try for a USB connection interface when VUSB is connected
 
-#define SM_MAIN_INACTIVITY_TIMEOUT_MS (2000) // How many ms until the message state machine reverts back to idle
+#define SM_MAIN_INACTIVITY_TIMEOUT_MS (5000) // How many ms until the message state machine reverts back to idle
 
 #define REED_SWITCH_DEBOUNCE_TIME_S (2) // How many seconds to debounce the reed switch
 
