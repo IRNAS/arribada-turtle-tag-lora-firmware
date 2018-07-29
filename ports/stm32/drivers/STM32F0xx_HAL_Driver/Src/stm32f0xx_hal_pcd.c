@@ -1376,7 +1376,7 @@ static HAL_StatusTypeDef PCD_EP_ISR_Handler(PCD_HandleTypeDef *hpcd)
         ep->xfer_buff+=ep->xfer_count;
        
         /* Zero Length Packet? */
-        if (ep->xfer_len == 0U)
+        if (ep->xfer_len == 0U && (ep->xfer_count < ep->maxpacket)) // See: https://community.st.com/s/question/0D50X00009XkXmgSAF/usb-cdc-breaks-on-heavy-loadU
         {
           /* TX COMPLETE */
           HAL_PCD_DataInStageCallback(hpcd, ep->num);
