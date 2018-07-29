@@ -215,6 +215,8 @@ int syshal_batt_level(void)
     {
         DEBUG_PR_WARN("BQ27621 has reset, FLAGS: 0x%04X", flags);
         syshal_batt_init();
+        BQ27621_read_flags(&flags);
+        DEBUG_PR_WARN("BQ27621 after reset, FLAGS: 0x%04X", flags);
     }
 
     int status = syshal_i2c_read_reg(I2C_BATTERY, BQ27621_ADDR, BQ27621_REG_STATE_OF_CHARGE, &level, 1);
