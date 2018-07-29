@@ -3028,9 +3028,12 @@ static void handle_config_if_messages(void)
     // Has a message timeout occured?
     if ((syshal_time_get_ticks_ms() - config_if_message_timeout) > SM_MAIN_INACTIVITY_TIMEOUT_MS)
     {
-        DEBUG_PR_WARN("State: %d, MESSAGE TIMEOUT", message_state);
-        message_set_state(SM_MESSAGE_STATE_IDLE); // Return to the idle state
-        config_if_session_cleanup(); // Clear any pending messages
+        if (SM_MESSAGE_STATE_IDLE != message_state) // Our idle state can't timeout
+        {
+            DEBUG_PR_WARN("State: %d, MESSAGE TIMEOUT", message_state);
+            message_set_state(SM_MESSAGE_STATE_IDLE); // Return to the idle state
+            config_if_session_cleanup(); // Clear any pending messages
+        }
     }
 
     // Don't allow the processing of anymore messages until we have a free transmit buffer
