@@ -104,6 +104,14 @@ void syshal_i2c_transfer(uint32_t instance, uint8_t slaveAddress, uint8_t * data
 
     status = HAL_I2C_Master_Transmit(&hi2c[instance], (uint16_t)(slaveAddress << 1), data, size, I2C_TIMEOUT);
 
+    // We've timed out. Lets try resetting the i2c bus
+    if (HAL_TIMEOUT == status)
+    {
+        DEBUG_PR_WARN("syshal_i2c_receive timeout, reset");
+        syshal_i2c_term(instance);
+        syshal_i2c_init(instance);
+    }
+
     if (HAL_OK != status)
     {
         DEBUG_PR_ERROR("%s(%lu, 0x%02X, *data, %lu) failed with %d", __FUNCTION__, instance, slaveAddress, size, status);
@@ -125,6 +133,14 @@ uint32_t syshal_i2c_receive(uint32_t instance, uint8_t slaveAddress, uint8_t * d
     HAL_StatusTypeDef status = HAL_ERROR;
 
     status = HAL_I2C_Master_Receive(&hi2c[instance], (uint16_t)(slaveAddress << 1), data, size, I2C_TIMEOUT);
+
+    // We've timed out. Lets try resetting the i2c bus
+    if (HAL_TIMEOUT == status)
+    {
+        DEBUG_PR_WARN("syshal_i2c_receive timeout, reset");
+        syshal_i2c_term(instance);
+        syshal_i2c_init(instance);
+    }
 
     // return number of bytes read as best we can tell
     if (HAL_OK != status)
@@ -153,6 +169,14 @@ int syshal_i2c_read_reg(uint32_t instance, uint8_t slaveAddress, uint8_t regAddr
 
     status = HAL_I2C_Mem_Read(&hi2c[instance], (uint16_t)(slaveAddress << 1), regAddress, 1, data, size, I2C_TIMEOUT);
 
+    // We've timed out. Lets try resetting the i2c bus
+    if (HAL_TIMEOUT == status)
+    {
+        DEBUG_PR_WARN("syshal_i2c_read_reg timeout, reset");
+        syshal_i2c_term(instance);
+        syshal_i2c_init(instance);
+    }
+
     // return number of bytes read as best we can tell
     if (HAL_OK != status)
     {
@@ -177,6 +201,14 @@ int syshal_i2c_write_reg(uint32_t instance, uint8_t slaveAddress, uint8_t regAdd
     HAL_StatusTypeDef status = HAL_ERROR;
 
     status = HAL_I2C_Mem_Write(&hi2c[instance], (uint16_t)(slaveAddress << 1), regAddress, 1, data, size, I2C_TIMEOUT);
+
+    // We've timed out. Lets try resetting the i2c bus
+    if (HAL_TIMEOUT == status)
+    {
+        DEBUG_PR_WARN("HAL_I2C_Mem_Write timeout, reset");
+        syshal_i2c_term(instance);
+        syshal_i2c_init(instance);
+    }
 
     if (HAL_OK != status)
     {
