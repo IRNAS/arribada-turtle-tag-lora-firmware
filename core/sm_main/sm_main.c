@@ -2396,7 +2396,7 @@ static void fw_apply_image_req(cmd_t * req, uint16_t size)
                         syshal_ble_config_fw_upgrade(stat.size, 0);
 
                         uint32_t toggleLedTime = syshal_time_get_ticks_ms();
-                        const uint32_t ledTogglePeriodMs = 1000;
+                        const uint32_t ledTogglePeriodMs = 200;
 
                         do
                         {
