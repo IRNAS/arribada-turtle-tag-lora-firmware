@@ -602,7 +602,10 @@ void logging_add_to_buffer(uint8_t * data, uint32_t size)
     uint32_t length = 0;
     uint8_t * buf_ptr;
     if (!buffer_write(&logging_buffer, (uintptr_t *)&buf_ptr))
-        Throw(EXCEPTION_LOG_BUFFER_FULL);
+    {
+        DEBUG_PR_ERROR("LOG BUFFER FULL");
+        return; // If our logging buffer is full then just ignore this data
+    }
 
     // Are we supposed to be adding a timestamp with this value?
     if (sys_config.sys_config_logging_date_time_stamp_enable.contents.enable)
@@ -748,8 +751,7 @@ void syshal_gps_callback(syshal_gps_event_t event)
 
                 // If TTFF logging is enabled then log this
                 if (!gps_ttff_reading_logged &&
-                    sys_config.sys_config_gps_log_ttff_enable.contents.enable &&
-                    sensor_logging_enabled)
+                    sys_config.sys_config_gps_log_ttff_enable.contents.enable)
                 {
                     logging_gps_ttff_t gps_ttff;
 
@@ -803,20 +805,17 @@ void syshal_gps_callback(syshal_gps_event_t event)
                 sys_config.sys_config_gps_last_known_position.contents.vAcc = event.event_data.location.vAcc;
 
                 // Add data to be logged
-                if (sensor_logging_enabled)
-                {
-                    logging_gps_position_t position;
+                logging_gps_position_t position;
 
-                    LOGGING_SET_HDR(&position, LOGGING_GPS_POSITION);
-                    position.iTOW = event.event_data.location.iTOW;
-                    position.lon = event.event_data.location.lon;
-                    position.lat = event.event_data.location.lat;
-                    position.height = event.event_data.location.hMSL;
-                    position.hAcc = event.event_data.location.hAcc;
-                    position.vAcc = event.event_data.location.vAcc;
+                LOGGING_SET_HDR(&position, LOGGING_GPS_POSITION);
+                position.iTOW = event.event_data.location.iTOW;
+                position.lon = event.event_data.location.lon;
+                position.lat = event.event_data.location.lat;
+                position.height = event.event_data.location.hMSL;
+                position.hAcc = event.event_data.location.hAcc;
+                position.vAcc = event.event_data.location.vAcc;
 
-                    logging_add_to_buffer((uint8_t *) &position, sizeof(position));
-                }
+                logging_add_to_buffer((uint8_t *) &position, sizeof(position));
             }
             break;
 
@@ -2577,6 +2576,8 @@ static void log_create_req(cmd_t * req, uint16_t size)
                 sys_config_logging_file_size_t log_file_size;
                 log_file_size.contents.file_size = 0; // File is currently of zero size
                 sys_config_set(SYS_CONFIG_TAG_LOGGING_FILE_SIZE, &log_file_size.contents, SYS_CONFIG_TAG_DATA_SIZE(sys_config_logging_file_size_t));
+
+                buffer_reset(&logging_buffer); // Clear anything we were looking to flush to the log file
                 break;
 
             case FS_ERROR_FILE_ALREADY_EXISTS:
@@ -3235,10 +3236,6 @@ static void sm_main_operational(sm_handle_t * state_handle)
             Throw(EXCEPTION_FS_ERROR);
         }
 
-        // All systems go
-        // Flush any data that we previously may have in the buffers and start fresh
-        buffer_reset(&logging_buffer);
-
         // Clear any current timers
         syshal_timer_cancel_all();
 
@@ -3560,7 +3557,7 @@ static void sm_main_operational(sm_handle_t * state_handle)
         syshal_timer_cancel(timer_axl_interval);
         syshal_timer_cancel(timer_axl_maximum_acquisition);
 
-        sensor_logging_enabled = false; // Prevent any sensors from logging
+        sensor_logging_enabled = false; // Prevent any sensors from logging but still other logs eg. BLE connection events
     }
 }
 
