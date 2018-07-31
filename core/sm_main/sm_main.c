@@ -790,30 +790,33 @@ void syshal_gps_callback(syshal_gps_event_t event)
         case SYSHAL_GPS_EVENT_POSLLH:
             DEBUG_PR_TRACE("SYSHAL_GPS_EVENT_POSLLH - lat,long: %ld,%ld", event.event_data.location.lat, event.event_data.location.lon);
 
-            // Store this value into our last known location configuration interface tag
-            sys_config.sys_config_gps_last_known_position.hdr.set = true;
-            sys_config.sys_config_gps_last_known_position.contents.iTOW = event.event_data.location.iTOW;
-            sys_config.sys_config_gps_last_known_position.contents.lon = event.event_data.location.lon;
-            sys_config.sys_config_gps_last_known_position.contents.lat = event.event_data.location.lat;
-            sys_config.sys_config_gps_last_known_position.contents.height = event.event_data.location.hMSL;
-            sys_config.sys_config_gps_last_known_position.contents.hAcc = event.event_data.location.hAcc;
-            sys_config.sys_config_gps_last_known_position.contents.vAcc = event.event_data.location.vAcc;
-
-            // Add data to be logged
-            if ( (SM_GPS_STATE_FIXED == sm_gps_state) &&
-                 sensor_logging_enabled)
+            // If we have a GPS fix
+            if (SM_GPS_STATE_FIXED == sm_gps_state)
             {
-                logging_gps_position_t position;
+                // Store this value into our last known location configuration interface tag
+                sys_config.sys_config_gps_last_known_position.hdr.set = true;
+                sys_config.sys_config_gps_last_known_position.contents.iTOW = event.event_data.location.iTOW;
+                sys_config.sys_config_gps_last_known_position.contents.lon = event.event_data.location.lon;
+                sys_config.sys_config_gps_last_known_position.contents.lat = event.event_data.location.lat;
+                sys_config.sys_config_gps_last_known_position.contents.height = event.event_data.location.hMSL;
+                sys_config.sys_config_gps_last_known_position.contents.hAcc = event.event_data.location.hAcc;
+                sys_config.sys_config_gps_last_known_position.contents.vAcc = event.event_data.location.vAcc;
 
-                LOGGING_SET_HDR(&position, LOGGING_GPS_POSITION);
-                position.iTOW = event.event_data.location.iTOW;
-                position.lon = event.event_data.location.lon;
-                position.lat = event.event_data.location.lat;
-                position.height = event.event_data.location.hMSL;
-                position.hAcc = event.event_data.location.hAcc;
-                position.vAcc = event.event_data.location.vAcc;
+                // Add data to be logged
+                if (sensor_logging_enabled)
+                {
+                    logging_gps_position_t position;
 
-                logging_add_to_buffer((uint8_t *) &position, sizeof(position));
+                    LOGGING_SET_HDR(&position, LOGGING_GPS_POSITION);
+                    position.iTOW = event.event_data.location.iTOW;
+                    position.lon = event.event_data.location.lon;
+                    position.lat = event.event_data.location.lat;
+                    position.height = event.event_data.location.hMSL;
+                    position.hAcc = event.event_data.location.hAcc;
+                    position.vAcc = event.event_data.location.vAcc;
+
+                    logging_add_to_buffer((uint8_t *) &position, sizeof(position));
+                }
             }
             break;
 
