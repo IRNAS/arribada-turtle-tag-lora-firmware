@@ -41,16 +41,14 @@
 #define LOGGING_BLE_CONNECTED     (0x0C) // Bluetooth GATT connection has been made
 #define LOGGING_BLE_DISCONNECTED  (0x0D) // Bluetooth GATT connection has been released
 
-#define LOGGING_BLE_ENABLED_CAUSE_REED_SWITCH     (0x00)
-#define LOGGING_BLE_ENABLED_CAUSE_SCHEDULE_TIMER  (0x01)
-#define LOGGING_BLE_ENABLED_CAUSE_GEOFENCE        (0x02)
+#define LOGGING_BLE_ENABLED_CAUSE_REED_SWITCH          (0x00)
+#define LOGGING_BLE_ENABLED_CAUSE_SCHEDULE_TIMER       (0x01)
+#define LOGGING_BLE_ENABLED_CAUSE_GEOFENCE             (0x02)
 
-#define LOGGING_BLE_DISABLED_CAUSE_REED_SWITCH    (0x00)
-#define LOGGING_BLE_DISABLED_CAUSE_SCHEDULE_TIMER (0x01)
-#define LOGGING_BLE_DISABLED_CAUSE_GEOFENCE       (0x02)
-
-#define LOGGING_BLE_DISCONNECTED_CAUSE_DISCONNECT (0x00)
-#define LOGGING_BLE_DISCONNECTED_CAUSE_INACTIVITY (0x01)
+#define LOGGING_BLE_DISABLED_CAUSE_REED_SWITCH         (0x00)
+#define LOGGING_BLE_DISABLED_CAUSE_SCHEDULE_TIMER      (0x01)
+#define LOGGING_BLE_DISABLED_CAUSE_GEOFENCE            (0x02)
+#define LOGGING_BLE_DISABLED_CAUSE_INACTIVITY_TIMEOUT  (0x03)
 
 typedef struct __attribute__((__packed__))
 {
@@ -146,7 +144,11 @@ typedef struct __attribute__((__packed__))
 typedef struct __attribute__((__packed__))
 {
     logging_hdr_t h;
-    uint8_t cause;
-} logging_ble_disconnect_t;
+} logging_ble_connected_t;
+
+typedef struct __attribute__((__packed__))
+{
+    logging_hdr_t h;
+} logging_ble_disconnected_t;
 
 #endif /* _LOGGING_H_ */

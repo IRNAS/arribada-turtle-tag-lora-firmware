@@ -658,7 +658,26 @@ void manage_ble(void)
 
     if (ble_state &&
         CONFIG_IF_BACKEND_NOT_SET == config_if_current())
+    {
+        // Should we log this event
+        if (sys_config.sys_config_tag_bluetooth_log_enable.hdr.set &&
+            sys_config.sys_config_tag_bluetooth_log_enable.contents.enable)
+        {
+            logging_ble_enabled_t ble_enabled;
+            LOGGING_SET_HDR(&ble_enabled, LOGGING_BLE_ENABLED);
+
+            if (ble_state & SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_REED_SWITCH)
+                ble_enabled.cause = LOGGING_BLE_ENABLED_CAUSE_REED_SWITCH;
+            else if (ble_state & SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_SCHEDULED)
+                ble_enabled.cause = LOGGING_BLE_ENABLED_CAUSE_SCHEDULE_TIMER;
+            else if (ble_state & SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_GEOFENCE)
+                ble_enabled.cause = LOGGING_BLE_ENABLED_CAUSE_GEOFENCE;
+
+            logging_add_to_buffer((uint8_t *) &ble_enabled, sizeof(ble_enabled));
+        }
+
         config_if_init(CONFIG_IF_BACKEND_BLE);
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -739,7 +758,7 @@ void syshal_gps_callback(syshal_gps_event_t event)
 
             if (event.event_data.status.gpsFix > 0)
             {
-                
+
                 if (SM_GPS_STATE_ASLEEP != sm_gps_state) // If we haven't already slept the GPS
                 {
                     syshal_timer_cancel(timer_gps_no_fix); // Clear any no fix timer
@@ -906,6 +925,16 @@ static void gpio_reed_sw_callback(void)
                 if (!ble_state &&
                     CONFIG_IF_BACKEND_BLE == config_if_current())
                 {
+                    // Should we log this event
+                    if (sys_config.sys_config_tag_bluetooth_log_enable.hdr.set &&
+                        sys_config.sys_config_tag_bluetooth_log_enable.contents.enable)
+                    {
+                        logging_ble_enabled_t ble_disabled;
+                        LOGGING_SET_HDR(&ble_disabled, LOGGING_BLE_DISABLED);
+                        ble_disabled.cause = LOGGING_BLE_DISABLED_CAUSE_REED_SWITCH;
+                        logging_add_to_buffer((uint8_t *) &ble_disabled, sizeof(ble_disabled));
+                    }
+
                     // If so then terminate it
                     config_if_term();
 
@@ -1097,6 +1126,16 @@ static void timer_ble_duration_callback(void)
     if (!config_if_connected &&
         !ble_state) // And there is no other reason to keep the BLE interface running
     {
+        // Should we log this event
+        if (sys_config.sys_config_tag_bluetooth_log_enable.hdr.set &&
+            sys_config.sys_config_tag_bluetooth_log_enable.contents.enable)
+        {
+            logging_ble_enabled_t ble_disabled;
+            LOGGING_SET_HDR(&ble_disabled, LOGGING_BLE_DISABLED);
+            ble_disabled.cause = LOGGING_BLE_DISABLED_CAUSE_SCHEDULE_TIMER;
+            logging_add_to_buffer((uint8_t *) &ble_disabled, sizeof(ble_disabled));
+        }
+
         // Then terminate it
         config_if_term();
     }
@@ -1114,6 +1153,16 @@ static void timer_ble_timeout_callback(void)
         !ble_state && // And there is no other reason to keep the BLE interface running (e.g. reed switch)
         CONFIG_IF_BACKEND_BLE == config_if_current()) // And we are currently using the bluetooth interface
     {
+        // Should we log this event
+        if (sys_config.sys_config_tag_bluetooth_log_enable.hdr.set &&
+            sys_config.sys_config_tag_bluetooth_log_enable.contents.enable)
+        {
+            logging_ble_enabled_t ble_disabled;
+            LOGGING_SET_HDR(&ble_disabled, LOGGING_BLE_DISABLED);
+            ble_disabled.cause = LOGGING_BLE_DISABLED_CAUSE_INACTIVITY_TIMEOUT;
+            logging_add_to_buffer((uint8_t *) &ble_disabled, sizeof(ble_disabled));
+        }
+
         // If so then terminate it
         config_if_term();
 
@@ -2815,6 +2864,17 @@ int config_if_callback(config_if_event_t * event)
 
         case CONFIG_IF_EVENT_CONNECTED:
             DEBUG_PR_TRACE("CONFIG_IF_EVENT_CONNECTED");
+
+            // Should we log this event
+            if (CONFIG_IF_BACKEND_BLE == event->backend)
+                if (sys_config.sys_config_tag_bluetooth_log_enable.hdr.set &&
+                    sys_config.sys_config_tag_bluetooth_log_enable.contents.enable)
+                {
+                    logging_ble_connected_t ble_connected;
+                    LOGGING_SET_HDR(&ble_connected, LOGGING_BLE_CONNECTED);
+                    logging_add_to_buffer((uint8_t *) &ble_connected, sizeof(ble_connected));
+                }
+
             config_if_session_cleanup(); // Clean up any previous session
             config_if_timeout_reset(); // Reset our timeout counter
             config_if_connected = true;
@@ -2822,6 +2882,17 @@ int config_if_callback(config_if_event_t * event)
 
         case CONFIG_IF_EVENT_DISCONNECTED:
             DEBUG_PR_TRACE("CONFIG_IF_EVENT_DISCONNECTED");
+
+            // Should we log this event
+            if (CONFIG_IF_BACKEND_BLE == event->backend)
+                if (sys_config.sys_config_tag_bluetooth_log_enable.hdr.set &&
+                    sys_config.sys_config_tag_bluetooth_log_enable.contents.enable)
+                {
+                    logging_ble_disconnected_t ble_disconnected;
+                    LOGGING_SET_HDR(&ble_disconnected, LOGGING_BLE_DISCONNECTED);
+                    logging_add_to_buffer((uint8_t *) &ble_disconnected, sizeof(ble_disconnected));
+                }
+
             syshal_timer_cancel(timer_ble_timeout);
             // Clear all pending transmissions/receptions
             config_if_session_cleanup();
