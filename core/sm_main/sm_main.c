@@ -607,25 +607,50 @@ void logging_add_to_buffer(uint8_t * data, uint32_t size)
         return; // If our logging buffer is full then just ignore this data
     }
 
+    static syshal_rtc_data_and_time_t last_log_time;
+
     // Are we supposed to be adding a timestamp with this value?
     if (sys_config.sys_config_logging_date_time_stamp_enable.contents.enable)
     {
-        logging_date_time_t * date_time = (logging_date_time_t *) buf_ptr;
+        syshal_rtc_data_and_time_t current_time;
+        bool log_time = true;
 
-        LOGGING_SET_HDR(date_time, LOGGING_DATE_TIME);
+        syshal_rtc_get_date_and_time(&current_time);
 
-        syshal_rtc_data_and_time_t rtc_time;
-        syshal_rtc_get_date_and_time(&rtc_time);
+        // Are we supposed to be grouping every log entry that happens within the same second together?
+        if (sys_config.sys_config_logging_group_sensor_readings_enable.hdr.set &&
+            sys_config.sys_config_logging_group_sensor_readings_enable.contents.enable)
+        {
+            // Has our time changed since the last log entry?
+            if (last_log_time.year == current_time.year ||
+                last_log_time.month == current_time.month ||
+                last_log_time.day == current_time.day ||
+                last_log_time.hours == current_time.hours ||
+                last_log_time.minutes == current_time.minutes ||
+                last_log_time.seconds == current_time.seconds)
+            {
+                last_log_time = current_time;
+                log_time = false; // Time has no changed, so do not log it
+            }
 
-        date_time->year = rtc_time.year;
-        date_time->month = rtc_time.month;
-        date_time->day = rtc_time.day;
-        date_time->hours = rtc_time.hours;
-        date_time->minutes = rtc_time.minutes;
-        date_time->seconds = rtc_time.seconds;
+        }
 
-        buf_ptr += sizeof(logging_date_time_t);
-        length += sizeof(logging_date_time_t);
+        if (log_time)
+        {
+            logging_date_time_t * date_time = (logging_date_time_t *) buf_ptr;
+
+            LOGGING_SET_HDR(date_time, LOGGING_DATE_TIME);
+
+            date_time->year = current_time.year;
+            date_time->month = current_time.month;
+            date_time->day = current_time.day;
+            date_time->hours = current_time.hours;
+            date_time->minutes = current_time.minutes;
+            date_time->seconds = current_time.seconds;
+
+            buf_ptr += sizeof(logging_date_time_t);
+            length += sizeof(logging_date_time_t);
+        }
     }
 
     if (sys_config.sys_config_logging_high_resolution_timer_enable.contents.enable)
