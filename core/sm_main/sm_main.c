@@ -3339,11 +3339,6 @@ static void sm_main_operational(sm_handle_t * state_handle)
         leds_flashing = true;
         led_flashing_start_time = 0;
 
-        // Ensure the GPS module is off
-        if (SM_GPS_STATE_ASLEEP != sm_gps_state)
-            syshal_gps_shutdown();
-        sm_gps_state = SM_GPS_STATE_ASLEEP;
-
         // Start the log file flushing timer
         syshal_timer_set(timer_log_flush, periodic, LOG_FILE_FLUSH_PERIOD_SECONDS);
 
