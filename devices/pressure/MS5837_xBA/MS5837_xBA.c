@@ -163,6 +163,7 @@ uint32_t MS5837_xBA_get_adc(uint8_t measurement, uint8_t precision)
         case CMD_ADC_1024: syshal_time_delay_ms(4); break;
         case CMD_ADC_2048: syshal_time_delay_ms(6); break;
         case CMD_ADC_4096: syshal_time_delay_ms(10); break;
+        case CMD_ADC_8192: syshal_time_delay_ms(20); break;
     }
 
     // Issue an ADC read command
