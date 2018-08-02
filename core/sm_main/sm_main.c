@@ -610,7 +610,8 @@ void logging_add_to_buffer(uint8_t * data, uint32_t size)
     static syshal_rtc_data_and_time_t last_log_time;
 
     // Are we supposed to be adding a timestamp with this value?
-    if (sys_config.sys_config_logging_date_time_stamp_enable.contents.enable)
+    if (sys_config.sys_config_logging_date_time_stamp_enable.hdr.set &&
+        sys_config.sys_config_logging_date_time_stamp_enable.contents.enable)
     {
         syshal_rtc_data_and_time_t current_time;
         bool log_time = true;
