@@ -125,12 +125,20 @@ typedef enum
     UBX_MSG_ID_LOG_INFO = 0x08,
 } UBX_MessageID_LOG_t;
 
+/****************************** ACK *************************************/
+
 /* This message can be concatenated multiple times into a single message */
 typedef struct
 {
     uint8_t  clsID;
     uint8_t  msgID;
 } UBX_ACK_t;
+
+typedef struct
+{
+    uint8_t  clsID;
+    uint8_t  msgID;
+} UBX_NACK_t;
 
 /****************************** CFG *************************************/
 
@@ -518,6 +526,8 @@ typedef struct
     union
     {
         uint8_t             payloadAndCrc[1018];  /* CRC is appended to payload */
+        UBX_ACK_t           UBX_ACK;
+        UBX_NACK_t          UBX_NACK;
         UBX_CFG_CFG_t       UBX_CFG_CFG;
         UBX_CFG_MSG_POLL_t  UBX_CFG_MSG_POLL;
         UBX_LOG_INFO_t      UBX_LOG_INFO;
