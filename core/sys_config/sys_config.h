@@ -212,6 +212,13 @@ typedef struct __attribute__((__packed__))
         int32_t height;  // Height in mm
         uint32_t hAcc;   // Horizontal accuracy estimate
         uint32_t vAcc;   // Vertical accuracy estimate
+
+        uint16_t year;
+        uint8_t month;
+        uint8_t day;
+        uint8_t hours;
+        uint8_t minutes;
+        uint8_t seconds;
     } contents;
 } sys_config_gps_last_known_position_t;
 

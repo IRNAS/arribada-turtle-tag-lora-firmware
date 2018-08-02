@@ -856,6 +856,16 @@ void syshal_gps_callback(syshal_gps_event_t event)
                 sys_config.sys_config_gps_last_known_position.contents.hAcc = event.event_data.location.hAcc;
                 sys_config.sys_config_gps_last_known_position.contents.vAcc = event.event_data.location.vAcc;
 
+                syshal_rtc_data_and_time_t current_time;
+                syshal_rtc_get_date_and_time(&current_time);
+
+                sys_config.sys_config_gps_last_known_position.contents.day = current_time.day;
+                sys_config.sys_config_gps_last_known_position.contents.month = current_time.month;
+                sys_config.sys_config_gps_last_known_position.contents.year = current_time.year;
+                sys_config.sys_config_gps_last_known_position.contents.hours = current_time.hours;
+                sys_config.sys_config_gps_last_known_position.contents.minutes = current_time.minutes;
+                sys_config.sys_config_gps_last_known_position.contents.seconds = current_time.seconds;
+
                 // Add data to be logged
                 logging_gps_position_t position;
 
