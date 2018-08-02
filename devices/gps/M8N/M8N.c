@@ -55,8 +55,6 @@ void syshal_gps_init(void)
         DEBUG_PR_TRACE("%s(), changing baudrate to %lu", __FUNCTION__, sys_config.sys_config_gps_uart_baud_rate.contents.baudrate);
     }
 
-    syshal_uart_change_baud(GPS_UART, 460800);
-
     // Clear any prior NACK messages
     last_nack.clsID = 0xFF;
     last_nack.msgID = 0xFF;
@@ -250,8 +248,6 @@ static void syshal_gps_process_nav_posllh_priv(UBX_Packet_t * packet)
 
 static void syshal_gps_process_nack_priv(UBX_Packet_t * packet)
 {
-    DEBUG_PR_TRACE("GPS NACK received: Class: %u ID: %u", packet->UBX_NACK.clsID, packet->UBX_NACK.msgID);
-
     last_nack.clsID = packet->UBX_NACK.clsID;
     last_nack.msgID = packet->UBX_NACK.msgID;
 }
@@ -296,51 +292,16 @@ void syshal_gps_look_for_nack(void)
     UBX_Packet_t ubx_packet;
     int error;
 
-    do
+    error = syshal_gps_parse_rx_buffer_priv(&ubx_packet);
+
+    // Correct packet so process it
+    if (GPS_UART_NO_ERROR == error)
     {
-        error = syshal_gps_parse_rx_buffer_priv(&ubx_packet);
-
-        if (GPS_UART_ERROR_CHECKSUM == error)
-        {
-            DEBUG_PR_TRACE("GPS Checksum error");
-        }
-        else if (GPS_UART_ERROR_MSG_TOO_BIG == error)
-        {
-            DEBUG_PR_TRACE("GPS Message too big");
-        }
-        else if (GPS_UART_ERROR_INSUFFICIENT_BYTES == error)
-        {
-            //DEBUG_PR_TRACE("GPS Uart insufficient bytes");
-            break;
-        }
-        else if (GPS_UART_ERROR_MISSING_SYNC1 == error)
-        {
-            DEBUG_PR_TRACE("GPS missing Sync1");
-        }
-        else if (GPS_UART_ERROR_MISSING_SYNC2 == error)
-        {
-            DEBUG_PR_TRACE("GPS missing Sync2");
-        }
-        else if (GPS_UART_ERROR_MSG_PENDING == error)
-        {
-            DEBUG_PR_TRACE("GPS message not fully received");
-        }
-        else if (GPS_UART_NO_ERROR != error)
-        {
-            DEBUG_PR_TRACE("GPS Generic comm error");
-        }
-
-        // Correct packet so process it
-        if (GPS_UART_NO_ERROR == error)
-        {
-            if (UBX_IS_MSG(&ubx_packet, UBX_MSG_CLASS_ACK, UBX_MSG_ID_ACK_NACK))
-                syshal_gps_process_nack_priv(&ubx_packet);
-            else
-                DEBUG_PR_WARN("Unexpected GPS message class: (0x%02X) id: (0x%02X)", ubx_packet.msgClass, ubx_packet.msgId);
-        }
-
+        if (UBX_IS_MSG(&ubx_packet, UBX_MSG_CLASS_ACK, UBX_MSG_ID_ACK_NACK))
+            syshal_gps_process_nack_priv(&ubx_packet);
+        else
+            DEBUG_PR_WARN("Unexpected GPS message class: (0x%02X) id: (0x%02X)", ubx_packet.msgClass, ubx_packet.msgId);
     }
-    while ( error == GPS_UART_NO_ERROR ); // Repeat this for every packet correctly received
 }
 
 static bool syshal_gps_device_responsive_priv(void)
