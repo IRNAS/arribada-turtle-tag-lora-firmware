@@ -21,7 +21,7 @@
 
 #include <stdint.h>
 
-#define MS5837_I2C_ADDRESS    (0x77)
+#define MS5837_I2C_ADDRESS    (0x76)
 
 #define CMD_RESET       (0x1E) // ADC reset command
 #define CMD_PROM        (0xA0) // PROM location

@@ -38,8 +38,8 @@ int syshal_pressure_init(void)
     // Read PROM contents
     MS5837_xBA_read_prom(&MS5837_xBA_coefficient[0]);
 
-    // The last 4 bits of the 7th coefficient form a CRC error checking code.
-    uint8_t crc4_read = MS5837_xBA_coefficient[7];
+    // The last 4 bits of the 1st prom region form a CRC error checking code.
+    uint8_t crc4_read = MS5837_xBA_coefficient[0] >> 12;
 
     // Calculate the actual crc value
     uint8_t crc4_actual = MS5837_xBA_calculate_crc4(&MS5837_xBA_coefficient[0]);
@@ -135,7 +135,7 @@ void MS5837_xBA_send_command(uint8_t command)
 
 void MS5837_xBA_read_prom(uint16_t prom[])
 {
-    for (uint32_t i = 0; i < 8; ++i)
+    for (uint32_t i = 0; i < 7; ++i)
     {
         uint8_t read_buffer[2];
 

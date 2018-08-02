@@ -42,7 +42,7 @@ int32_t MS5837_get_pressure(void)
     TEMP = (((int64_t)dT * MS5837_xBA_coefficient[6]) >> 23) + 2000;
 
     // Offset at actual temperature
-    // OFF = C2 * 2^16 + (C4 * dT ) / 2^7
+    // OFF = C2 * 2^16 + ( C4 * dT ) / 2^7
     OFF = ((int64_t)MS5837_xBA_coefficient[2] << 16) + (((MS5837_xBA_coefficient[4] * (int64_t)dT)) >> 7);
 
     // Sensitivity at actual temperature
@@ -51,7 +51,7 @@ int32_t MS5837_get_pressure(void)
 
     /* Calculate second order coefficients */
 
-    if (TEMP < 2000) // If temp is below 20.0C
+    if (TEMP / 100 < 20) // If temp is below 20.0C
     {
         // T2 = 3 * dT^2 / 2^33
         T2 = 3 * (((int64_t)dT * dT) >> 33);
@@ -96,8 +96,8 @@ int32_t MS5837_get_pressure(void)
 
     /* Calculate pressure */
 
-    // P = (D1 * SENS / 2^21 - OFF) / 2^15
-    int32_t pressure = (((SENS * D1) >> 21 ) - OFF) >> 15;
+    // P = (D1 * SENS / 2^21 - OFF) / 2^13
+    int32_t pressure = ((((SENS * D1) >> 21 ) - OFF) >> 13) / 10;
 
     return pressure;
 }
