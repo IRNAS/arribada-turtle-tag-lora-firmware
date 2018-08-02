@@ -1345,6 +1345,14 @@ static int fs_get_configuration_data(void)
     if (bytes_read != sizeof(sys_config))
     {
         DEBUG_PR_WARN("%s() size mismatch", __FUNCTION__);
+
+        // We have an erroneous configuration file, so lets unset all the tags we may have set incorrectly
+        uint16_t last_index = 0;
+        uint16_t tag;
+
+        while (!sys_config_iterate(&tag, &last_index))
+            sys_config_unset(tag);
+
         return FS_ERROR_FILE_VERSION_MISMATCH;
     }
 
