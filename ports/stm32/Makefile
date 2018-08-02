@@ -22,6 +22,7 @@ CMSIS_DIR = drivers/CMSIS
 USB_DIR = drivers/STM32_USB_Device_Library
 CORE_DIR = ../../core
 DEVICE_DIR = ../../devices
+SYSHAL_DIR = ../../syshal
 
 # Build path
 BUILD_DIR = build
@@ -75,8 +76,8 @@ $(USB_DIR)/Core/Src/usbd_ioreq.c \
 usb/usbd_conf.c \
 usb/usbd_desc.c \
 usb/usbd_vendor.c \
-../../syshal/src/syshal_switch.c \
-../../syshal/src/syshal_timer.c \
+$(SYSHAL_DIR)/syshal/src/syshal_switch.c \
+$(SYSHAL_DIR)/syshal/src/syshal_timer.c \
 syshal/syshal_firmware.c \
 syshal/syshal_gpio.c \
 syshal/syshal_i2c.c \
@@ -163,7 +164,7 @@ C_INCLUDES =  \
 -I$(STMHAL_DIR)/Inc \
 -I$(STMHAL_DIR)/Inc/Legacy \
 -I$(USB_DIR)/Core/Inc \
--I../../syshal/inc \
+-I$(SYSHAL_DIR)/inc \
 -Iboards/$(BOARD) \
 -Iusb \
 -I.
