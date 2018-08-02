@@ -41,7 +41,6 @@ int main(void)
 
     // Set all pins to Analog to reduce power consumption on unused pins
     GPIO_InitTypeDef GPIO_Init;
-    GPIO_Init.Pin = GPIO_PIN_All;
     GPIO_Init.Mode = GPIO_MODE_ANALOG;
     GPIO_Init.Pull = GPIO_NOPULL;
     GPIO_Init.Speed = GPIO_SPEED_FREQ_LOW;
@@ -55,7 +54,9 @@ int main(void)
     __HAL_RCC_GPIOE_CLK_ENABLE();
     __HAL_RCC_GPIOF_CLK_ENABLE();
 
+    GPIO_Init.Pin = GPIO_PIN_All & ~(GPIO_PIN_13 | GPIO_PIN_14); // Don't change the SWDIO or SWDCLK lines as these are used for the debugging interface
     HAL_GPIO_Init(GPIOA, &GPIO_Init);
+    GPIO_Init.Pin = GPIO_PIN_All;
     HAL_GPIO_Init(GPIOB, &GPIO_Init);
     HAL_GPIO_Init(GPIOC, &GPIO_Init);
     HAL_GPIO_Init(GPIOD, &GPIO_Init);
@@ -63,7 +64,7 @@ int main(void)
     HAL_GPIO_Init(GPIOF, &GPIO_Init);
 
     // PORT A
-    GPIO_Init.Pin = GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7 | GPIO_PIN_9 | GPIO_PIN_11 | GPIO_PIN_12 | GPIO_PIN_13 | GPIO_PIN_14;
+    GPIO_Init.Pin = GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7 | GPIO_PIN_9 | GPIO_PIN_11 | GPIO_PIN_12;
     GPIO_Init.Mode = GPIO_MODE_INPUT;
     GPIO_Init.Pull = GPIO_PULLDOWN;
     GPIO_Init.Speed = GPIO_SPEED_FREQ_LOW;
