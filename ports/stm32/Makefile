@@ -76,8 +76,8 @@ $(USB_DIR)/Core/Src/usbd_ioreq.c \
 usb/usbd_conf.c \
 usb/usbd_desc.c \
 usb/usbd_vendor.c \
-$(SYSHAL_DIR)/syshal/src/syshal_switch.c \
-$(SYSHAL_DIR)/syshal/src/syshal_timer.c \
+$(SYSHAL_DIR)/src/syshal_switch.c \
+$(SYSHAL_DIR)/src/syshal_timer.c \
 syshal/syshal_firmware.c \
 syshal/syshal_gpio.c \
 syshal/syshal_i2c.c \
