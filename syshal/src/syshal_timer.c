@@ -33,7 +33,7 @@ typedef struct
     void (*callback)(void);   // The function that is called when the timer is triggered
 } syshal_timer_t;
 
-static syshal_timer_t timers_priv[SYSHAL_TIMER_NUMBER_OF_TIMERS];
+static volatile syshal_timer_t timers_priv[SYSHAL_TIMER_NUMBER_OF_TIMERS];
 
 uint32_t syshal_timer_time_in_milliseconds_priv(void)
 {

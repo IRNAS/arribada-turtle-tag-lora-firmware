@@ -1130,12 +1130,6 @@ static void timer_ble_interval_callback(void)
         sys_config.sys_config_tag_bluetooth_trigger_control.hdr.set &&
         sys_config.sys_config_tag_bluetooth_trigger_control.contents.flags | SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_SCHEDULED)
     {
-        // Should we be starting a BLE inactivity timer?
-        if (sys_config.sys_config_tag_bluetooth_connection_inactivity_timeout.hdr.set)
-        {
-            syshal_timer_set(timer_ble_timeout, one_shot, sys_config.sys_config_tag_bluetooth_connection_inactivity_timeout.contents.seconds);
-        }
-
         ble_state |= SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_SCHEDULED;
         syshal_timer_set(timer_ble_duration, one_shot, sys_config.sys_config_tag_bluetooth_scheduled_duration.contents.seconds);
     }
@@ -2892,8 +2886,10 @@ int config_if_callback(config_if_event_t * event)
         case CONFIG_IF_EVENT_CONNECTED:
             DEBUG_PR_TRACE("CONFIG_IF_EVENT_CONNECTED");
 
-            // Should we log this event
+            // Was this a bluetooth connection?
             if (CONFIG_IF_BACKEND_BLE == event->backend)
+            {
+                // Should we log this event
                 if (sys_config.sys_config_tag_bluetooth_log_enable.hdr.set &&
                     sys_config.sys_config_tag_bluetooth_log_enable.contents.enable)
                 {
@@ -2901,6 +2897,14 @@ int config_if_callback(config_if_event_t * event)
                     LOGGING_SET_HDR(&ble_connected, LOGGING_BLE_CONNECTED);
                     logging_add_to_buffer((uint8_t *) &ble_connected, sizeof(ble_connected));
                 }
+
+                // Should we be starting a BLE inactivity timer?
+                if (sys_config.sys_config_tag_bluetooth_connection_inactivity_timeout.hdr.set &&
+                    sys_config.sys_config_tag_bluetooth_connection_inactivity_timeout.contents.seconds)
+                {
+                    syshal_timer_set(timer_ble_timeout, one_shot, sys_config.sys_config_tag_bluetooth_connection_inactivity_timeout.contents.seconds);
+                }
+            }
 
             config_if_session_cleanup(); // Clean up any previous session
             config_if_timeout_reset(); // Reset our timeout counter
