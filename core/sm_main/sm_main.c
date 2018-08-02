@@ -675,9 +675,16 @@ void manage_ble(void)
         sys_config.sys_config_tag_bluetooth_trigger_control.hdr.set &&
         sys_config.sys_config_tag_bluetooth_trigger_control.contents.flags & SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_SCHEDULED)
     {
-        if (!syshal_timer_running(timer_ble_interval))
+        if (sys_config.sys_config_tag_bluetooth_scheduled_interval.contents.seconds)
         {
-            syshal_timer_set(timer_ble_interval, periodic, sys_config.sys_config_tag_bluetooth_scheduled_interval.contents.seconds);
+            if (!syshal_timer_running(timer_ble_interval))
+            {
+                syshal_timer_set(timer_ble_interval, periodic, sys_config.sys_config_tag_bluetooth_scheduled_interval.contents.seconds);
+            }
+        }
+        else
+        {
+            ble_state |= SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_SCHEDULED; // As the scheduled interval = 0 this is a special case to mean bluetooth is always on
         }
     }
     else
