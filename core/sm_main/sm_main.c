@@ -202,7 +202,6 @@ static volatile buffer_t logging_buffer;
 static volatile uint8_t  config_if_send_buffer_pool[SYSHAL_USB_PACKET_SIZE * 2];
 static volatile uint8_t  config_if_receive_buffer_pool[SYSHAL_USB_PACKET_SIZE];
 static volatile uint8_t  logging_buffer_pool[LOGGING_BUFFER_SIZE * LOGGING_FIFO_DEPTH];
-static uint8_t           spi_bridge_buffer[SYSHAL_USB_PACKET_SIZE + 1];
 static uint32_t          config_if_message_timeout;
 static volatile bool     config_if_connected = false;
 static fs_t              file_system;
@@ -631,7 +630,7 @@ void logging_add_to_buffer(uint8_t * data, uint32_t size)
                 last_log_time.seconds == current_time.seconds)
             {
                 last_log_time = current_time;
-                log_time = false; // Time has no changed, so do not log it
+                log_time = false; // Time has not changed, so do not log it
             }
 
         }
@@ -2154,13 +2153,18 @@ static void ble_write_next_state(void)
         Throw(EXCEPTION_PACKET_WRONG_SIZE);
     }
 
-    spi_bridge_buffer[0] = sm_context.ble_write.address;
-    memcpy(&spi_bridge_buffer[1], read_buffer, length);
-
-    // Check send worked
-    if (syshal_spi_transfer(SPI_BLE, spi_bridge_buffer, NULL, length + 1))
+    // Send address
+    if (syshal_spi_transfer(SPI_BLE, &sm_context.ble_write.address, NULL, sizeof(sm_context.ble_write.address)))
     {
-        // If not we should exit out
+        // If it failed we should exit
+        message_set_state(SM_MESSAGE_STATE_IDLE);
+        Throw(EXCEPTION_SPI_ERROR);
+    }
+
+    // Send data
+    if (syshal_spi_transfer(SPI_BLE, read_buffer, NULL, length))
+    {
+        // If it failed we should exit
         message_set_state(SM_MESSAGE_STATE_IDLE);
         Throw(EXCEPTION_SPI_ERROR);
     }
@@ -2224,20 +2228,23 @@ static void ble_read_next_state(void)
     // be used for storing the SPI bus address
     uint32_t bytes_to_read = MIN(sm_context.ble_read.length, SYSHAL_USB_PACKET_SIZE);
 
-    // Read data from the specified SPI bus address
-    memset(spi_bridge_buffer, 0, sizeof(spi_bridge_buffer));
-    spi_bridge_buffer[0] = sm_context.ble_read.address;
-    if (syshal_spi_transfer(SPI_BLE, spi_bridge_buffer, spi_bridge_buffer, bytes_to_read + 1))
+    // Send address
+    if (syshal_spi_transfer(SPI_BLE, &sm_context.ble_read.address, NULL, sizeof(sm_context.ble_read.address)))
     {
-        // If not we should exit out
+        // If it failed we should exit
+        message_set_state(SM_MESSAGE_STATE_IDLE);
+        Throw(EXCEPTION_SPI_ERROR);
+    }
+
+    // Read data
+    if (syshal_spi_transfer(SPI_BLE, resp, resp, bytes_to_read))
+    {
+        // If it failed we should exit
         message_set_state(SM_MESSAGE_STATE_IDLE);
         Throw(EXCEPTION_SPI_ERROR);
     }
 
     sm_context.ble_read.length -= bytes_to_read;
-
-    // Copy data from bridge buffer into USB buffer
-    memcpy(resp, &spi_bridge_buffer[1], bytes_to_read);
 
     // Send response
     buffer_write_advance(&config_if_send_buffer, bytes_to_read);
