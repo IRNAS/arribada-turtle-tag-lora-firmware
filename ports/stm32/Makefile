@@ -46,8 +46,8 @@ $(DEVICE_DIR)/battery/BQ27621/BQ27621.c \
 $(DEVICE_DIR)/ble/nRF52x/syshal_ble.c \
 $(DEVICE_DIR)/gps/M8N/M8N.c \
 $(DEVICE_DIR)/flash/S25FL128/S25FL128.c \
-$(DEVICE_DIR)/pressure/MS5803_xBA/MS5803_xBA.c \
-$(DEVICE_DIR)/pressure/MS5803_xBA/MS5803_14BA/MS5803_14BA.c \
+$(DEVICE_DIR)/pressure/MS5837_xBA/MS5837_xBA.c \
+$(DEVICE_DIR)/pressure/MS5837_xBA/MS5837_30BA/MS5837_30BA.c \
 $(STMHAL_DIR)/Src/stm32f0xx_hal.c \
 $(STMHAL_DIR)/Src/stm32f0xx_hal_cortex.c \
 $(STMHAL_DIR)/Src/stm32f0xx_hal_dma.c \
@@ -160,7 +160,7 @@ C_INCLUDES =  \
 -I$(DEVICE_DIR)/ble/nRF52x/ \
 -I$(DEVICE_DIR)/gps/M8N/ \
 -I$(DEVICE_DIR)/flash/S25FL128/ \
--I$(DEVICE_DIR)/pressure/MS5803_xBA/ \
+-I$(DEVICE_DIR)/pressure/MS5837_xBA/ \
 -I$(STMHAL_DIR)/Inc \
 -I$(STMHAL_DIR)/Inc/Legacy \
 -I$(USB_DIR)/Core/Inc \
