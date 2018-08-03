@@ -460,7 +460,7 @@ int syshal_ble_tick(void)
             /* Copy as many bytes as are available upto the limit of the user's
              * pending buffer size.
              */
-            uint16_t num_read_bytes = MIN(length, rx_buffer_pending_size);
+            uint16_t num_read_bytes = MIN(MIN(length, rx_buffer_pending_size), NRF52_SPI_DATA_PORT_SIZE);
             ret = read_register(NRF52_REG_ADDR_RX_DATA_PORT, rx_buffer_pending, num_read_bytes);
             if (ret)
                 goto done;
