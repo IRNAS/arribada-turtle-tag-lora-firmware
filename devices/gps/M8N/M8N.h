@@ -530,6 +530,7 @@ typedef struct
         UBX_NACK_t          UBX_NACK;
         UBX_CFG_CFG_t       UBX_CFG_CFG;
         UBX_CFG_MSG_POLL_t  UBX_CFG_MSG_POLL;
+        UBX_CFG_PRT2_t      UBX_CFG_PRT2;
         UBX_LOG_INFO_t      UBX_LOG_INFO;
         UBX_LOG_CREATE_t    UBX_LOG_CREATE;
         UBX_RXM_PMREQ2_t    UBX_RXM_PMREQ2;

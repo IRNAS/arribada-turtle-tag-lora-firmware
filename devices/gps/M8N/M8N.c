@@ -25,16 +25,23 @@
 
 #define M8N_TIMEOUT_MS (100)
 
+static UBX_ACK_t last_ack;
 static UBX_NACK_t last_nack;
+
+const uint32_t supported_baudrates_priv[] = {4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800};
+
+#define MAX_BAUD_RATE (460800)
 
 // Private functions
 static int syshal_gps_parse_rx_buffer_priv(UBX_Packet_t * packet);
 static void syshal_gps_process_nav_status_priv(UBX_Packet_t * packet);
 static void syshal_gps_process_nav_posllh_priv(UBX_Packet_t * packet);
+static void syshal_gps_process_ack_priv(UBX_Packet_t * packet);
 static void syshal_gps_process_nack_priv(UBX_Packet_t * packet);
 static void syshal_gps_set_checksum_priv(UBX_Packet_t * packet);
 static void syshal_gps_send_packet_priv(UBX_Packet_t * ubx_packet);
 static bool syshal_gps_device_responsive_priv(void);
+static void syshal_gps_look_for_ack_or_nack_priv(void);
 
 // HAL to SYSHAL error code mapping table
 static int hal_error_map[] =
@@ -47,20 +54,33 @@ static int hal_error_map[] =
 
 void syshal_gps_init(void)
 {
-    // If we have a custom baudrate set, make sure we're using it
-    if (sys_config_get(SYS_CONFIG_TAG_GPS_UART_BAUD_RATE, NULL) >= 0)
-    {
-        // If so update our UART HW baudrate
-        syshal_uart_change_baud(GPS_UART, sys_config.sys_config_gps_uart_baud_rate.contents.baudrate);
-        DEBUG_PR_TRACE("%s(), changing baudrate to %lu", __FUNCTION__, sys_config.sys_config_gps_uart_baud_rate.contents.baudrate);
-    }
+    // Go through every baudrate and set them to the highest to ensure the device is always in the highest baudrate
+    UBX_Packet_t ubx_packet;
+    UBX_SET_PACKET_HEADER(&ubx_packet, UBX_MSG_CLASS_CFG, UBX_MSG_ID_CFG_PRT, sizeof(UBX_CFG_PRT2_t));
+    UBX_PAYLOAD(&ubx_packet, UBX_CFG_PRT2)->portID = 1;
+    UBX_PAYLOAD(&ubx_packet, UBX_CFG_PRT2)->txReady = 0;
+    UBX_PAYLOAD(&ubx_packet, UBX_CFG_PRT2)->mode = (3 << 6) | (4 << 9);
+    UBX_PAYLOAD(&ubx_packet, UBX_CFG_PRT2)->inProtoMask = 1;
+    UBX_PAYLOAD(&ubx_packet, UBX_CFG_PRT2)->outProtoMask = 1;
+    UBX_PAYLOAD(&ubx_packet, UBX_CFG_PRT2)->flags = 0;
 
-    // Clear any prior NACK messages
-    last_nack.clsID = 0xFF;
-    last_nack.msgID = 0xFF;
+    for (uint32_t repeat = 0; repeat < 10; ++repeat)
+        for (uint32_t i = 0; i < sizeof(supported_baudrates_priv) / sizeof(supported_baudrates_priv[0]) - 1; ++i)
+        {
+            syshal_uart_change_baud(GPS_UART, supported_baudrates_priv[i]);
+            UBX_PAYLOAD(&ubx_packet, UBX_CFG_PRT2)->baudRate = MAX_BAUD_RATE;
+            syshal_gps_send_packet_priv(&ubx_packet);
+        }
 
-    // Make sure the device is awake
-    syshal_gps_wake_up();
+    syshal_uart_change_baud(GPS_UART, MAX_BAUD_RATE);
+
+    // Make sure the device is asleep
+    syshal_gps_shutdown();
+
+    // Empty the UART RX buffer
+    uint8_t dumpBuffer;
+    while (syshal_uart_available(GPS_UART) > 0)
+        syshal_uart_receive(GPS_UART, &dumpBuffer, 1);
 }
 
 /**
@@ -93,6 +113,8 @@ void syshal_gps_shutdown(void)
     UBX_PAYLOAD(&ubx_packet, UBX_RXM_PMREQ2)->wakeupSources = UBX_RXM_PMREQ_WAKEUP_UARTRX; // Configure pins to wakeup the receiver on a UART RX pin edge
     // No ACK is expected for this message
     syshal_gps_send_packet_priv(&ubx_packet);
+
+    syshal_time_delay_ms(10); // Wait for shutdown to occur
 }
 
 /**
@@ -125,7 +147,7 @@ void syshal_gps_tick(void)
         }
         else if (GPS_UART_ERROR_MSG_TOO_BIG == error)
         {
-            DEBUG_PR_TRACE("GPS Message too big");
+            //DEBUG_PR_TRACE("GPS Message too big");
         }
         else if (GPS_UART_ERROR_INSUFFICIENT_BYTES == error)
         {
@@ -134,15 +156,15 @@ void syshal_gps_tick(void)
         }
         else if (GPS_UART_ERROR_MISSING_SYNC1 == error)
         {
-            DEBUG_PR_TRACE("GPS missing Sync1");
+            //DEBUG_PR_TRACE("GPS missing Sync1");
         }
         else if (GPS_UART_ERROR_MISSING_SYNC2 == error)
         {
-            DEBUG_PR_TRACE("GPS missing Sync2");
+            //DEBUG_PR_TRACE("GPS missing Sync2");
         }
         else if (GPS_UART_ERROR_MSG_PENDING == error)
         {
-            DEBUG_PR_TRACE("GPS message not fully received");
+            //DEBUG_PR_TRACE("GPS message not fully received");
         }
         else if (GPS_UART_NO_ERROR != error)
         {
@@ -246,6 +268,12 @@ static void syshal_gps_process_nav_posllh_priv(UBX_Packet_t * packet)
     syshal_gps_callback(event);
 }
 
+static void syshal_gps_process_ack_priv(UBX_Packet_t * packet)
+{
+    last_ack.clsID = packet->UBX_ACK.clsID;
+    last_ack.msgID = packet->UBX_ACK.msgID;
+}
+
 static void syshal_gps_process_nack_priv(UBX_Packet_t * packet)
 {
     last_nack.clsID = packet->UBX_NACK.clsID;
@@ -287,7 +315,7 @@ static void syshal_gps_set_checksum_priv(UBX_Packet_t * packet)
 /**
  * @brief      Process the UART Rx buffer looking for any NACKS
  */
-void syshal_gps_look_for_nack(void)
+void syshal_gps_look_for_ack_or_nack_priv(void)
 {
     UBX_Packet_t ubx_packet;
     int error;
@@ -299,8 +327,8 @@ void syshal_gps_look_for_nack(void)
     {
         if (UBX_IS_MSG(&ubx_packet, UBX_MSG_CLASS_ACK, UBX_MSG_ID_ACK_NACK))
             syshal_gps_process_nack_priv(&ubx_packet);
-        else
-            DEBUG_PR_WARN("Unexpected GPS message class: (0x%02X) id: (0x%02X)", ubx_packet.msgClass, ubx_packet.msgId);
+        else if (UBX_IS_MSG(&ubx_packet, UBX_MSG_CLASS_ACK, UBX_MSG_ID_ACK_NACK))
+            syshal_gps_process_ack_priv(&ubx_packet);
     }
 }
 
@@ -319,7 +347,6 @@ static bool syshal_gps_device_responsive_priv(void)
 
     // Empty the UART RX buffer
     uint8_t dumpBuffer;
-
     while (syshal_uart_available(GPS_UART) > 0)
         syshal_uart_receive(GPS_UART, &dumpBuffer, 1);
 
@@ -328,7 +355,7 @@ static bool syshal_gps_device_responsive_priv(void)
     uint32_t start_time = syshal_time_get_ticks_ms();
     while (syshal_time_get_ticks_ms() - start_time < M8N_TIMEOUT_MS)
     {
-        syshal_gps_look_for_nack();
+        syshal_gps_look_for_ack_or_nack_priv();
 
         // Look for a NACK response to this message
         if (last_nack.clsID == UBX_MSG_CLASS_CFG &&

@@ -66,7 +66,6 @@ enum
     SYS_CONFIG_TAG_GPS_LOG_POSITION_ENABLE = 0x0000,         // Enable logging of position information.
     SYS_CONFIG_TAG_GPS_LOG_TTFF_ENABLE,                      // Enable logging of time to first fix (TTFF)
     SYS_CONFIG_TAG_GPS_TRIGGER_MODE,                         // Mode shall allow for continuous operation or external switch triggered operation.
-    SYS_CONFIG_TAG_GPS_UART_BAUD_RATE,                       // The UART baud rate to be used for communications with the M8N GPS device.
     SYS_CONFIG_TAG_GPS_SCHEDULED_ACQUISITION_INTERVAL,       // Interval in seconds between GPS acquisition attempts. Setting to zero means always on
     SYS_CONFIG_TAG_GPS_MAXIMUM_ACQUISITION_TIME,             // Maximum time period, in seconds, to allow for GPS fixes. Setting to zero means no upper limit
     SYS_CONFIG_TAG_GPS_SCHEDULED_ACQUISITION_NO_FIX_TIMEOUT, // When triggered by a scheduled acquisition, this is the timeout period in seconds during acquisition after which to shutdown the GPS if no fix is found
@@ -164,15 +163,6 @@ typedef struct __attribute__((__packed__))
         uint8_t mode;
     } contents;
 } sys_config_gps_trigger_mode_t;
-
-typedef struct __attribute__((__packed__))
-{
-    sys_config_hdr_t hdr;
-    struct __attribute__((__packed__))
-    {
-        uint32_t baudrate;
-    } contents;
-} sys_config_gps_uart_baud_rate_t;
 
 typedef struct __attribute__((__packed__))
 {
@@ -612,7 +602,6 @@ typedef struct __attribute__((__packed__))
     sys_config_gps_log_position_enable_t                        sys_config_gps_log_position_enable;
     sys_config_gps_log_ttff_enable_t                            sys_config_gps_log_ttff_enable;
     sys_config_gps_trigger_mode_t                               sys_config_gps_trigger_mode;
-    sys_config_gps_uart_baud_rate_t                             sys_config_gps_uart_baud_rate;
     sys_config_gps_scheduled_acquisition_interval_t             sys_config_gps_scheduled_acquisition_interval;
     sys_config_gps_maximum_acquisition_time_t                   sys_config_gps_maximum_acquisition_time;
     sys_config_gps_scheduled_acquisition_no_fix_timeout_t       sys_config_gps_scheduled_acquisition_no_fix_timeout;

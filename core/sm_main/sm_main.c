@@ -1644,13 +1644,6 @@ static void cfg_write_next_state(void)
 
         DEBUG_PR_TRACE("sys_config_set(0x%04X)", tag);
 
-        // Have we just changed our GPS baudrate
-        if (SYS_CONFIG_TAG_GPS_UART_BAUD_RATE == tag)
-        {
-            // If so update our UART HW baudrate
-            syshal_uart_change_baud(GPS_UART, sys_config.sys_config_gps_uart_baud_rate.contents.baudrate);
-        }
-
         sm_context.cfg_write.length -= sm_context.cfg_write.buffer_occupancy;
         sm_context.cfg_write.buffer_occupancy = 0;
 
@@ -3327,7 +3320,7 @@ static void sm_main_boot(sm_handle_t * state_handle)
     // Init the peripheral devices after configuration data has been collected
 
     syshal_gps_init();
-    sm_gps_state = SM_GPS_STATE_ACQUIRING;
+    sm_gps_state = SM_GPS_STATE_ASLEEP;
 
     syshal_switch_init();
     tracker_above_water = !syshal_switch_get();

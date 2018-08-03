@@ -29,7 +29,6 @@ static const uint16_t sys_config_lookup_priv[SYS_CONFIG_TAG_TOTAL_NUMBER] =
     SYS_CONFIG_TAG_GPS_LOG_POSITION_ENABLE,
     SYS_CONFIG_TAG_GPS_LOG_TTFF_ENABLE,
     SYS_CONFIG_TAG_GPS_TRIGGER_MODE,
-    SYS_CONFIG_TAG_GPS_UART_BAUD_RATE,
     SYS_CONFIG_TAG_GPS_SCHEDULED_ACQUISITION_INTERVAL,
     SYS_CONFIG_TAG_GPS_MAXIMUM_ACQUISITION_TIME,
     SYS_CONFIG_TAG_GPS_SCHEDULED_ACQUISITION_NO_FIX_TIMEOUT,
@@ -106,11 +105,6 @@ int sys_config_get_data_ptr_priv(uint16_t tag, void ** data)
         case SYS_CONFIG_TAG_GPS_TRIGGER_MODE:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_gps_trigger_mode_t);
             *data = &sys_config.sys_config_gps_trigger_mode;
-            break;
-
-        case SYS_CONFIG_TAG_GPS_UART_BAUD_RATE:
-            len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_gps_uart_baud_rate_t);
-            *data = &sys_config.sys_config_gps_uart_baud_rate;
             break;
 
         case SYS_CONFIG_TAG_GPS_SCHEDULED_ACQUISITION_INTERVAL:
