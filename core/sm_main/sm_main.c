@@ -3318,9 +3318,9 @@ static void sm_main_boot(sm_handle_t * state_handle)
     fs_delete(file_system, FS_FILE_ID_BLE_IMAGE);
 
     // Init the peripheral devices after configuration data has been collected
-
     syshal_gps_init();
     sm_gps_state = SM_GPS_STATE_ASLEEP;
+    sys_config.sys_config_gps_last_known_position.hdr.set = false; // Invalidate any prior last location
 
     syshal_switch_init();
     tracker_above_water = !syshal_switch_get();
