@@ -2566,6 +2566,7 @@ static void reset_req(cmd_t * req, uint16_t size)
         case RESET_REQ_FLASH_ERASE_ALL:
             resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
             fs_format(file_system);
+            log_file_created = false;
             break;
 
         default:
