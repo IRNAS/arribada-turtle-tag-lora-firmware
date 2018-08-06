@@ -100,6 +100,9 @@ int config_if_receive(uint8_t * data, uint32_t size)
     if (config_if_func_receive_priv == NULL)
         return CONFIG_IF_ERROR_INVALID_INSTANCE;
 
+    if (backend_priv == CONFIG_IF_BACKEND_USB)
+        size = SYSHAL_USB_PACKET_SIZE; // Force the USB receive size to the maximum. See AG-148
+
     return config_if_func_receive_priv(data, size);
 }
 

@@ -327,7 +327,7 @@ static void config_if_send_priv(volatile buffer_t * buffer)
     }
 }
 
-static void config_if_receive_priv(void)
+static void config_if_receive_length_priv(uint32_t length)
 {
     if (!config_if_rx_queued)
     {
@@ -336,9 +336,14 @@ static void config_if_receive_priv(void)
         if (!buffer_write(&config_if_receive_buffer, (uintptr_t *)&receive_buffer))
             Throw(EXCEPTION_RX_BUFFER_FULL);
 
-        if (CONFIG_IF_NO_ERROR == config_if_receive(receive_buffer, SYSHAL_USB_PACKET_SIZE))
+        if (CONFIG_IF_NO_ERROR == config_if_receive(receive_buffer, length))
             config_if_rx_queued = true;
     }
+}
+
+static void config_if_receive_priv(void)
+{
+    config_if_receive_length_priv(SYSHAL_USB_PACKET_SIZE);
 }
 
 /**
@@ -1558,7 +1563,7 @@ static void cfg_write_req(cmd_t * req, uint16_t size)
     buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_generic_resp_t));
     config_if_send_priv(&config_if_send_buffer); // Send response
 
-    config_if_receive_priv(); // Queue a receive
+    config_if_receive_length_priv(sm_context.cfg_write.length); // Queue a receive
 
     sm_context.cfg_write.buffer_occupancy = 0;
 
@@ -1651,7 +1656,7 @@ static void cfg_write_next_state(void)
 
     if (sm_context.cfg_write.length) // Is there still data to receive?
     {
-        config_if_receive_priv(); // Queue a receive
+        config_if_receive_length_priv(sm_context.cfg_write.length); // Queue a receive
         config_if_timeout_reset(); // Reset the message timeout counter
     }
     else
@@ -1920,7 +1925,7 @@ static void gps_write_req(cmd_t * req, uint16_t size)
         sm_context.gps_write.length = req->p.cmd_gps_write_req.length;
         resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
 
-        config_if_receive_priv(); // Queue a receive
+        config_if_receive_length_priv(sm_context.gps_write.length); // Queue a receive
 
         message_set_state(SM_MESSAGE_STATE_GPS_WRITE_NEXT);
     }
@@ -1964,7 +1969,7 @@ static void gps_write_next_state(void)
 
     if (sm_context.gps_write.length) // Is there still data to receive?
     {
-        config_if_receive_priv(); // Queue a receive
+        config_if_receive_length_priv(sm_context.gps_write.length); // Queue a receive
         config_if_timeout_reset(); // Reset the message timeout counter
     }
     else
@@ -2116,7 +2121,7 @@ static void ble_write_req(cmd_t * req, uint16_t size)
         sm_context.ble_write.length = req->p.cmd_ble_write_req.length;
         resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
 
-        config_if_receive_priv(); // Queue a receive
+        config_if_receive_length_priv(sm_context.ble_write.length); // Queue a receive
 
         message_set_state(SM_MESSAGE_STATE_BLE_WRITE_NEXT);
     }
@@ -2166,7 +2171,7 @@ static void ble_write_next_state(void)
 
     if (sm_context.ble_write.length) // Is there still data to receive?
     {
-        config_if_receive_priv(); // Queue a receive
+        config_if_receive_length_priv(sm_context.ble_write.length); // Queue a receive
         config_if_timeout_reset(); // Reset the message timeout counter
     }
     else
@@ -2316,7 +2321,7 @@ static void fw_send_image_req(cmd_t * req, uint16_t size)
                     Throw(EXCEPTION_FS_ERROR); // An unrecoverable error has occured
 
                 // FIXME: Check to see if there is sufficient room for the firmware image
-                config_if_receive_priv(); // Queue a receive
+                config_if_receive_length_priv(sm_context.fw_send_image.length); // Queue a receive
                 resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
                 message_set_state(SM_MESSAGE_STATE_FW_SEND_IMAGE_NEXT);
                 break;
@@ -2374,7 +2379,7 @@ static void fw_send_image_next_state(void)
 
     if (sm_context.fw_send_image.length) // Is there still data to receive?
     {
-        config_if_receive_priv(); // Queue a receive
+        config_if_receive_length_priv(sm_context.fw_send_image.length); // Queue a receive
         config_if_timeout_reset(); // Reset the message timeout counter
     }
     else
