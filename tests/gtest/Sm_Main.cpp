@@ -338,8 +338,6 @@ int syshal_flash_erase_GTest(uint32_t device, uint32_t address, uint32_t size, i
 }
 
 // syshal_gps
-void syshal_gps_init_GTest(int cmock_num_calls) {}
-void syshal_gps_shutdown_GTest(int cmock_num_calls) {}
 
 // syshal_gps_send_raw callback function
 uint8_t gps_write_buffer[2048];
@@ -455,6 +453,7 @@ class Sm_MainTest : public ::testing::Test
         // syshal_batt
         Mocksyshal_batt_Init();
 
+        syshal_batt_init_IgnoreAndReturn(SYSHAL_BATT_NO_ERROR);
         syshal_batt_level_StubWithCallback(syshal_batt_level_GTest);
 
         battery_level = 100;
@@ -489,8 +488,9 @@ class Sm_MainTest : public ::testing::Test
 
         // syshal_gps
         Mocksyshal_gps_Init();
-        syshal_gps_init_StubWithCallback(syshal_gps_init_GTest);
-        syshal_gps_shutdown_StubWithCallback(syshal_gps_shutdown_GTest);
+        syshal_gps_init_Ignore();
+        syshal_gps_wake_up_Ignore();
+        syshal_gps_shutdown_Ignore();
         syshal_gps_send_raw_StubWithCallback(syshal_gps_send_raw_GTest);
         syshal_gps_receive_raw_StubWithCallback(syshal_gps_receive_raw_GTest);
 
@@ -505,6 +505,8 @@ class Sm_MainTest : public ::testing::Test
 
         // syshal_pmu
         Mocksyshal_pmu_Init();
+
+        syshal_pmu_set_level_Ignore();
 
         // Setup main state machine
         sm_init(&state_handle, sm_main_states);
@@ -1045,10 +1047,14 @@ TEST_F(Sm_MainTest, LogFileFullBLEReedSwitchToggle)
     EXPECT_EQ(CONFIG_IF_BACKEND_NOT_SET, config_if_current());
     SetGPIOPin(GPIO_REED_SW, 0); // Trigger the reed switch
 
+    IncrementSeconds(5); // Progress time to allow for switch debouncing
+
     sm_tick(&state_handle);
 
     EXPECT_EQ(CONFIG_IF_BACKEND_BLE, config_if_current());
     SetGPIOPin(GPIO_REED_SW, 1); // Release the reed switch
+
+    IncrementSeconds(5); // Progress time to allow for switch debouncing
 
     sm_tick(&state_handle);
 
@@ -1150,10 +1156,14 @@ TEST_F(Sm_MainTest, ProvisioningNeededBLEReedSwitchToggle)
     EXPECT_EQ(CONFIG_IF_BACKEND_NOT_SET, config_if_current());
     SetGPIOPin(GPIO_REED_SW, 0); // Trigger the reed switch
 
+    IncrementSeconds(5); // Progress time to allow for switch debouncing
+
     sm_tick(&state_handle);
 
     EXPECT_EQ(CONFIG_IF_BACKEND_BLE, config_if_current());
     SetGPIOPin(GPIO_REED_SW, 1); // Release the reed switch
+
+    IncrementSeconds(5); // Progress time to allow for switch debouncing
 
     sm_tick(&state_handle);
 
@@ -1236,7 +1246,6 @@ TEST_F(Sm_MainTest, ProvisioningNeededBLEScheduledConnectionInactivityTimeout)
     IncrementSeconds(interval);
 
     BLEConnectionEvent();
-    syshal_gps_wake_up_Ignore();
 
     sm_tick(&state_handle);
     sm_tick(&state_handle);
@@ -1346,11 +1355,15 @@ TEST_F(Sm_MainTest, ProvisioningBLEReedSwitchDisable)
     config_if_init(CONFIG_IF_BACKEND_BLE);
     BLEConnectionEvent();
 
+    IncrementSeconds(5); // Progress time to allow for switch debouncing
+
     sm_tick(&state_handle);
 
     EXPECT_EQ(CONFIG_IF_BACKEND_BLE, config_if_current());
 
     SetGPIOPin(GPIO_REED_SW, 1); // Release the reed switch
+
+    IncrementSeconds(5); // Progress time to allow for switch debouncing
 
     sm_tick(&state_handle);
 
@@ -1372,7 +1385,6 @@ TEST_F(Sm_MainTest, OperationalToBatteryLow)
     SetBatteryLowThreshold(10);
 
     // TODO: handle these ignored functions properly
-    syshal_pmu_set_level_Ignore();
     syshal_axl_term_IgnoreAndReturn(0);
     syshal_pressure_term_IgnoreAndReturn(0);
 
@@ -1390,7 +1402,6 @@ TEST_F(Sm_MainTest, OperationalToBatteryCharging)
     SetVUSB(true);
 
     // TODO: handle these ignored functions properly
-    syshal_pmu_set_level_Ignore();
     syshal_axl_term_IgnoreAndReturn(0);
     syshal_pressure_term_IgnoreAndReturn(0);
 
@@ -1411,7 +1422,6 @@ TEST_F(Sm_MainTest, OperationalToProvisioning)
     BLEConnectionEvent();
 
     // TODO: handle these ignored functions properly
-    syshal_pmu_set_level_Ignore();
     syshal_axl_term_IgnoreAndReturn(0);
     syshal_pressure_term_IgnoreAndReturn(0);
 
@@ -1456,7 +1466,6 @@ TEST_F(Sm_MainTest, OperationalToLogFileFull)
     sys_config.sys_config_pressure_sensor_log_enable.contents.enable = true;
 
     // TODO: handle these ignored functions properly
-    syshal_pmu_set_level_Ignore();
     syshal_pressure_init_ExpectAndReturn(SYSHAL_PRESSURE_NO_ERROR);
     syshal_pressure_wake_ExpectAndReturn(SYSHAL_PRESSURE_NO_ERROR);
     syshal_pressure_tick_ExpectAndReturn(SYSHAL_PRESSURE_NO_ERROR);
@@ -1482,7 +1491,6 @@ TEST_F(Sm_MainTest, OperationalBLEReedSwitchToggle)
     sm_set_current_state(&state_handle, SM_MAIN_OPERATIONAL);
 
     // TODO: handle these ignored functions properly
-    syshal_pmu_set_level_Ignore();
     syshal_axl_term_IgnoreAndReturn(0);
     syshal_pressure_term_IgnoreAndReturn(0);
 
@@ -1496,10 +1504,14 @@ TEST_F(Sm_MainTest, OperationalBLEReedSwitchToggle)
     EXPECT_EQ(CONFIG_IF_BACKEND_NOT_SET, config_if_current());
     SetGPIOPin(GPIO_REED_SW, 0); // Trigger the reed switch
 
+    IncrementSeconds(5); // Progress time to allow for switch debouncing
+
     sm_tick(&state_handle);
 
     EXPECT_EQ(CONFIG_IF_BACKEND_BLE, config_if_current());
     SetGPIOPin(GPIO_REED_SW, 1); // Release the reed switch
+
+    IncrementSeconds(5); // Progress time to allow for switch debouncing
 
     sm_tick(&state_handle);
 
@@ -1524,7 +1536,6 @@ TEST_F(Sm_MainTest, OperationalPressureLogging)
     sys_config.sys_config_pressure_sensor_log_enable.contents.enable = true;
 
     // TODO: handle these ignored functions properly
-    syshal_pmu_set_level_Ignore();
     syshal_pressure_init_ExpectAndReturn(SYSHAL_PRESSURE_NO_ERROR);
     syshal_pressure_wake_ExpectAndReturn(SYSHAL_PRESSURE_NO_ERROR);
     syshal_pressure_tick_ExpectAndReturn(SYSHAL_PRESSURE_NO_ERROR);
@@ -1577,7 +1588,6 @@ TEST_F(Sm_MainTest, OperationalAXLLogging)
     sys_config.sys_config_axl_log_enable.contents.enable = true;
 
     // TODO: handle these ignored functions properly
-    syshal_pmu_set_level_Ignore();
     syshal_axl_init_ExpectAndReturn(SYSHAL_AXL_NO_ERROR);
     syshal_axl_wake_ExpectAndReturn(SYSHAL_AXL_NO_ERROR);
     syshal_axl_tick_ExpectAndReturn(SYSHAL_AXL_NO_ERROR);
@@ -1631,9 +1641,6 @@ TEST_F(Sm_MainTest, OperationalBatteryLogging)
     // Disable battery low threshold
     sys_config.sys_config_battery_low_threshold.hdr.set = false;
 
-    // TODO: handle these ignored functions properly
-    syshal_pmu_set_level_Ignore();
-
     SetBatteryPercentage(batteryLevel);
 
     sm_tick(&state_handle);
@@ -1668,8 +1675,6 @@ TEST_F(Sm_MainTest, OperationalBLEScheduled)
     BLETriggeredOnSchedule(15, 5, 0);
 
     sm_set_current_state(&state_handle, SM_MAIN_OPERATIONAL);
-
-    syshal_pmu_set_level_Ignore(); // TODO: handle this ignored function properly
 
     sm_tick(&state_handle);
 
