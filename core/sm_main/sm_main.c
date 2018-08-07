@@ -3563,8 +3563,7 @@ static void sm_main_operational(sm_handle_t * state_handle)
     // Determine how deep a sleep we should take
     if (!syshal_pressure_awake() && !syshal_axl_awake() && !leds_flashing)
     {
-        if (SM_GPS_STATE_ASLEEP == sm_gps_state &&
-            sys_config.sys_config_axl_scheduled_acquisition_interval.contents.seconds)
+        if (SM_GPS_STATE_ASLEEP == sm_gps_state)
             syshal_pmu_set_level(POWER_STOP);
         else
             syshal_pmu_set_level(POWER_SLEEP);
