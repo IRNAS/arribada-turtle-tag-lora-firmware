@@ -47,7 +47,7 @@ static uint8_t   *  rx_buffer_pending = NULL;
 
 static uint32_t     time_of_last_transfer = 0;
 
-static uint16_t     rx_buffer_pending_size = 0;
+static uint32_t     rx_buffer_pending_size = 0;
 
 static uint8_t   *  tx_buffer_pending = NULL;
 static uint16_t     tx_bytes_to_transmit;
@@ -202,9 +202,10 @@ int syshal_ble_init(uint32_t comms_device)
     DEBUG_PR_TRACE("NRF52 TX data length = %u bytes", tx_buffer_pending_size);
 
     /* Get the RX data length */
-    if (read_register(NRF52_REG_ADDR_RX_DATA_LENGTH, (uint8_t *)&rx_buffer_pending_size, sizeof(rx_buffer_pending_size)))
+    uint8_t rx_data_length;
+    if (read_register(NRF52_REG_ADDR_RX_DATA_LENGTH, (uint8_t *)&rx_data_length, sizeof(rx_data_length)))
         return SYSHAL_BLE_ERROR_NOT_DETECTED;
-    DEBUG_PR_TRACE("NRF52 RX data length = %u bytes", rx_buffer_pending_size);
+    DEBUG_PR_TRACE("NRF52 RX data length = %u bytes", rx_data_length);
 
     rx_buffer_pending_size = 0;
 
