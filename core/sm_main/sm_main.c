@@ -2520,6 +2520,22 @@ static void fw_apply_image_req(cmd_t * req, uint16_t size)
                         syshal_gpio_set_output_low(GPIO_LED1_GREEN);
                         syshal_gpio_set_output_low(GPIO_LED2_RED);
 
+                        // We've just flashed and reset our bluetooth device
+                        // If we were using it as our configuration interface it is now unused
+                        if (CONFIG_IF_BACKEND_BLE == config_if_current())
+                        {
+                            config_if_term();
+
+                            if (config_if_connected)
+                            {
+                                // If the BLE device was connected, trigger a disconnect event
+                                config_if_event_t disconnectEvent;
+                                disconnectEvent.backend = CONFIG_IF_BACKEND_BLE;
+                                disconnectEvent.id = CONFIG_IF_EVENT_DISCONNECTED;
+                                config_if_callback(&disconnectEvent);
+                            }
+                        }
+
                         DEBUG_PR_TRACE("Complete FS_FILE_ID_BLE_IMAGE");
                         break;
                 }
