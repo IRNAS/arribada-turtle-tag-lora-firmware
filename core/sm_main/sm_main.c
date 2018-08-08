@@ -2464,6 +2464,8 @@ static void fw_apply_image_req(cmd_t * req, uint16_t size)
                 switch (image_type)
                 {
                     case FS_FILE_ID_STM32_IMAGE:
+                        DEBUG_PR_TRACE("Apply FS_FILE_ID_STM32_IMAGE");
+
                         fs_close(file_handle); // Close the file
 
                         // Respond now as we're about to wipe our FLASH and reset
@@ -2488,6 +2490,19 @@ static void fw_apply_image_req(cmd_t * req, uint16_t size)
 
                     case FS_FILE_ID_BLE_IMAGE:
                         DEBUG_PR_TRACE("Apply FS_FILE_ID_BLE_IMAGE");
+
+                        // Respond now as we're about to wipe our FLASH and reset
+                        resp->p.cmd_generic_resp.error_code = CMD_NO_ERROR;
+                        buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_generic_resp_t));
+                        config_if_send_priv(&config_if_send_buffer);
+
+                        // Make sure our response is sent before we attempt any FLASH operations
+#ifndef GTEST // Prevent infinite loop in unit test
+                        while (config_if_tx_pending)
+#endif
+                        {
+                            config_if_tick();
+                        }
 
                         fs_stat(file_system, FS_FILE_ID_BLE_IMAGE, &stat);
 
@@ -2537,6 +2552,8 @@ static void fw_apply_image_req(cmd_t * req, uint16_t size)
                         }
 
                         DEBUG_PR_TRACE("Complete FS_FILE_ID_BLE_IMAGE");
+
+                        return;
                         break;
                 }
 
@@ -2558,7 +2575,6 @@ static void fw_apply_image_req(cmd_t * req, uint16_t size)
         resp->p.cmd_generic_resp.error_code = CMD_ERROR_INVALID_FW_IMAGE_TYPE;
     }
 
-    config_if_timeout_reset();
     buffer_write_advance(&config_if_send_buffer, CMD_SIZE(cmd_generic_resp_t));
     config_if_send_priv(&config_if_send_buffer);
 }
@@ -2603,7 +2619,7 @@ static void reset_req(cmd_t * req, uint16_t size)
         // Wait for response to have been sent
         // Prevent an infinite loop in unit tests
 #ifndef GTEST
-        while (config_if_tx_pending )
+        while (config_if_tx_pending)
 #endif
         {
             config_if_tick();
