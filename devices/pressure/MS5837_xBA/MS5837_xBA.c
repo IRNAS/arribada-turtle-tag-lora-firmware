@@ -61,10 +61,13 @@ int syshal_pressure_init(void)
 
 int syshal_pressure_term(void)
 {
-    // Delete sampling timer
-    syshal_timer_term(MS5837_sampling_timer_priv);
+    if (initialised_priv)
+    {
+        // Delete sampling timer
+        syshal_timer_term(MS5837_sampling_timer_priv);
 
-    initialised_priv = false;
+        initialised_priv = false;
+    }
 
     return SYSHAL_PRESSURE_NO_ERROR;
 }
