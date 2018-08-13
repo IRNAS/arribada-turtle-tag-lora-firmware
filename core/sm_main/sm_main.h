@@ -23,7 +23,7 @@
 #include "fs.h"
 #include "cexception.h"
 
-#define STM32_FIRMWARE_VERSION (2) // The current version of the firmware
+#define STM32_FIRMWARE_VERSION (3) // The current version of the firmware
 
 #define FS_FILE_ID_CONF             (0) // The File ID of the configuration data
 #define FS_FILE_ID_STM32_IMAGE      (1) // STM32 image
