@@ -3938,18 +3938,18 @@ static void sm_main_provisioning(sm_handle_t * state_handle)
             // Branch to Provisioning Needed state if configuration tags are not set OR log file doesn't exist
             sm_set_next_state(state_handle, SM_MAIN_PROVISIONING_NEEDED);
 
+        // Branch to Battery Low state if battery is beneath threshold
+        int level = syshal_batt_level();
+        if (level >= 0)
+            // If we've read the battery level successfully
+            if (sys_config.sys_config_battery_low_threshold.hdr.set &&
+                level <= sys_config.sys_config_battery_low_threshold.contents.threshold)
+                sm_set_next_state(state_handle, SM_MAIN_BATTERY_LEVEL_LOW);
+
         // Branch to Battery Charging if VUSB is present
         if (syshal_gpio_get_input(GPIO_VUSB))
             sm_set_next_state(state_handle, SM_MAIN_BATTERY_CHARGING);
     }
-
-    // Branch to Battery Low state if battery is beneath threshold
-    int level = syshal_batt_level();
-    if (level >= 0)
-        // If we've read the battery level successfully
-        if (sys_config.sys_config_battery_low_threshold.hdr.set &&
-            level <= sys_config.sys_config_battery_low_threshold.contents.threshold)
-            sm_set_next_state(state_handle, SM_MAIN_BATTERY_LEVEL_LOW);
 
     // Are we about to leave this state?
     if (sm_is_last_entry(state_handle))
