@@ -39,11 +39,14 @@ extern debug_level_t g_debug_level;
 
 #ifndef DEBUG_COLOR
 
-#define DEBUG_PR_T(lvl, fmt, ...)   if (g_debug_level >= lvl) { \
-    DEBUG_PR("%lu\t%s\t" fmt, \
-    TIME_IN_SECONDS, \
-    g_dbg_lvl[lvl], ## __VA_ARGS__); \
-}
+#define DEBUG_PR_T(lvl, fmt, ...) \
+    do { \
+        if (g_debug_level >= lvl) { \
+        DEBUG_PR("%lu\t%s\t" fmt, \
+        TIME_IN_SECONDS, \
+        g_dbg_lvl[lvl], ## __VA_ARGS__); \
+        } \
+    } while (0)
 
 #define DEBUG_PR_SYS(fmt, ...)       DEBUG_PR_T(DEBUG_SYSTEM, fmt, ## __VA_ARGS__)
 #define DEBUG_PR_INFO(fmt, ...)      DEBUG_PR_T(DEBUG_INFO, fmt, ## __VA_ARGS__)
@@ -69,13 +72,13 @@ extern debug_level_t g_debug_level;
 
 #else
 
-#define DEBUG_PR(fmt, ...)
-#define DEBUG_PR_T(lvl, fmt, ...)
-#define DEBUG_PR_SYS(fmt, ...)
-#define DEBUG_PR_INFO(fmt, ...)
-#define DEBUG_PR_WARN(fmt, ...)
-#define DEBUG_PR_ERROR(fmt, ...)
-#define DEBUG_PR_TRACE(fmt, ...)
+#define DEBUG_PR(fmt, ...)           do {} while (0)
+#define DEBUG_PR_T(lvl, fmt, ...)    do {} while (0)
+#define DEBUG_PR_SYS(fmt, ...)       do {} while (0)
+#define DEBUG_PR_INFO(fmt, ...)      do {} while (0)
+#define DEBUG_PR_WARN(fmt, ...)      do {} while (0)
+#define DEBUG_PR_ERROR(fmt, ...)     do {} while (0)
+#define DEBUG_PR_TRACE(fmt, ...)     do {} while (0)
 
 #endif
 

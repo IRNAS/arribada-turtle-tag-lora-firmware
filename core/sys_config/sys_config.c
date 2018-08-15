@@ -381,7 +381,7 @@ int sys_config_set(uint16_t tag, void * value, uint32_t length)
     if (return_code < 0)
         return return_code;
 
-    if (return_code != length)
+    if ( ((uint32_t) return_code) != length)
         return SYS_CONFIG_ERROR_WRONG_SIZE;
 
     // Copy data into the configuration tag

@@ -1627,7 +1627,7 @@ static void cfg_write_next_state(void)
         }
 
         // Then lets put what we have into our working buffer, accounting for what we might already have in our buffer
-        bytes_to_copy = MIN( length, MIN(tag_data_size, tag_data_size - sm_context.cfg_write.buffer_occupancy + SYS_CONFIG_TAG_ID_SIZE));
+        bytes_to_copy = MIN( length, MIN((uint32_t) tag_data_size, ((uint32_t) tag_data_size) - sm_context.cfg_write.buffer_occupancy + SYS_CONFIG_TAG_ID_SIZE));
         memcpy(&sm_context.cfg_write.buffer[sm_context.cfg_write.buffer_occupancy], read_buffer, bytes_to_copy);
         sm_context.cfg_write.buffer_occupancy += bytes_to_copy;
         read_buffer += bytes_to_copy;
@@ -1697,6 +1697,8 @@ static void cfg_write_error_state(void)
 
 static void cfg_save_req(cmd_t * req, uint16_t size)
 {
+    UNUSED(req);
+
     // Check request size is correct
     if (size != CMD_SIZE_HDR)
         Throw(EXCEPTION_REQ_WRONG_SIZE);
@@ -1743,6 +1745,8 @@ static void cfg_save_req(cmd_t * req, uint16_t size)
 
 static void cfg_restore_req(cmd_t * req, uint16_t size)
 {
+    UNUSED(req);
+
     // Check request size is correct
     if (size != CMD_SIZE_HDR)
         Throw(EXCEPTION_REQ_WRONG_SIZE);
@@ -1835,6 +1839,8 @@ static void cfg_erase_req(cmd_t * req, uint16_t size)
 
 static void cfg_protect_req(cmd_t * req, uint16_t size)
 {
+    UNUSED(req);
+
     // Check request size is correct
     if (size != CMD_SIZE_HDR)
         Throw(EXCEPTION_REQ_WRONG_SIZE);
@@ -1872,6 +1878,8 @@ static void cfg_protect_req(cmd_t * req, uint16_t size)
 
 static void cfg_unprotect_req(cmd_t * req, uint16_t size)
 {
+    UNUSED(req);
+
     // Check request size is correct
     if (size != CMD_SIZE_HDR)
         Throw(EXCEPTION_REQ_WRONG_SIZE);
@@ -2028,7 +2036,7 @@ static void gps_read_next_state(void)
         Throw(EXCEPTION_TX_BUFFER_FULL);
 
     // Don't read more than the maximum packet size
-    uint32_t bytes_to_read = MIN(sm_context.gps_read.length, SYSHAL_USB_PACKET_SIZE);
+    uint32_t bytes_to_read = MIN(sm_context.gps_read.length, (uint32_t) SYSHAL_USB_PACKET_SIZE);
 
     // Receive data from the GPS module
     uint32_t bytes_actually_read = syshal_gps_receive_raw(resp, bytes_to_read);
@@ -2265,6 +2273,8 @@ static void ble_read_next_state(void)
 
 static void status_req(cmd_t * req, uint16_t size)
 {
+    UNUSED(req);
+
     // Check request size is correct
     if (size != CMD_SIZE_HDR)
         Throw(EXCEPTION_REQ_WRONG_SIZE);
@@ -2634,6 +2644,8 @@ static void reset_req(cmd_t * req, uint16_t size)
 ////////////////////////////////////////////////////////////////////////////////
 static void battery_status_req(cmd_t * req, uint16_t size)
 {
+    UNUSED(req);
+
     // Check request size is correct
     if (size != CMD_SIZE_HDR)
         Throw(EXCEPTION_REQ_WRONG_SIZE);
@@ -2736,6 +2748,8 @@ static void log_create_req(cmd_t * req, uint16_t size)
 
 static void log_erase_req(cmd_t * req, uint16_t size)
 {
+    UNUSED(req);
+
     // Check request size is correct
     if (size != CMD_SIZE_HDR)
         Throw(EXCEPTION_REQ_WRONG_SIZE);
@@ -2880,7 +2894,7 @@ static void log_read_next_state()
         Throw(EXCEPTION_TX_BUFFER_FULL);
 
     // Read data out
-    bytes_to_read = MIN(sm_context.log_read.length, SYSHAL_USB_PACKET_SIZE);
+    bytes_to_read = MIN(sm_context.log_read.length, (uint32_t) SYSHAL_USB_PACKET_SIZE);
     ret = fs_read(file_handle, read_buffer, bytes_to_read, &bytes_actually_read);
     if (FS_NO_ERROR != ret)
     {
