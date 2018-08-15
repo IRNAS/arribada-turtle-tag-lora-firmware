@@ -290,15 +290,15 @@ static void syshal_gps_compute_checksum_priv(UBX_Packet_t * packet, uint8_t ck[2
      */
     for (unsigned int i = 0; i < 4; i++)
     {
-        ck[0] = ck[0] + buffer[i];
-        ck[1] = ck[1] + ck[0];
+        ck[0] = (uint8_t) (ck[0] + buffer[i]);
+        ck[1] = (uint8_t) (ck[1] + ck[0]);
     }
 
     buffer = packet->payloadAndCrc;
     for (unsigned int i = 0; i < packet->msgLength; i++)
     {
-        ck[0] = ck[0] + buffer[i];
-        ck[1] = ck[1] + ck[0];
+        ck[0] = (uint8_t) (ck[0] + buffer[i]);
+        ck[1] = (uint8_t) (ck[1] + ck[0]);
     }
 }
 

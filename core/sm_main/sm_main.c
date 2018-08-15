@@ -965,7 +965,7 @@ static void gpio_reed_sw_callback(void)
             }
             else
             {
-                ble_state &= ~SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_REED_SWITCH;
+                ble_state &= (uint8_t) ~SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_REED_SWITCH;
 
                 // Was the reed switch the only reason the the BLE interface was running?
                 if (!ble_state &&
@@ -1160,7 +1160,7 @@ static void timer_ble_duration_callback(void)
 {
     DEBUG_PR_TRACE("%s() called", __FUNCTION__);
 
-    ble_state &= ~SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_SCHEDULED;
+    ble_state &= (uint8_t) ~SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_SCHEDULED;
 
     // If we've not managed to connect during the duration period
     if (!config_if_connected &&
@@ -1187,7 +1187,7 @@ static void timer_ble_timeout_callback(void)
 
     // This has been triggered because we have a bluetooth connection but no data has been sent or received for a while
 
-    ble_state &= ~SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_SCHEDULED;
+    ble_state &= (uint8_t) ~SYS_CONFIG_TAG_BLUETOOTH_TRIGGER_CONTROL_SCHEDULED;
 
     if (config_if_connected && // If we are currently connected
         !ble_state && // And there is no other reason to keep the BLE interface running (e.g. reed switch)
@@ -1379,8 +1379,8 @@ static int fs_get_configuration_data(void)
 
 void cfg_read_populate_next(uint16_t tag, void * src, uint16_t length)
 {
-    sm_context.cfg_read.buffer_base[sm_context.cfg_read.buffer_offset++] = tag & 0xFF;
-    sm_context.cfg_read.buffer_base[sm_context.cfg_read.buffer_offset++] = (tag >> 8) & 0xFF;
+    sm_context.cfg_read.buffer_base[sm_context.cfg_read.buffer_offset++] = (uint8_t) (tag);
+    sm_context.cfg_read.buffer_base[sm_context.cfg_read.buffer_offset++] = (uint8_t) (tag >> 8);
     memcpy(&sm_context.cfg_read.buffer_base[sm_context.cfg_read.buffer_offset],
            src, length);
     sm_context.cfg_read.buffer_offset += length;
@@ -1403,7 +1403,7 @@ void cfg_read_populate_buffer(void)
         ret = sys_config_get(tag, &src);
         if (ret > 0)
         {
-            if ((sm_context.cfg_read.buffer_offset + ret + sizeof(uint16_t)) > SYSHAL_USB_PACKET_SIZE)
+            if ((sm_context.cfg_read.buffer_offset + (uint32_t) ret + sizeof(uint16_t)) > SYSHAL_USB_PACKET_SIZE)
             {
                 /* Buffer is full so defer this to the next iteration */
                 sm_context.cfg_read.last_index--;
@@ -1427,13 +1427,13 @@ uint32_t cfg_read_all_calc_length(void)
         void * src;
         ret = sys_config_get(tag, &src);
         if (ret > 0)
-            length += (ret + sizeof(uint16_t));
+            length += ( (uint32_t) ret + sizeof(uint16_t));
     }
 
     return length;
 }
 
-void cfg_read_req(cmd_t * req, uint16_t size)
+void cfg_read_req(cmd_t * req, uint32_t size)
 {
     // Check request size is correct
     if (CMD_SIZE(cmd_cfg_read_req_t) != size)
@@ -1542,7 +1542,7 @@ void cfg_read_next_state(void)
 /////////////////////////////////// CFG_WRITE //////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-static void cfg_write_req(cmd_t * req, uint16_t size)
+static void cfg_write_req(cmd_t * req, uint32_t size)
 {
     // Check request size is correct
     if (CMD_SIZE(cmd_cfg_write_req_t) != size)
@@ -1695,7 +1695,7 @@ static void cfg_write_error_state(void)
 /////////////////////////////////// CFG_SAVE ///////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-static void cfg_save_req(cmd_t * req, uint16_t size)
+static void cfg_save_req(cmd_t * req, uint32_t size)
 {
     UNUSED(req);
 
@@ -1743,7 +1743,7 @@ static void cfg_save_req(cmd_t * req, uint16_t size)
 ////////////////////////////////// CFG_RESTORE /////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-static void cfg_restore_req(cmd_t * req, uint16_t size)
+static void cfg_restore_req(cmd_t * req, uint32_t size)
 {
     UNUSED(req);
 
@@ -1785,7 +1785,7 @@ static void cfg_restore_req(cmd_t * req, uint16_t size)
 /////////////////////////////////// CFG_ERASE //////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-static void cfg_erase_req(cmd_t * req, uint16_t size)
+static void cfg_erase_req(cmd_t * req, uint32_t size)
 {
     // Check request size is correct
     if (CMD_SIZE(cmd_cfg_erase_req_t) != size)
@@ -1837,7 +1837,7 @@ static void cfg_erase_req(cmd_t * req, uint16_t size)
 ///////////////////////////////// CFG_PROTECT //////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-static void cfg_protect_req(cmd_t * req, uint16_t size)
+static void cfg_protect_req(cmd_t * req, uint32_t size)
 {
     UNUSED(req);
 
@@ -1876,7 +1876,7 @@ static void cfg_protect_req(cmd_t * req, uint16_t size)
 //////////////////////////////// CFG_UNPROTECT /////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-static void cfg_unprotect_req(cmd_t * req, uint16_t size)
+static void cfg_unprotect_req(cmd_t * req, uint32_t size)
 {
     UNUSED(req);
 
@@ -1915,7 +1915,7 @@ static void cfg_unprotect_req(cmd_t * req, uint16_t size)
 ////////////////////////////////// GPS_WRITE ///////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-static void gps_write_req(cmd_t * req, uint16_t size)
+static void gps_write_req(cmd_t * req, uint32_t size)
 {
     // Check request size is correct
     if (CMD_SIZE(cmd_gps_write_req_t) != size)
@@ -1991,7 +1991,7 @@ static void gps_write_next_state(void)
 /////////////////////////////////// GPS_READ ///////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-static void gps_read_req(cmd_t * req, uint16_t size)
+static void gps_read_req(cmd_t * req, uint32_t size)
 {
     // Check request size is correct
     if (CMD_SIZE(cmd_gps_read_req_t) != size)
@@ -2062,7 +2062,7 @@ static void gps_read_next_state(void)
 //////////////////////////////// GPS_CONFIG_REQ ////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-static void gps_config_req(cmd_t * req, uint16_t size)
+static void gps_config_req(cmd_t * req, uint32_t size)
 {
     // Check request size is correct
     if (CMD_SIZE(cmd_gps_config_req_t) != size)
@@ -2090,7 +2090,7 @@ static void gps_config_req(cmd_t * req, uint16_t size)
     config_if_send_priv(&config_if_send_buffer);
 }
 
-static void ble_config_req(cmd_t * req, uint16_t size)
+static void ble_config_req(cmd_t * req, uint32_t size)
 {
     // Check request size is correct
     if (CMD_SIZE(cmd_ble_config_req_t) != size)
@@ -2110,7 +2110,7 @@ static void ble_config_req(cmd_t * req, uint16_t size)
     config_if_send_priv(&config_if_send_buffer);
 }
 
-static void ble_write_req(cmd_t * req, uint16_t size)
+static void ble_write_req(cmd_t * req, uint32_t size)
 {
     // Check request size is correct
     if (CMD_SIZE(cmd_ble_write_req_t) != size)
@@ -2189,7 +2189,7 @@ static void ble_write_next_state(void)
     }
 }
 
-static void ble_read_req(cmd_t * req, uint16_t size)
+static void ble_read_req(cmd_t * req, uint32_t size)
 {
     // Check request size is correct
     if (CMD_SIZE(cmd_ble_read_req_t) != size)
@@ -2271,7 +2271,7 @@ static void ble_read_next_state(void)
 ////////////////////////////////// STATUS_REQ //////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-static void status_req(cmd_t * req, uint16_t size)
+static void status_req(cmd_t * req, uint32_t size)
 {
     UNUSED(req);
 
@@ -2296,7 +2296,7 @@ static void status_req(cmd_t * req, uint16_t size)
     config_if_send_priv(&config_if_send_buffer);
 }
 
-static void fw_send_image_req(cmd_t * req, uint16_t size)
+static void fw_send_image_req(cmd_t * req, uint32_t size)
 {
     // Check request size is correct
     if (CMD_SIZE(cmd_fw_send_image_req_t) != size)
@@ -2444,7 +2444,7 @@ __RAMFUNC void execute_stm32_firmware_upgrade(void)
         syshal_pmu_reset();
 }
 
-static void fw_apply_image_req(cmd_t * req, uint16_t size)
+static void fw_apply_image_req(cmd_t * req, uint32_t size)
 {
     fs_stat_t stat;
 
@@ -2589,7 +2589,7 @@ static void fw_apply_image_req(cmd_t * req, uint16_t size)
     config_if_send_priv(&config_if_send_buffer);
 }
 
-static void reset_req(cmd_t * req, uint16_t size)
+static void reset_req(cmd_t * req, uint32_t size)
 {
     // Check request size is correct
     if (CMD_SIZE(cmd_reset_req_t) != size)
@@ -2642,7 +2642,7 @@ static void reset_req(cmd_t * req, uint16_t size)
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////// BATTERY_STATUS_REQ //////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
-static void battery_status_req(cmd_t * req, uint16_t size)
+static void battery_status_req(cmd_t * req, uint32_t size)
 {
     UNUSED(req);
 
@@ -2676,7 +2676,7 @@ static void battery_status_req(cmd_t * req, uint16_t size)
 //////////////////////////////// LOG_CREATE_REQ ////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-static void log_create_req(cmd_t * req, uint16_t size)
+static void log_create_req(cmd_t * req, uint32_t size)
 {
     // Check request size is correct
     if (CMD_SIZE(cmd_log_create_req_t) != size)
@@ -2746,7 +2746,7 @@ static void log_create_req(cmd_t * req, uint16_t size)
 //////////////////////////////// LOG_ERASE_REQ /////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-static void log_erase_req(cmd_t * req, uint16_t size)
+static void log_erase_req(cmd_t * req, uint32_t size)
 {
     UNUSED(req);
 
@@ -2790,7 +2790,7 @@ static void log_erase_req(cmd_t * req, uint16_t size)
 ///////////////////////////////// LOG_READ_REQ /////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-static void log_read_req(cmd_t * req, uint16_t size)
+static void log_read_req(cmd_t * req, uint32_t size)
 {
     // Check request size is correct
     if (CMD_SIZE(cmd_log_read_req_t) != size)
@@ -3675,7 +3675,7 @@ static void sm_main_operational(sm_handle_t * state_handle)
                 logging_battery_t battery_log;
 
                 LOGGING_SET_HDR(&battery_log, LOGGING_BATTERY);
-                battery_log.charge = level;
+                battery_log.charge = (uint8_t) level;
                 logging_add_to_buffer((uint8_t *) &battery_log, sizeof(battery_log));
             }
 
@@ -3684,7 +3684,7 @@ static void sm_main_operational(sm_handle_t * state_handle)
                 level <= sys_config.sys_config_battery_low_threshold.contents.threshold)
                 sm_set_next_state(state_handle, SM_MAIN_BATTERY_LEVEL_LOW);
 
-            last_battery_reading = level;
+            last_battery_reading = (uint8_t) level;
         }
     }
 

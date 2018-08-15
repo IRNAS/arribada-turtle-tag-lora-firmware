@@ -120,9 +120,9 @@ static int S25FL128_erase_sector(uint32_t spi_device, uint32_t addr)
     uint8_t status;
 
     spi_tx_buf[0] = SE;
-    spi_tx_buf[1] = addr >> 16;
-    spi_tx_buf[2] = addr >> 8;
-    spi_tx_buf[3] = addr;
+    spi_tx_buf[1] = (uint8_t) (addr >> 16);
+    spi_tx_buf[2] = (uint8_t) (addr >> 8);
+    spi_tx_buf[3] = (uint8_t) (addr);
 
     syshal_gpio_set_output_low(GPIO_SPI2_CS_FLASH);
     ret = syshal_spi_transfer(spi_device, spi_tx_buf, spi_rx_buf, 4);
@@ -273,9 +273,9 @@ int syshal_flash_write(uint32_t drive, const void *src, uint32_t address, uint32
     while (size > 0)
     {
         spi_tx_buf[0] = PP;
-        spi_tx_buf[1] = address >> 16;
-        spi_tx_buf[2] = address >> 8;
-        spi_tx_buf[3] = address;
+        spi_tx_buf[1] = (uint8_t) (address >> 16);
+        spi_tx_buf[2] = (uint8_t) (address >> 8);
+        spi_tx_buf[3] = (uint8_t) (address);
 
         uint16_t wr_size = MIN(size, S25FL128_PAGE_SIZE);
         memcpy(&spi_tx_buf[4], src, wr_size);
@@ -329,9 +329,9 @@ __RAMFUNC int syshal_flash_read(uint32_t drive, void *dest, uint32_t address, ui
 
     while (size > 0)
     {
-        spi_tx_buf[1] = address >> 16;
-        spi_tx_buf[2] = address >> 8;
-        spi_tx_buf[3] = address;
+        spi_tx_buf[1] = (uint8_t) (address >> 16);
+        spi_tx_buf[2] = (uint8_t) (address >> 8);
+        spi_tx_buf[3] = (uint8_t) (address);
 
         uint16_t rd_size = MIN(size, S25FL128_PAGE_SIZE);
 

@@ -39,8 +39,8 @@ static uint32_t number_of_charge_levels_zero;
 static inline int BQ27621_write(uint8_t regAddress, uint16_t value)
 {
     uint8_t data[2];
-    data[1] = value >> 8;
-    data[0] = value & 0xFF;
+    data[1] = (uint8_t) (value >> 8);
+    data[0] = (uint8_t) (value & 0xFF);
     return syshal_i2c_write_reg(I2C_BATTERY, BQ27621_ADDR, regAddress, data, 2);
 }
 
@@ -52,7 +52,7 @@ static inline int BQ27621_read(uint8_t regAddress, uint16_t * value)
     if (2 != length)
         return length;
 
-    *value = (read_bytes[1] << 8) | (read_bytes[0] & 0xff);
+    *value = (uint16_t) ( ((uint16_t)(read_bytes[1]) << 8) | ((uint16_t)(read_bytes[0]) & 0xff) );
 
     return 0;
 }

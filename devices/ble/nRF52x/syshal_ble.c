@@ -62,7 +62,7 @@ static bool         fw_update_pending = false;
 
 /* Private functions */
 
-static int read_register(uint16_t address, uint8_t * data, uint16_t size)
+static int read_register(uint8_t address, uint8_t * data, uint16_t size)
 {
     int ret;
 
@@ -74,8 +74,8 @@ static int read_register(uint16_t address, uint8_t * data, uint16_t size)
     memset(tx_buffer, 0, sizeof(tx_buffer));
     tx_buffer[0] = address;
 
-    tx_buffer[1] = size & 0x00FF;
-    tx_buffer[2] = (size >> 8) & 0x00FF;
+    tx_buffer[1] = (uint8_t) (size);
+    tx_buffer[2] = (uint8_t) (size >> 8);
 
     while (syshal_time_get_ticks_us() - time_of_last_transfer < SPI_BUS_DELAY_US_WRITE)
     {}
@@ -126,7 +126,7 @@ static int read_register(uint16_t address, uint8_t * data, uint16_t size)
     return SYSHAL_BLE_NO_ERROR;
 }
 
-static int write_register(uint16_t address, uint8_t * data, uint16_t size)
+static int write_register(uint8_t address, uint8_t * data, uint16_t size)
 {
     int ret;
 

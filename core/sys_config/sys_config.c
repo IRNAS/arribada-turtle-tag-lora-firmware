@@ -341,7 +341,7 @@ int sys_config_get_data_ptr_priv(uint16_t tag, void ** data)
             return SYS_CONFIG_ERROR_INVALID_TAG;
     }
 
-    return len;
+    return (int) len;
 }
 
 /**

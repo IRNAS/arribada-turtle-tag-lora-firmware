@@ -39,7 +39,7 @@ int syshal_pressure_init(void)
     MS5837_xBA_read_prom(&MS5837_xBA_coefficient[0]);
 
     // The last 4 bits of the 1st prom region form a CRC error checking code.
-    uint8_t crc4_read = MS5837_xBA_coefficient[0] >> 12;
+    uint8_t crc4_read = (uint8_t) (MS5837_xBA_coefficient[0] >> 12);
 
     // Calculate the actual crc value
     uint8_t crc4_actual = MS5837_xBA_calculate_crc4(&MS5837_xBA_coefficient[0]);
@@ -82,7 +82,7 @@ int syshal_pressure_sleep(void)
 int syshal_pressure_wake(void)
 {
     // Start the sampling timer
-    syshal_timer_set_ms(MS5837_sampling_timer_priv, periodic, round((float) 1000.0f / sys_config.sys_config_pressure_sample_rate.contents.sample_rate));
+    syshal_timer_set_ms(MS5837_sampling_timer_priv, periodic, (uint32_t) round((float) 1000.0f / sys_config.sys_config_pressure_sample_rate.contents.sample_rate));
 
     MS5837_timer_callback(); // Manually trigger a reading now so we get a first reading straight away
 
@@ -128,7 +128,7 @@ uint8_t MS5837_xBA_calculate_crc4(uint16_t prom[])
     n_rem = (0x000F & (n_rem >> 12)); // final 4-bit reminder is CRC code
     prom[0] = crc_temp; // restore the crc_read to its original place
 
-    return (n_rem ^ 0x00);
+    return (uint8_t) (n_rem ^ 0x00);
 }
 
 void MS5837_xBA_send_command(uint8_t command)
@@ -146,7 +146,7 @@ void MS5837_xBA_read_prom(uint16_t prom[])
         MS5837_xBA_send_command(CMD_PROM | (i * 2));
         syshal_i2c_receive(I2C_PRESSURE, MS5837_I2C_ADDRESS, read_buffer, 2);
 
-        prom[i] = (((uint16_t)read_buffer[0] << 8) + read_buffer[1]);
+        prom[i] = (uint16_t) (((uint16_t)read_buffer[0] << 8) + read_buffer[1]);
     }
 }
 
