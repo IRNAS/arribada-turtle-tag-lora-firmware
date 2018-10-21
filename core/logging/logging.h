@@ -40,6 +40,8 @@
 #define LOGGING_BLE_DISABLED      (0x0B) // Bluetooth function has been disabled
 #define LOGGING_BLE_CONNECTED     (0x0C) // Bluetooth GATT connection has been made
 #define LOGGING_BLE_DISCONNECTED  (0x0D) // Bluetooth GATT connection has been released
+#define LOGGING_GPS_ON            (0x0E) // GPS module turned on
+#define LOGGING_GPS_OFF           (0x0F) // GPS module turned off
 
 #define LOGGING_BLE_ENABLED_CAUSE_REED_SWITCH          (0x00)
 #define LOGGING_BLE_ENABLED_CAUSE_SCHEDULE_TIMER       (0x01)
@@ -150,5 +152,15 @@ typedef struct __attribute__((__packed__))
 {
     logging_hdr_t h;
 } logging_ble_disconnected_t;
+
+typedef struct __attribute__((__packed__))
+{
+    logging_hdr_t h;
+} logging_log_gps_on_t;
+
+typedef struct __attribute__((__packed__))
+{
+    logging_hdr_t h;
+} logging_log_gps_off_t;
 
 #endif /* _LOGGING_H_ */

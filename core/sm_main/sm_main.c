@@ -1013,6 +1013,11 @@ static void timer_gps_interval_callback(void)
             sm_gps_state = SM_GPS_STATE_ACQUIRING;
             gps_ttff_reading_logged = false;
             syshal_gps_wake_up();
+
+            // Log the GPS wake-up event
+            logging_log_gps_on_t gps_on_log;
+            LOGGING_SET_HDR(&gps_on_log, LOGGING_GPS_ON);
+            logging_add_to_buffer((uint8_t *) &gps_on_log, sizeof(gps_on_log));
         }
 
         syshal_timer_set(timer_gps_maximum_acquisition, one_shot, sys_config.sys_config_gps_maximum_acquisition_time.contents.seconds);
@@ -1037,6 +1042,11 @@ static void timer_gps_no_fix_callback(void)
         {
             sm_gps_state = SM_GPS_STATE_ASLEEP;
             syshal_gps_shutdown();
+
+            // Log the GPS shutdown event
+            logging_log_gps_off_t gps_off_log;
+            LOGGING_SET_HDR(&gps_off_log, LOGGING_GPS_OFF);
+            logging_add_to_buffer((uint8_t *) &gps_off_log, sizeof(gps_off_log));
         }
     }
 }
@@ -1053,6 +1063,11 @@ static void timer_gps_maximum_acquisition_callback(void)
     {
         sm_gps_state = SM_GPS_STATE_ASLEEP;
         syshal_gps_shutdown();
+
+        // Log the GPS shutdown event
+        logging_log_gps_off_t gps_off_log;
+        LOGGING_SET_HDR(&gps_off_log, LOGGING_GPS_OFF);
+        logging_add_to_buffer((uint8_t *) &gps_off_log, sizeof(gps_off_log));
     }
 }
 
