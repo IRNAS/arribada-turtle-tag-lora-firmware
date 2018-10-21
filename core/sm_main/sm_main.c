@@ -3615,6 +3615,34 @@ static void sm_main_operational(sm_handle_t * state_handle)
             syshal_pmu_set_level(POWER_SLEEP);
     }
 
+    // Get the battery level state
+    int level = syshal_batt_level();
+    if (level >= 0) // If we've read the battery level successfully
+    {
+        // Has our battery level decreased
+        if (last_battery_reading > level)
+        {
+            // Should we log this?
+            if (sys_config.sys_config_battery_log_enable.hdr.set &&
+                sys_config.sys_config_battery_log_enable.contents.enable)
+            {
+                // Log the battery level
+                logging_battery_t battery_log;
+
+                LOGGING_SET_HDR(&battery_log, LOGGING_BATTERY);
+                battery_log.charge = (uint8_t) level;
+                logging_add_to_buffer((uint8_t *) &battery_log, sizeof(battery_log));
+            }
+
+            // Should we check to see if we should enter a low power state?
+            if (sys_config.sys_config_battery_low_threshold.hdr.set &&
+                level <= sys_config.sys_config_battery_low_threshold.contents.threshold)
+                sm_set_next_state(state_handle, SM_MAIN_BATTERY_LEVEL_LOW);
+
+            last_battery_reading = (uint8_t) level;
+        }
+    }
+
     // Is global logging enabled?
     if (sys_config.sys_config_logging_enable.contents.enable)
     {
@@ -3659,34 +3687,6 @@ static void sm_main_operational(sm_handle_t * state_handle)
     // Branch to Battery Charging if VUSB is present
     if (syshal_gpio_get_input(GPIO_VUSB))
         sm_set_next_state(state_handle, SM_MAIN_BATTERY_CHARGING);
-
-    // Get the battery level state
-    int level = syshal_batt_level();
-    if (level >= 0) // If we've read the battery level successfully
-    {
-        // Has our battery level decreased
-        if (last_battery_reading > level)
-        {
-            // Should we log this?
-            if (sys_config.sys_config_battery_log_enable.hdr.set &&
-                sys_config.sys_config_battery_log_enable.contents.enable)
-            {
-                // Log the battery level
-                logging_battery_t battery_log;
-
-                LOGGING_SET_HDR(&battery_log, LOGGING_BATTERY);
-                battery_log.charge = (uint8_t) level;
-                logging_add_to_buffer((uint8_t *) &battery_log, sizeof(battery_log));
-            }
-
-            // Should we check to see if we should enter a low power state?
-            if (sys_config.sys_config_battery_low_threshold.hdr.set &&
-                level <= sys_config.sys_config_battery_low_threshold.contents.threshold)
-                sm_set_next_state(state_handle, SM_MAIN_BATTERY_LEVEL_LOW);
-
-            last_battery_reading = (uint8_t) level;
-        }
-    }
 
     manage_ble();
 
