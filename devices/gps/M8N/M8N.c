@@ -54,25 +54,126 @@ static int hal_error_map[] =
 
 void syshal_gps_init(void)
 {
-    // Go through every baudrate and set them to the highest to ensure the device is always in the highest baudrate
-    UBX_Packet_t ubx_packet;
-    UBX_SET_PACKET_HEADER(&ubx_packet, UBX_MSG_CLASS_CFG, UBX_MSG_ID_CFG_PRT, sizeof(UBX_CFG_PRT2_t));
-    UBX_PAYLOAD(&ubx_packet, UBX_CFG_PRT2)->portID = 1;
-    UBX_PAYLOAD(&ubx_packet, UBX_CFG_PRT2)->txReady = 0;
-    UBX_PAYLOAD(&ubx_packet, UBX_CFG_PRT2)->mode = (3 << 6) | (4 << 9);
-    UBX_PAYLOAD(&ubx_packet, UBX_CFG_PRT2)->inProtoMask = 1;
-    UBX_PAYLOAD(&ubx_packet, UBX_CFG_PRT2)->outProtoMask = 1;
-    UBX_PAYLOAD(&ubx_packet, UBX_CFG_PRT2)->flags = 0;
+    bool is_responsive;
+    uint32_t i;
+    int total_retries = 5;
 
-    for (uint32_t repeat = 0; repeat < 10; ++repeat)
-        for (uint32_t i = 0; i < sizeof(supported_baudrates_priv) / sizeof(supported_baudrates_priv[0]) - 1; ++i)
+auto_baud:
+    is_responsive = false;
+
+    DEBUG_PR_INFO("Trying to detect M8N baud rate using auto-baud...");
+
+    // Go through every baudrate and try to detect what is currently being used
+    for (i = 0; i < sizeof(supported_baudrates_priv) / sizeof(supported_baudrates_priv[0]); i++)
+    {
+        syshal_uart_change_baud(GPS_UART, supported_baudrates_priv[i]);
+
+        for (unsigned int j = 0; j < 2; j++)
         {
-            syshal_uart_change_baud(GPS_UART, supported_baudrates_priv[i]);
-            UBX_PAYLOAD(&ubx_packet, UBX_CFG_PRT2)->baudRate = MAX_BAUD_RATE;
-            syshal_gps_send_packet_priv(&ubx_packet);
+            if (syshal_gps_device_responsive_priv())
+            {
+                DEBUG_PR_INFO("Detected %i baud rate using auto-baud", (unsigned int)supported_baudrates_priv[i]);
+                is_responsive = true;
+                goto done;
+            }
         }
 
-    syshal_uart_change_baud(GPS_UART, MAX_BAUD_RATE);
+        // Empty the UART RX buffer before proceeding
+        uint8_t dumpBuffer;
+        while (syshal_uart_available(GPS_UART) > 0)
+            syshal_uart_receive(GPS_UART, &dumpBuffer, 1);
+    }
+
+done:
+    if (!is_responsive)
+    {
+        DEBUG_PR_ERROR("Failed to detect GPS baud rate using auto-baud");
+
+        total_retries--;
+        if (total_retries > 0)
+            goto auto_baud;
+
+        // FIXME: if this happens we really should go into an error state
+        // which has some visible indication to the end user i.e., this
+        // function should have a return value indicating a failure
+    }
+
+    if (is_responsive && MAX_BAUD_RATE != supported_baudrates_priv[i])
+    {
+        DEBUG_PR_INFO("Changing baud rate to %u", MAX_BAUD_RATE);
+
+        UBX_Packet_t ubx_packet;
+        UBX_SET_PACKET_HEADER(&ubx_packet, UBX_MSG_CLASS_CFG, UBX_MSG_ID_CFG_PRT, sizeof(UBX_CFG_PRT2_t));
+        UBX_PAYLOAD(&ubx_packet, UBX_CFG_PRT2)->portID = 1;
+        UBX_PAYLOAD(&ubx_packet, UBX_CFG_PRT2)->txReady = 0;
+        UBX_PAYLOAD(&ubx_packet, UBX_CFG_PRT2)->mode = (3 << 6) | (4 << 9);
+        UBX_PAYLOAD(&ubx_packet, UBX_CFG_PRT2)->inProtoMask = 1;
+        UBX_PAYLOAD(&ubx_packet, UBX_CFG_PRT2)->outProtoMask = 1;
+        UBX_PAYLOAD(&ubx_packet, UBX_CFG_PRT2)->flags = 0;
+        UBX_PAYLOAD(&ubx_packet, UBX_CFG_PRT2)->baudRate = MAX_BAUD_RATE;
+
+        // Empty the UART RX buffer before proceeding
+        uint8_t dumpBuffer;
+        while (syshal_uart_available(GPS_UART) > 0)
+            syshal_uart_receive(GPS_UART, &dumpBuffer, 1);
+
+        last_ack.clsID = 0xFF;
+        last_ack.msgID = 0xFF;
+        last_nack.clsID = 0xFF;
+        last_nack.msgID = 0xFF;
+        syshal_gps_send_packet_priv(&ubx_packet);
+
+        DEBUG_PR_TRACE("Sending UBX:CFG_PRT2");
+        syshal_uart_change_baud(GPS_UART, MAX_BAUD_RATE);
+
+        is_responsive = false;
+        uint32_t start_time = syshal_time_get_ticks_ms();
+        while (syshal_time_get_ticks_ms() - start_time < M8N_TIMEOUT_MS)
+        {
+            syshal_gps_look_for_ack_or_nack_priv();
+
+            // Look for a ACK response to this message
+            if (last_ack.clsID == UBX_MSG_CLASS_CFG &&
+                last_ack.msgID == UBX_MSG_ID_CFG_PRT)
+            {
+                DEBUG_PR_TRACE("UBX:CFG_PRT2 ACKed");
+                last_ack.clsID = 0xFF;
+                last_ack.msgID = 0xFF;
+                is_responsive = true;
+                break;
+            }
+            else if (last_nack.clsID == UBX_MSG_CLASS_CFG&&
+                last_nack.msgID == UBX_MSG_ID_CFG_PRT)
+            {
+                DEBUG_PR_TRACE("UBX:CFG_PRT2 NACKed");
+                last_nack.clsID = 0xFF;
+                last_nack.msgID = 0xFF;
+                break;
+            }
+        }
+
+        if (is_responsive)
+        {
+            if (syshal_gps_device_responsive_priv())
+            {
+                DEBUG_PR_INFO("Successfully changed baud to %u", MAX_BAUD_RATE);
+            }
+            else
+            {
+                DEBUG_PR_ERROR("Device unresponsive after changing baud to %u", MAX_BAUD_RATE);
+                total_retries--;
+                if (total_retries > 0)
+                    goto auto_baud;
+            }
+        }
+        else
+        {
+            DEBUG_PR_WARN("Failed to change baud to %u", MAX_BAUD_RATE);
+            total_retries--;
+            if (total_retries > 0)
+                goto auto_baud;
+        }
+    }
 
     // Make sure the device is asleep
     syshal_gps_shutdown();
@@ -326,9 +427,13 @@ void syshal_gps_look_for_ack_or_nack_priv(void)
     if (GPS_UART_NO_ERROR == error)
     {
         if (UBX_IS_MSG(&ubx_packet, UBX_MSG_CLASS_ACK, UBX_MSG_ID_ACK_NACK))
+        {
             syshal_gps_process_nack_priv(&ubx_packet);
-        else if (UBX_IS_MSG(&ubx_packet, UBX_MSG_CLASS_ACK, UBX_MSG_ID_ACK_NACK))
+        }
+        else if (UBX_IS_MSG(&ubx_packet, UBX_MSG_CLASS_ACK, UBX_MSG_ID_ACK_ACK))
+        {
             syshal_gps_process_ack_priv(&ubx_packet);
+        }
     }
 }
 
