@@ -691,6 +691,7 @@ TEST_F(FsTest, LargeFileDataIntegrityCheck)
 {
     fs_t fs;
     fs_handle_t handle;
+    fs_stat_t stat;
     uint8_t wr_user_flags = 0x7;
     uint32_t wr, rd;
 
@@ -715,6 +716,10 @@ TEST_F(FsTest, LargeFileDataIntegrityCheck)
         EXPECT_EQ((uint32_t)1, rd);
     }
     EXPECT_EQ(FS_NO_ERROR, fs_close(handle));
+
+    // Check file size is correct
+    EXPECT_EQ(FS_NO_ERROR, fs_stat(fs, 0, &stat));
+    EXPECT_EQ((uint32_t)FS_PRIV_USABLE_SIZE * FS_PRIV_MAX_SECTORS, stat.size);
 }
 
 TEST_F(FsTest, CircularFileCanOverwriteAndReadBack)
