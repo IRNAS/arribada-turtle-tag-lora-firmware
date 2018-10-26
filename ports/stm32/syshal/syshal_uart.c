@@ -154,7 +154,7 @@ static inline uint8_t usart_getc_priv(UART_t instance)
  */
 uint32_t syshal_uart_available(uint32_t instance)
 {
-    return rb_full_count(&rx_buffer[instance]); // Return the number of elements stored in the ring buffer
+    return rb_occupancy(&rx_buffer[instance]); // Return the number of elements stored in the ring buffer
 }
 
 /**
@@ -166,7 +166,7 @@ uint32_t syshal_uart_available(uint32_t instance)
  */
 int syshal_uart_receive(uint32_t instance, uint8_t * data, uint32_t size)
 {
-    uint32_t count = rb_full_count(&rx_buffer[instance]);
+    uint32_t count = rb_occupancy(&rx_buffer[instance]);
 
     if (size > count)
         size = count;
