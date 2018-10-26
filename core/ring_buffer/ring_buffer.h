@@ -1,36 +1,8 @@
-/******************************************************************************
- * The MIT License
- *
- * Copyright (c) 2011 LeafLabs, LLC.
- *
- * Permission is hereby granted, free of charge, to any person
- * obtaining a copy of this software and associated documentation
- * files (the "Software"), to deal in the Software without
- * restriction, including without limitation the rights to use, copy,
- * modify, merge, publish, distribute, sublicense, and/or sell copies
- * of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be
- * included in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *****************************************************************************/
-
-// This implementation is not thread-safe.  In particular, none of
-// these functions is guaranteed re-entrant.
-
 #ifndef _ring_buffer_H_
 #define _ring_buffer_H_
 
 #include <stdint.h>
+#include <stdbool.h>
 
 /**
  * Ring buffer type.
@@ -44,9 +16,9 @@
 typedef struct
 {
     volatile uint8_t * buf; /**< Buffer items are stored into */
-    volatile uint16_t head; /**< Index of the next item to remove */
-    volatile uint16_t tail; /**< Index where the next item will get inserted */
-    volatile uint16_t size; /**< Buffer capacity minus one */
+    volatile uint32_t head; /**< Index of the next item to remove */
+    volatile uint32_t tail; /**< Index where the next item will get inserted */
+    volatile uint32_t size; /**< Buffer capacity minus one */
 } ring_buffer_t;
 
 /**
@@ -54,18 +26,15 @@ typedef struct
  *
  *  @param rb   Instance to initialise
  *
- *  @param size Number of items in buf.  The ring buffer will always
- *              leave one element unoccupied, so the maximum number of
- *              elements it can store will be size - 1.  Thus, size
- *              must be at least 2.
+ *  @param size Number of items in buf
  *
  *  @param buf  Buffer to store items into
  */
-static inline void rb_init(ring_buffer_t * rb, uint16_t size, uint8_t * buf)
+static inline void rb_init(ring_buffer_t * rb, uint32_t size, uint8_t * buf)
 {
     rb->head = 0;
     rb->tail = 0;
-    rb->size = size - 1;
+    rb->size = size;
     rb->buf = buf;
 }
 
@@ -73,7 +42,7 @@ static inline void rb_init(ring_buffer_t * rb, uint16_t size, uint8_t * buf)
  * @brief Return the max number of elements that can be stored in the ring buffer.
  * @param rb Buffer whose elements to count.
  */
-static inline uint16_t rb_capacity(ring_buffer_t * rb)
+static inline uint32_t rb_capacity(ring_buffer_t * rb)
 {
     return rb->size;
 }
@@ -82,32 +51,34 @@ static inline uint16_t rb_capacity(ring_buffer_t * rb)
  * @brief Return the number of elements stored in the ring buffer.
  * @param rb Buffer whose elements to count.
  */
-static inline uint16_t rb_full_count(ring_buffer_t * rb)
+static inline uint32_t rb_occupancy(ring_buffer_t * rb)
 {
-    volatile ring_buffer_t * arb = rb;
-    int32_t size = arb->tail - arb->head;
-    if (arb->tail < arb->head)
-    {
-        size += arb->size + 1;
-    }
-    return (uint16_t)size;
+    return rb->tail - rb->head;
+}
+
+/**
+ * @brief Return the number of free spaces in the ring buffer.
+ * @param rb Buffer whose elements to count.
+ */
+static inline uint32_t rb_free(ring_buffer_t * rb)
+{
+    return rb->size - rb_occupancy(rb);
 }
 
 /**
  * @brief Returns true if and only if the ring buffer is full.
  * @param rb Buffer to test.
  */
-static inline int rb_is_full(ring_buffer_t * rb)
+static inline bool rb_is_full(ring_buffer_t * rb)
 {
-    return (rb->tail + 1 == rb->head) ||
-           (rb->tail == rb->size && rb->head == 0);
+    return rb_occupancy(rb) == rb->size;
 }
 
 /**
  * @brief Returns true if and only if the ring buffer is empty.
  * @param rb Buffer to test.
  */
-static inline int rb_is_empty(ring_buffer_t * rb)
+static inline bool rb_is_empty(ring_buffer_t * rb)
 {
     return rb->head == rb->tail;
 }
@@ -119,8 +90,8 @@ static inline int rb_is_empty(ring_buffer_t * rb)
  */
 static inline void rb_insert(ring_buffer_t * rb, uint8_t element)
 {
-    rb->buf[rb->tail] = element;
-    rb->tail = (rb->tail == rb->size) ? 0 : rb->tail + 1;
+    rb->buf[rb->tail % rb->size] = element;
+    rb->tail++;
 }
 
 /**
@@ -129,47 +100,27 @@ static inline void rb_insert(ring_buffer_t * rb, uint8_t element)
  */
 static inline uint8_t rb_remove(ring_buffer_t * rb)
 {
-    uint8_t ch = rb->buf[rb->head];
-    rb->head = (rb->head == rb->size) ? 0 : rb->head + 1;
+    uint8_t ch = rb->buf[rb->head % rb->size];
+    rb->head++;
     return ch;
 }
 
 /*
- * Roger Clark. 20141125,
- * added peek function.
  * @brief Return the first item from a ring buffer, without removing it
  * @param rb Buffer to remove from, must contain at least one element.
  */
-static inline int rb_peek(ring_buffer_t * rb)
+static inline uint8_t rb_peek(ring_buffer_t * rb)
 {
-    if (rb->head == rb->tail)
-    {
-        return -1;
-    }
-    else
-    {
-        return rb->buf[rb->head];
-    }
+    return rb->buf[rb->head % rb->size];
 }
 
 /*
  * @brief Return the nth element from a ring buffer, without removing it
  * @param rb Buffer to remove from, must contain at least one element.
  */
-static inline int rb_peek_at(ring_buffer_t * rb, uint8_t element)
+static inline uint8_t rb_peek_at(ring_buffer_t * rb, uint32_t element)
 {
-    if (rb->head == rb->tail)
-    {
-        return -1;
-    }
-    else
-    {
-        if(rb_full_count(rb) < element)
-            return -1;
-
-        uint16_t location = (rb->head + element) % rb->size;
-        return rb->buf[location];
-    }
+    return rb->buf[(rb->head + element) % rb->size];
 }
 
 /**
@@ -180,7 +131,7 @@ static inline int rb_peek_at(ring_buffer_t * rb, uint8_t element)
  *
  * @param rb Buffer to attempt to remove from.
  */
-static inline int16_t rb_safe_remove(ring_buffer_t * rb)
+static inline int32_t rb_safe_remove(ring_buffer_t * rb)
 {
     return rb_is_empty(rb) ? -1 : rb_remove(rb);
 }
@@ -192,14 +143,13 @@ static inline int16_t rb_safe_remove(ring_buffer_t * rb)
  * @param element Value to insert into rb.
  * @sideeffect If rb is not full, appends element onto buffer.
  * @return If element was appended, then true; otherwise, false. */
-static inline int rb_safe_insert(ring_buffer_t * rb, uint8_t element)
+static inline bool rb_safe_insert(ring_buffer_t * rb, uint8_t element)
 {
     if (rb_is_full(rb))
-    {
-        return 0;
-    }
+        return false;
+
     rb_insert(rb, element);
-    return 1;
+    return true;
 }
 
 /**
@@ -210,15 +160,15 @@ static inline int rb_safe_insert(ring_buffer_t * rb, uint8_t element)
  *
  * @param rb Ring buffer to insert into.
  * @param element Value to insert into ring buffer.
- * @return On success, returns -1.  If an element was popped, returns
- *         the popped value.
+ * @return returns true if element was removed else false
  */
-static inline int rb_push_insert(ring_buffer_t * rb, uint8_t element)
+static inline bool rb_push_insert(ring_buffer_t * rb, uint8_t element)
 {
-    int ret = -1;
+    bool ret = false;
     if (rb_is_full(rb))
     {
-        ret = rb_remove(rb);
+        rb_remove(rb);
+        ret = true;
     }
     rb_insert(rb, element);
     return ret;
