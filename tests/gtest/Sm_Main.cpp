@@ -1788,7 +1788,7 @@ TEST_F(Sm_MainTest, OperationalStateGPSScheduledAlwaysOn)
 
     EXPECT_EQ(SM_MAIN_OPERATIONAL, sm_get_current_state(&state_handle));
 
-    for (unsigned int i = 0; i < acquisition_interval+1; ++i)
+    for (unsigned int i = 0; i < 100; ++i)
     {
         IncrementSeconds(1);
         sm_tick(&state_handle);
