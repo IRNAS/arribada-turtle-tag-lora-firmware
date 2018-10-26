@@ -1314,23 +1314,6 @@ TEST_F(Sm_MainTest, ProvisioningToCharging)
     EXPECT_EQ(SM_MAIN_BATTERY_CHARGING, sm_get_current_state(&state_handle));
 }
 
-TEST_F(Sm_MainTest, ProvisioningToLowBattery)
-{
-    BootTagsNotSet();
-
-    sm_set_current_state(&state_handle, SM_MAIN_PROVISIONING);
-
-    config_if_init(CONFIG_IF_BACKEND_USB);
-    USBConnectionEvent();
-    SetBatteryPercentage(0);
-    SetBatteryLowThreshold(10);
-
-    sm_tick(&state_handle);
-
-    EXPECT_EQ(SM_MAIN_BATTERY_LEVEL_LOW, sm_get_current_state(&state_handle));
-    EXPECT_EQ(CONFIG_IF_BACKEND_NOT_SET, config_if_current());
-}
-
 TEST_F(Sm_MainTest, ProvisioningToOperationalState)
 {
     BootTagsSetAndLogFileCreated();
