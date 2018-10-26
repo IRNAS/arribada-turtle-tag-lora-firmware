@@ -44,6 +44,8 @@ class Ring_BufferTest : public ::testing::Test
     virtual void SetUp()
     {
         rb_init(&ring_buffer, BUF_SIZE, &buffer[0]); // Setup ring buffer
+        EXPECT_EQ(BUF_SIZE, rb_capacity(&ring_buffer));
+        EXPECT_EQ(BUF_SIZE, rb_free(&ring_buffer));
     }
 
     virtual void TearDown()
@@ -68,6 +70,35 @@ TEST_F(Ring_BufferTest, BufferEmpty)
     EXPECT_FALSE(rb_is_full(&ring_buffer));
 }
 
+TEST_F(Ring_BufferTest, WriteOne)
+{
+    uint8_t testData[1];
+
+    GenerateTestData(testData, 1);
+
+    rb_insert(&ring_buffer, testData[0]);
+
+    EXPECT_EQ(1, rb_occupancy(&ring_buffer));
+    EXPECT_EQ(BUF_SIZE - 1, rb_free(&ring_buffer));
+    EXPECT_FALSE(rb_is_full(&ring_buffer));
+    EXPECT_FALSE(rb_is_empty(&ring_buffer));
+
+    // Read out and compare data
+    EXPECT_EQ(testData[0], rb_safe_remove(&ring_buffer));
+}
+
+TEST_F(Ring_BufferTest, SafeRemoveNoContents)
+{
+    EXPECT_EQ(0, rb_occupancy(&ring_buffer));
+    EXPECT_EQ(BUF_SIZE, rb_free(&ring_buffer));
+    EXPECT_FALSE(rb_is_full(&ring_buffer));
+    EXPECT_TRUE(rb_is_empty(&ring_buffer));
+
+    // Read out and compare data
+    EXPECT_EQ(-1, rb_safe_remove(&ring_buffer));
+}
+
+
 TEST_F(Ring_BufferTest, BufferFill)
 {
     uint8_t testData[BUF_SIZE];
@@ -78,6 +109,7 @@ TEST_F(Ring_BufferTest, BufferFill)
         rb_insert(&ring_buffer, testData[i]);
 
     EXPECT_EQ(BUF_SIZE, rb_occupancy(&ring_buffer));
+    EXPECT_EQ(0, rb_free(&ring_buffer));
     EXPECT_TRUE(rb_is_full(&ring_buffer));
     EXPECT_FALSE(rb_is_empty(&ring_buffer));
 
