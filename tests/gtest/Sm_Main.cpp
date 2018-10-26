@@ -379,7 +379,10 @@ bool syshal_pressure_awake_GTest(int cmock_num_calls) {return false;}
 // syshal_axl
 bool syshal_axl_awake_GTest(int cmock_num_calls) {return false;}
 
-//// syshal_pmu
+// syshal_gps
+bool syshal_gps_on;
+void syshal_gps_wake_up_GTest(int cmock_num_calls) {syshal_gps_on = true;}
+void syshal_gps_shutdown_GTest(int cmock_num_calls) {syshal_gps_on = false;}
 
 class Sm_MainTest : public ::testing::Test
 {
@@ -488,9 +491,11 @@ class Sm_MainTest : public ::testing::Test
 
         // syshal_gps
         Mocksyshal_gps_Init();
+        syshal_gps_on = false;
         syshal_gps_init_Ignore();
-        syshal_gps_wake_up_Ignore();
-        syshal_gps_shutdown_Ignore();
+        syshal_gps_tick_Ignore();
+        syshal_gps_wake_up_StubWithCallback(syshal_gps_wake_up_GTest);
+        syshal_gps_shutdown_StubWithCallback(syshal_gps_shutdown_GTest);
         syshal_gps_send_raw_StubWithCallback(syshal_gps_send_raw_GTest);
         syshal_gps_receive_raw_StubWithCallback(syshal_gps_receive_raw_GTest);
 
@@ -1677,6 +1682,118 @@ TEST_F(Sm_MainTest, OperationalBLEScheduled)
 
     EXPECT_EQ(CONFIG_IF_BACKEND_NOT_SET, config_if_current());
     EXPECT_EQ(SM_MAIN_OPERATIONAL, sm_get_current_state(&state_handle));
+}
+
+TEST_F(Sm_MainTest, OperationalStateGPSScheduled)
+{
+    uint32_t acquisition_interval = 165;
+    uint32_t maximum_acquisition = 15;
+    uint32_t no_fix_timeout = 0;
+
+    sm_set_current_state(&state_handle, SM_MAIN_BOOT);
+
+    set_all_configuration_tags_RAM();
+    CreateEmptyLogfile();
+
+    // Set GPS trigger mode
+    sys_config.sys_config_gps_trigger_mode.hdr.set = true;
+    sys_config.sys_config_gps_trigger_mode.contents.mode = SYS_CONFIG_GPS_TRIGGER_MODE_SCHEDULED;
+
+    // Set GPS acquisition interval
+    sys_config.sys_config_gps_scheduled_acquisition_interval.hdr.set = true;
+    sys_config.sys_config_gps_scheduled_acquisition_interval.contents.seconds = acquisition_interval;
+
+    // Set GPS acquisition time
+    sys_config.sys_config_gps_maximum_acquisition_time.hdr.set = true;
+    sys_config.sys_config_gps_maximum_acquisition_time.contents.seconds = maximum_acquisition;
+
+    // Set GPS no fix timeout
+    sys_config.sys_config_gps_scheduled_acquisition_no_fix_timeout.hdr.set = true;
+    sys_config.sys_config_gps_scheduled_acquisition_no_fix_timeout.contents.seconds = no_fix_timeout;
+
+    // Enable GPS logging
+    sys_config.sys_config_gps_log_position_enable.hdr.set = true;
+    sys_config.sys_config_gps_log_position_enable.contents.enable = true;
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_OPERATIONAL, sm_get_current_state(&state_handle));
+    EXPECT_FALSE(syshal_gps_on);
+
+    for (unsigned int i = 0; i < acquisition_interval+1; ++i)
+    {
+        IncrementSeconds(1);
+        sm_tick(&state_handle);
+    }
+
+    EXPECT_TRUE(syshal_gps_on);
+
+    for (unsigned int i = 0; i < maximum_acquisition; ++i)
+    {
+        IncrementSeconds(1);
+        sm_tick(&state_handle);
+    }
+
+    EXPECT_FALSE(syshal_gps_on);
+
+    for (unsigned int i = 0; i < acquisition_interval - maximum_acquisition; ++i)
+    {
+        IncrementSeconds(1);
+        sm_tick(&state_handle);
+    }
+
+    EXPECT_TRUE(syshal_gps_on);
+
+    for (unsigned int i = 0; i < maximum_acquisition; ++i)
+    {
+        IncrementSeconds(1);
+        sm_tick(&state_handle);
+    }
+
+    EXPECT_FALSE(syshal_gps_on);
+}
+
+TEST_F(Sm_MainTest, OperationalStateGPSScheduledAlwaysOn)
+{
+    uint32_t acquisition_interval = 0;
+    uint32_t maximum_acquisition = 0;
+    uint32_t no_fix_timeout = 0;
+
+    sm_set_current_state(&state_handle, SM_MAIN_BOOT);
+
+    set_all_configuration_tags_RAM();
+    CreateEmptyLogfile();
+
+    // Set GPS trigger mode
+    sys_config.sys_config_gps_trigger_mode.hdr.set = true;
+    sys_config.sys_config_gps_trigger_mode.contents.mode = SYS_CONFIG_GPS_TRIGGER_MODE_SCHEDULED;
+
+    // Set GPS acquisition interval
+    sys_config.sys_config_gps_scheduled_acquisition_interval.hdr.set = true;
+    sys_config.sys_config_gps_scheduled_acquisition_interval.contents.seconds = acquisition_interval;
+
+    // Set GPS acquisition time
+    sys_config.sys_config_gps_maximum_acquisition_time.hdr.set = true;
+    sys_config.sys_config_gps_maximum_acquisition_time.contents.seconds = maximum_acquisition;
+
+    // Set GPS no fix timeout
+    sys_config.sys_config_gps_scheduled_acquisition_no_fix_timeout.hdr.set = true;
+    sys_config.sys_config_gps_scheduled_acquisition_no_fix_timeout.contents.seconds = no_fix_timeout;
+
+    // Enable GPS logging
+    sys_config.sys_config_gps_log_position_enable.hdr.set = true;
+    sys_config.sys_config_gps_log_position_enable.contents.enable = true;
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_OPERATIONAL, sm_get_current_state(&state_handle));
+
+    for (unsigned int i = 0; i < acquisition_interval+1; ++i)
+    {
+        IncrementSeconds(1);
+        sm_tick(&state_handle);
+        ASSERT_TRUE(syshal_gps_on);
+    }
 }
 
 //////////////////////////////////////////////////////////////////
