@@ -33,6 +33,7 @@ static const uint16_t sys_config_lookup_priv[SYS_CONFIG_TAG_TOTAL_NUMBER] =
     SYS_CONFIG_TAG_GPS_MAXIMUM_ACQUISITION_TIME,
     SYS_CONFIG_TAG_GPS_SCHEDULED_ACQUISITION_NO_FIX_TIMEOUT,
     SYS_CONFIG_TAG_GPS_LAST_KNOWN_POSITION,
+    SYS_CONFIG_TAG_GPS_VERY_FIRST_FIX_HOLD_TIME,
     SYS_CONFIG_SALTWATER_SWITCH_LOG_ENABLE,
     SYS_CONFIG_SALTWATER_SWITCH_HYSTERESIS_PERIOD,
     SYS_CONFIG_TAG_RTC_SYNC_TO_GPS_ENABLE,
@@ -125,6 +126,11 @@ int sys_config_get_data_ptr_priv(uint16_t tag, void ** data)
         case SYS_CONFIG_TAG_GPS_LAST_KNOWN_POSITION:
             len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_gps_last_known_position_t);
             *data = &sys_config.sys_config_gps_last_known_position;
+            break;
+
+        case SYS_CONFIG_TAG_GPS_VERY_FIRST_FIX_HOLD_TIME:
+            len = SYS_CONFIG_TAG_DATA_SIZE(sys_config_gps_very_first_fix_hold_time_t);
+            *data = &sys_config.sys_config_gps_very_first_fix_hold_time;
             break;
 
         case SYS_CONFIG_SALTWATER_SWITCH_LOG_ENABLE:
