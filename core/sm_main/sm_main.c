@@ -213,6 +213,7 @@ static volatile bool     sensor_logging_enabled = false; // Are sensors currentl
 static uint8_t           ble_state;
 static volatile bool     reed_switch_debounce = false; // Debouncing on the reed switch
 static bool              gps_waiting_for_first_fix; // Are we waiting for the GPS to achieve a first fix?
+static bool              green_led_flashing;
 
 #ifndef GTEST
 static fs_handle_t       file_handle = NULL; // The global file handle we have open. Only allow one at once
@@ -1174,6 +1175,8 @@ static void timer_gps_very_first_fix_hold_time_callback(void)
     DEBUG_PR_TRACE("%s() called", __FUNCTION__);
 
     gps_waiting_for_first_fix = false; // First fix hold time is complete
+    green_led_flashing = false;
+    syshal_gpio_set_output_low(GPIO_LED1_GREEN);
     setup_GPS_based_on_configuration(); // Set the GPS to standard operation
 }
 
@@ -3518,8 +3521,8 @@ static void sm_main_boot(sm_handle_t * state_handle)
 
 static void sm_main_operational(sm_handle_t * state_handle)
 {
-    static bool leds_flashing;
     static uint32_t led_flashing_start_time;
+    static uint32_t led_last_flash_time;
 
     if (sm_is_first_entry(state_handle))
     {
@@ -3539,7 +3542,8 @@ static void sm_main_operational(sm_handle_t * state_handle)
         // Clear any current timers
         syshal_timer_cancel_all();
 
-        leds_flashing = true;
+        green_led_flashing = true;
+        led_last_flash_time = syshal_time_get_ticks_ms();
         led_flashing_start_time = 0;
 
         // Start the log file flushing timer
@@ -3614,29 +3618,24 @@ static void sm_main_operational(sm_handle_t * state_handle)
         }
     }
 
-    if (leds_flashing)
+    if (green_led_flashing)
     {
-        // Flash the green LED for 5 seconds to indicate this state
-        static uint32_t led_flashing_elapsed_time;
-
-        if (!led_flashing_start_time)
+        if (syshal_time_get_ticks_ms() > led_last_flash_time + 200)
         {
-            led_flashing_start_time = syshal_time_get_ticks_ms();
-            led_flashing_elapsed_time = led_flashing_start_time;
-
-            syshal_gpio_set_output_high(GPIO_LED1_GREEN);
-        }
-
-        if (syshal_time_get_ticks_ms() > led_flashing_elapsed_time + 200)
-        {
-            led_flashing_elapsed_time += 200;
             syshal_gpio_set_output_toggle(GPIO_LED1_GREEN);
+            led_last_flash_time += 200;
         }
 
-        if (syshal_time_get_ticks_ms() > led_flashing_start_time + 5000)
+        if (!gps_waiting_for_first_fix)
         {
-            leds_flashing = false;
-            syshal_gpio_set_output_low(GPIO_LED1_GREEN);
+            if (!led_flashing_start_time)
+                led_flashing_start_time = syshal_time_get_ticks_ms();
+
+            if (syshal_time_get_ticks_ms() > led_flashing_start_time + 5000)
+            {
+                green_led_flashing = false;
+                syshal_gpio_set_output_low(GPIO_LED1_GREEN);
+            }
         }
     }
 
@@ -3655,6 +3654,7 @@ static void sm_main_operational(sm_handle_t * state_handle)
                 {
                     syshal_timer_set(timer_gps_very_first_fix_hold_time, one_shot, sys_config.sys_config_gps_very_first_fix_hold_time.contents.seconds);
                 }
+                syshal_gpio_set_output_high(GPIO_LED1_GREEN); // Have the LED be solid green to show a GPS fix has been achieved
             }
             else
             {
@@ -3670,7 +3670,7 @@ static void sm_main_operational(sm_handle_t * state_handle)
         syshal_axl_tick();
 
     // Determine how deep a sleep we should take
-    if (!syshal_pressure_awake() && !syshal_axl_awake() && !leds_flashing)
+    if (!syshal_pressure_awake() && !syshal_axl_awake() && !green_led_flashing)
     {
         if (SM_GPS_STATE_ASLEEP == sm_gps_state)
             syshal_pmu_set_level(POWER_STOP);
