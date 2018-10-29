@@ -423,6 +423,7 @@ static bool check_configuration_tags_set(void)
                 SYS_CONFIG_TAG_GPS_SCHEDULED_ACQUISITION_INTERVAL == tag ||
                 SYS_CONFIG_TAG_GPS_MAXIMUM_ACQUISITION_TIME == tag ||
                 SYS_CONFIG_TAG_GPS_SCHEDULED_ACQUISITION_NO_FIX_TIMEOUT == tag ||
+                SYS_CONFIG_TAG_GPS_VERY_FIRST_FIX_HOLD_TIME == tag ||
                 SYS_CONFIG_SALTWATER_SWITCH_LOG_ENABLE == tag ||
                 SYS_CONFIG_SALTWATER_SWITCH_HYSTERESIS_PERIOD == tag ||
                 SYS_CONFIG_TAG_AXL_LOG_ENABLE == tag ||
@@ -485,6 +486,10 @@ static bool check_configuration_tags_set(void)
 
         // We don't care about our last GPS location
         if (SYS_CONFIG_TAG_GPS_LAST_KNOWN_POSITION == tag)
+            continue;
+
+        // GPS first fix hold time is not required
+        if (SYS_CONFIG_TAG_GPS_VERY_FIRST_FIX_HOLD_TIME == tag)
             continue;
 
         if (!sys_config.sys_config_temp_sensor_log_enable.contents.enable)
