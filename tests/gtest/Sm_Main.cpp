@@ -1711,9 +1711,16 @@ TEST_F(Sm_MainTest, OperationalStateGPSScheduled)
     sys_config.sys_config_gps_scheduled_acquisition_no_fix_timeout.hdr.set = true;
     sys_config.sys_config_gps_scheduled_acquisition_no_fix_timeout.contents.seconds = no_fix_timeout;
 
+    // Disable GPS first fix hold
+    sys_config.sys_config_gps_very_first_fix_hold_time.hdr.set = false;
+
     // Enable GPS logging
     sys_config.sys_config_gps_log_position_enable.hdr.set = true;
     sys_config.sys_config_gps_log_position_enable.contents.enable = true;
+
+    // Enable Global logging
+    sys_config.sys_config_logging_enable.hdr.set = true;
+    sys_config.sys_config_logging_enable.contents.enable = true;
 
     sm_tick(&state_handle);
 
@@ -1753,6 +1760,208 @@ TEST_F(Sm_MainTest, OperationalStateGPSScheduled)
     EXPECT_FALSE(syshal_gps_on);
 }
 
+TEST_F(Sm_MainTest, OperationalStateGPSScheduledFirstFixHold)
+{
+    uint32_t acquisition_interval = 165;
+    uint32_t maximum_acquisition = 15;
+    uint32_t no_fix_timeout = 0;
+    uint32_t very_first_fix_hold_time = 60;
+
+    sm_set_current_state(&state_handle, SM_MAIN_BOOT);
+
+    set_all_configuration_tags_RAM();
+    CreateEmptyLogfile();
+
+    // Set GPS trigger mode
+    sys_config.sys_config_gps_trigger_mode.hdr.set = true;
+    sys_config.sys_config_gps_trigger_mode.contents.mode = SYS_CONFIG_GPS_TRIGGER_MODE_SCHEDULED;
+
+    // Set GPS acquisition interval
+    sys_config.sys_config_gps_scheduled_acquisition_interval.hdr.set = true;
+    sys_config.sys_config_gps_scheduled_acquisition_interval.contents.seconds = acquisition_interval;
+
+    // Set GPS acquisition time
+    sys_config.sys_config_gps_maximum_acquisition_time.hdr.set = true;
+    sys_config.sys_config_gps_maximum_acquisition_time.contents.seconds = maximum_acquisition;
+
+    // Set GPS no fix timeout
+    sys_config.sys_config_gps_scheduled_acquisition_no_fix_timeout.hdr.set = true;
+    sys_config.sys_config_gps_scheduled_acquisition_no_fix_timeout.contents.seconds = no_fix_timeout;
+
+    // Set GPS first fix hold
+    sys_config.sys_config_gps_very_first_fix_hold_time.hdr.set = true;
+    sys_config.sys_config_gps_very_first_fix_hold_time.contents.seconds = very_first_fix_hold_time;
+
+    // Enable GPS logging
+    sys_config.sys_config_gps_log_position_enable.hdr.set = true;
+    sys_config.sys_config_gps_log_position_enable.contents.enable = true;
+
+    // Enable Global logging
+    sys_config.sys_config_logging_enable.hdr.set = true;
+    sys_config.sys_config_logging_enable.contents.enable = true;
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_OPERATIONAL, sm_get_current_state(&state_handle));
+
+    sm_tick(&state_handle);
+    EXPECT_TRUE(syshal_gps_on);
+
+    // Test to see if GPS remains on with no fix
+    for (unsigned int i = 0; i < acquisition_interval + maximum_acquisition + very_first_fix_hold_time + 1; ++i)
+    {
+        IncrementSeconds(1);
+        sm_tick(&state_handle);
+        ASSERT_TRUE(syshal_gps_on);
+    }
+
+    // Generate a GPS fixed event
+    syshal_gps_event_t event;
+    event.event_id = SYSHAL_GPS_EVENT_STATUS;
+    event.event_data.status.gpsFix = 2;
+    syshal_gps_callback(event);
+    sm_tick(&state_handle);
+
+    for (unsigned int i = 0; i < very_first_fix_hold_time + 1; ++i)
+    {
+        IncrementSeconds(1);
+        sm_tick(&state_handle);
+    }
+
+    EXPECT_FALSE(syshal_gps_on);
+
+    for (unsigned int i = 0; i < acquisition_interval+1; ++i)
+    {
+        IncrementSeconds(1);
+        sm_tick(&state_handle);
+    }
+
+    EXPECT_TRUE(syshal_gps_on);
+
+    for (unsigned int i = 0; i < maximum_acquisition; ++i)
+    {
+        IncrementSeconds(1);
+        sm_tick(&state_handle);
+    }
+
+    EXPECT_FALSE(syshal_gps_on);
+
+    for (unsigned int i = 0; i < acquisition_interval - maximum_acquisition; ++i)
+    {
+        IncrementSeconds(1);
+        sm_tick(&state_handle);
+    }
+
+    EXPECT_TRUE(syshal_gps_on);
+
+    for (unsigned int i = 0; i < maximum_acquisition; ++i)
+    {
+        IncrementSeconds(1);
+        sm_tick(&state_handle);
+    }
+
+    EXPECT_FALSE(syshal_gps_on);
+}
+
+TEST_F(Sm_MainTest, OperationalStateGPSScheduledFirstFixHoldLostFix)
+{
+    uint32_t acquisition_interval = 165;
+    uint32_t maximum_acquisition = 15;
+    uint32_t no_fix_timeout = 0;
+    uint32_t very_first_fix_hold_time = 60;
+    syshal_gps_event_t event;
+
+    sm_set_current_state(&state_handle, SM_MAIN_BOOT);
+
+    set_all_configuration_tags_RAM();
+    CreateEmptyLogfile();
+
+    // Set GPS trigger mode
+    sys_config.sys_config_gps_trigger_mode.hdr.set = true;
+    sys_config.sys_config_gps_trigger_mode.contents.mode = SYS_CONFIG_GPS_TRIGGER_MODE_SCHEDULED;
+
+    // Set GPS acquisition interval
+    sys_config.sys_config_gps_scheduled_acquisition_interval.hdr.set = true;
+    sys_config.sys_config_gps_scheduled_acquisition_interval.contents.seconds = acquisition_interval;
+
+    // Set GPS acquisition time
+    sys_config.sys_config_gps_maximum_acquisition_time.hdr.set = true;
+    sys_config.sys_config_gps_maximum_acquisition_time.contents.seconds = maximum_acquisition;
+
+    // Set GPS no fix timeout
+    sys_config.sys_config_gps_scheduled_acquisition_no_fix_timeout.hdr.set = true;
+    sys_config.sys_config_gps_scheduled_acquisition_no_fix_timeout.contents.seconds = no_fix_timeout;
+
+    // Set GPS first fix hold
+    sys_config.sys_config_gps_very_first_fix_hold_time.hdr.set = true;
+    sys_config.sys_config_gps_very_first_fix_hold_time.contents.seconds = very_first_fix_hold_time;
+
+    // Enable GPS logging
+    sys_config.sys_config_gps_log_position_enable.hdr.set = true;
+    sys_config.sys_config_gps_log_position_enable.contents.enable = true;
+
+    // Enable Global logging
+    sys_config.sys_config_logging_enable.hdr.set = true;
+    sys_config.sys_config_logging_enable.contents.enable = true;
+
+    sm_tick(&state_handle);
+
+    EXPECT_EQ(SM_MAIN_OPERATIONAL, sm_get_current_state(&state_handle));
+
+    sm_tick(&state_handle);
+    EXPECT_TRUE(syshal_gps_on);
+
+    // Test to see if GPS remains on with no fix
+    for (unsigned int i = 0; i < acquisition_interval + maximum_acquisition + very_first_fix_hold_time + 1; ++i)
+    {
+        IncrementSeconds(1);
+        sm_tick(&state_handle);
+        ASSERT_TRUE(syshal_gps_on);
+    }
+
+    // Generate a GPS fixed event
+    event.event_id = SYSHAL_GPS_EVENT_STATUS;
+    event.event_data.status.gpsFix = 2;
+    syshal_gps_callback(event);
+    sm_tick(&state_handle);
+
+    for (unsigned int i = 0; i < (very_first_fix_hold_time / 2) + 1; ++i)
+    {
+        IncrementSeconds(1);
+        sm_tick(&state_handle);
+    }
+
+    EXPECT_TRUE(syshal_gps_on);
+
+    // Generate a GPS fix lost event before the no fix hold time has elapsed
+    event.event_id = SYSHAL_GPS_EVENT_STATUS;
+    event.event_data.status.gpsFix = 0;
+    syshal_gps_callback(event);
+    sm_tick(&state_handle);
+
+    for (unsigned int i = 0; i < (very_first_fix_hold_time); ++i)
+    {
+        IncrementSeconds(1);
+        sm_tick(&state_handle);
+    }
+
+    EXPECT_TRUE(syshal_gps_on); // Check the GPS is still on
+
+    // Generate a GPS fixed event
+    event.event_id = SYSHAL_GPS_EVENT_STATUS;
+    event.event_data.status.gpsFix = 2;
+    syshal_gps_callback(event);
+    sm_tick(&state_handle);
+
+    for (unsigned int i = 0; i < very_first_fix_hold_time + 1; ++i)
+    {
+        IncrementSeconds(1);
+        sm_tick(&state_handle);
+    }
+
+    EXPECT_FALSE(syshal_gps_on); // GPS should now be off
+}
+
 TEST_F(Sm_MainTest, OperationalStateGPSScheduledAlwaysOn)
 {
     uint32_t acquisition_interval = 0;
@@ -1780,9 +1989,16 @@ TEST_F(Sm_MainTest, OperationalStateGPSScheduledAlwaysOn)
     sys_config.sys_config_gps_scheduled_acquisition_no_fix_timeout.hdr.set = true;
     sys_config.sys_config_gps_scheduled_acquisition_no_fix_timeout.contents.seconds = no_fix_timeout;
 
+    // Disable GPS first fix hold
+    sys_config.sys_config_gps_very_first_fix_hold_time.hdr.set = false;
+
     // Enable GPS logging
     sys_config.sys_config_gps_log_position_enable.hdr.set = true;
     sys_config.sys_config_gps_log_position_enable.contents.enable = true;
+
+    // Enable Global logging
+    sys_config.sys_config_logging_enable.hdr.set = true;
+    sys_config.sys_config_logging_enable.contents.enable = true;
 
     sm_tick(&state_handle);
 
