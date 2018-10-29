@@ -616,7 +616,7 @@ typedef struct __attribute__((__packed__))
     sys_config_gps_maximum_acquisition_time_t                   sys_config_gps_maximum_acquisition_time;
     sys_config_gps_scheduled_acquisition_no_fix_timeout_t       sys_config_gps_scheduled_acquisition_no_fix_timeout;
     sys_config_gps_last_known_position_t                        sys_config_gps_last_known_position;
-    sys_config_gps_very_first_fix_timeout_t                     sys_config_gps_very_first_fix_timeout:
+    sys_config_gps_very_first_fix_timeout_t                     sys_config_gps_very_first_fix_timeout;
     sys_config_saltwater_switch_log_enable_t                    sys_config_saltwater_switch_log_enable;
     sys_config_saltwater_switch_hysteresis_period_t             sys_config_saltwater_switch_hysteresis_period;
     sys_config_rtc_sync_to_gps_enable_t                         sys_config_rtc_sync_to_gps_enable;
