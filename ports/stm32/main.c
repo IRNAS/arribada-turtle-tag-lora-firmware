@@ -15,6 +15,7 @@
  */
 
 // Includes ------------------------------------------------------------------
+
 #include "main.h"
 #include "bsp.h"
 #include "cexception.h"
@@ -31,6 +32,7 @@
 #include "syshal_usb.h"
 #include "version.h"
 #include <string.h>
+
 
 int main(void)
 {
@@ -147,6 +149,9 @@ int main(void)
     // Configure the system clock
     system_clock_config();
 
+    // Initialize the IWDG
+    HAL_IWDG_Init((IWDG_HandleTypeDef *)&IWDG_Init);
+
     sm_init(&state_handle, sm_main_states);
     sm_set_next_state(&state_handle, SM_MAIN_BOOT);
 
@@ -157,7 +162,13 @@ int main(void)
         Try
         {
             sm_tick(&state_handle);
-        } Catch (e)
+
+            // We only kick the IWDG from here -- this assumes that
+            // the state machine tick is called sufficiently often and
+            // never takes more than 20 seconds to complete
+            HAL_IWDG_Refresh((IWDG_HandleTypeDef *)&IWDG_Init);
+        }
+        Catch (e)
         {
             sm_main_exception_handler(e);
         }

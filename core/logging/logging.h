@@ -42,6 +42,8 @@
 #define LOGGING_BLE_DISCONNECTED  (0x0D) // Bluetooth GATT connection has been released
 #define LOGGING_GPS_ON            (0x0E) // GPS module turned on
 #define LOGGING_GPS_OFF           (0x0F) // GPS module turned off
+#define LOGGING_SOFT_WDOG         (0x10) // Software WDOG event
+#define LOGGING_STARTUP           (0x11) // Start-up event
 
 #define LOGGING_BLE_ENABLED_CAUSE_REED_SWITCH          (0x00)
 #define LOGGING_BLE_ENABLED_CAUSE_SCHEDULE_TIMER       (0x01)
@@ -162,5 +164,17 @@ typedef struct __attribute__((__packed__))
 {
     logging_hdr_t h;
 } logging_log_gps_off_t;
+
+typedef struct __attribute__((__packed__))
+{
+    logging_hdr_t h;
+    uint32_t      watchdog_address;
+} logging_soft_watchdog_t;
+
+typedef struct __attribute__((__packed__))
+{
+    logging_hdr_t h;
+    uint32_t       cause;
+} logging_startup_t;
 
 #endif /* _LOGGING_H_ */

@@ -70,6 +70,7 @@ $(STMHAL_DIR)/Src/stm32f0xx_hal_tim.c \
 $(STMHAL_DIR)/Src/stm32f0xx_hal_tim_ex.c \
 $(STMHAL_DIR)/Src/stm32f0xx_hal_uart.c \
 $(STMHAL_DIR)/Src/stm32f0xx_hal_uart_ex.c \
+$(STMHAL_DIR)/Src/stm32f0xx_hal_iwdg.c \
 $(USB_DIR)/Core/Src/usbd_core.c \
 $(USB_DIR)/Core/Src/usbd_ctlreq.c \
 $(USB_DIR)/Core/Src/usbd_ioreq.c \
@@ -103,19 +104,22 @@ startup_stm32f072xb.s
 #######################################
 OPENOCD = "../../../Toolchain/OpenOCD-20170821/bin/openocd"
 OPENOCDSCRIPTS = "/../../../Toolchain/OpenOCD-20170821/share/openocd/scripts"
-BINPATH = "../../../Toolchain/gcc-arm-none-eabi-7-2018-q2-update-win32/bin
+
+# Allow BINPATH to be passed in to make if not set
+BINPATH ?= "../../../Toolchain/gcc-arm-none-eabi-7-2018-q2-update-win32/bin/"
+
 JLINK = "JLink"
 PREFIX = arm-none-eabi-
-CC = $(BINPATH)/$(PREFIX)gcc" -pipe
-AS = $(BINPATH)/$(PREFIX)gcc" -x assembler-with-cpp
-CP = $(BINPATH)/$(PREFIX)objcopy"
-AR = $(BINPATH)/$(PREFIX)ar"
-SZ = $(BINPATH)/$(PREFIX)size"
+CC = $(BINPATH)$(PREFIX)gcc -pipe
+AS = $(BINPATH)$(PREFIX)gcc -x assembler-with-cpp
+CP = $(BINPATH)$(PREFIX)objcopy
+AR = $(BINPATH)$(PREFIX)ar
+SZ = $(BINPATH)$(PREFIX)size
 HEX = $(CP) -O ihex
 BIN = $(CP) -O binary -S
 # Get GIT version
 G_VERSION := $(shell git describe --dirty --always --tags)
- 
+
 #######################################
 # CFLAGS
 #######################################
@@ -172,7 +176,6 @@ C_INCLUDES =  \
 
 # compile gcc flags
 ASFLAGS = $(MCU) $(AS_DEFS) $(AS_INCLUDES) $(OPT) -Wall -Werror -fdata-sections -ffunction-sections
-
 CFLAGS = $(MCU) $(C_DEFS) $(C_INCLUDES) $(OPT) -Wall -Werror -fdata-sections -ffunction-sections -mlong-calls
 
 ifeq ($(DEBUG), 1)

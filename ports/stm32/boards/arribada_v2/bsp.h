@@ -143,6 +143,8 @@ typedef struct
 
 extern const UART_InitTypeDefAndInst_t UART_Inits[UART_TOTAL_NUMBER];
 
+extern const IWDG_HandleTypeDef IWDG_Init;
+
 ///////////////////////////////// USB definitions /////////////////////////////////
 
 

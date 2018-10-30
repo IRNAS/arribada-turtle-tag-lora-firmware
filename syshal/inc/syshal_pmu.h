@@ -28,5 +28,6 @@ typedef enum
 
 void syshal_pmu_set_level(syshal_pmu_power_level_t level);
 void syshal_pmu_reset(void);
+uint32_t syshal_pmu_get_startup_status(void);
 
 #endif /* _SYSHAL_PMU_H_ */

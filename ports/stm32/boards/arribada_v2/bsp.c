@@ -92,3 +92,14 @@ const UART_InitTypeDefAndInst_t UART_Inits[UART_TOTAL_NUMBER] =
     {USART2, {3000000, UART_WORDLENGTH_8B, UART_STOPBITS_1, UART_PARITY_NONE, UART_MODE_TX,    UART_HWCONTROL_NONE,    UART_OVERSAMPLING_16, UART_ADVFEATURE_NO_INIT}},
     {USART3, {9600,    UART_WORDLENGTH_8B, UART_STOPBITS_1, UART_PARITY_NONE, UART_MODE_TX_RX, UART_HWCONTROL_RTS_CTS, UART_OVERSAMPLING_16, UART_ADVFEATURE_NO_INIT}},
 };
+
+///////////////////////////////// IWDG definitions ////////////////////////////////
+const IWDG_HandleTypeDef IWDG_Init =
+{
+    IWDG,
+    {
+        .Prescaler = IWDG_PRESCALER_256,  /* 6 => 40 KHz / 256 pre-scaler = 156.25 Hz tick period */
+        .Reload = 3125,  /* Equates to 20 seconds */
+        .Window = 0x00000FFF
+    }
+};

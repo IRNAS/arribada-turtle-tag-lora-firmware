@@ -22,6 +22,11 @@
 
 #define YEAR_OFFSET (2018) // RTC can only handle 100 years so offset by 2000
 
+// Software watchdog state
+static void (*soft_watchdog_callback)(unsigned int) = NULL; // User callback
+static int soft_watchdog_now = -1;  // Current timer -1=>not started
+static int soft_watchdog_init = -1; // Init timer    -1=>not started
+
 RTC_HandleTypeDef rtc_handle;
 
 // HAL to SYSHAL error code mapping table
@@ -124,6 +129,23 @@ int syshal_rtc_get_date_and_time(syshal_rtc_data_and_time_t * date_time)
     return hal_error_map[status];
 }
 
+int syshal_rtc_soft_watchdog_enable(unsigned int seconds, void (*callback)(unsigned int))
+{
+    // The software watchdog timer is initialized as a count-down in seconds.  Once
+    // it has started, it can not be disabled.
+    soft_watchdog_callback = callback;
+    soft_watchdog_now = soft_watchdog_init = (int)seconds;
+
+    return SYSHAL_RTC_NO_ERROR;
+}
+
+int syshal_rtc_soft_watchdog_refresh(void)
+{
+    // Restart the timer -- this should be called periodically to prevent triggering
+    soft_watchdog_now = soft_watchdog_init;
+    return SYSHAL_RTC_NO_ERROR;
+}
+
 void HAL_RTC_MspInit(RTC_HandleTypeDef * rtcHandle)
 {
     if (rtcHandle->Instance == RTC)
@@ -147,6 +169,23 @@ void HAL_RTC_MspDeInit(RTC_HandleTypeDef * rtcHandle)
 
 void RTC_IRQHandler(void)
 {
+    register int sp asm("sp");
+
     HAL_RTC_AlarmIRQHandler(&rtc_handle);
     HAL_RTCEx_WakeUpTimerIRQHandler(&rtc_handle); // NOTE: is this needed?
+
+    // The software watchdog is inactive if the counter is less than zero
+    if (soft_watchdog_now > 0)
+    {
+        // Decrement counter and check for trigger condition
+        soft_watchdog_now--;
+        if (soft_watchdog_now == 0 && soft_watchdog_callback)
+        {
+            // FIXME: This is a hack and might fail with other gcc versions or indeed
+            // if the compilation flags are changed.
+            // This is the exact location of the LR register relative to SP on entry
+            // which we pass back to the caller.
+            soft_watchdog_callback(((unsigned int *)sp)[8]);
+        }
+    }
 }

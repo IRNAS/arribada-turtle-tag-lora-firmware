@@ -42,5 +42,7 @@ typedef struct
 int syshal_rtc_init(void);
 int syshal_rtc_set_date_and_time(syshal_rtc_data_and_time_t date_time);
 int syshal_rtc_get_date_and_time(syshal_rtc_data_and_time_t * date_time);
+int syshal_rtc_soft_watchdog_enable(unsigned int seconds, void (*callback)(unsigned int));
+int syshal_rtc_soft_watchdog_refresh(void);
 
 #endif /* _SYSHAL_RTC_H_ */

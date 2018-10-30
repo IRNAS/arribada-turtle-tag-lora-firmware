@@ -192,10 +192,16 @@ static volatile sm_gps_state_t sm_gps_state; // The current operating state of t
 
 #define REED_SWITCH_DEBOUNCE_TIME_S (2) // How many seconds to debounce the reed switch
 
+#define SOFT_WATCHDOG_TIMEOUT_S     (10) // How many seconds to allow before soft watchdog trips
+
+#define KICK_WATCHDOG()   syshal_rtc_soft_watchdog_refresh()
+
+
 static volatile bool     config_if_tx_pending = false;
 static volatile bool     config_if_rx_queued = false;
 static bool              syshal_gps_bridging = false;
 static bool              syshal_ble_bridging = false;
+static bool              system_startup_log_required = true;
 static volatile buffer_t config_if_send_buffer;
 static volatile buffer_t config_if_receive_buffer;
 static volatile buffer_t logging_buffer;
@@ -252,6 +258,7 @@ static void timer_axl_maximum_acquisition_callback(void);
 static void timer_ble_interval_callback(void);
 static void timer_ble_duration_callback(void);
 static void timer_ble_timeout_callback(void);
+static void soft_watchdog_callback(unsigned int);
 
 ////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////// PROTOTYPES ///////////////////////////////////
@@ -311,6 +318,41 @@ static void set_default_global_values(void)
    ({ __typeof__ (a) _a = (a); \
        __typeof__ (b) _b = (b); \
      _a < _b ? _a : _b; })
+
+
+static void soft_watchdog_callback(unsigned int lr)
+{
+    logging_soft_watchdog_t log_wdog;
+    uint32_t bytes_written;
+
+    if (sys_config.sys_config_logging_date_time_stamp_enable.contents.enable)
+    {
+        syshal_rtc_data_and_time_t current_time;
+        logging_date_time_t log_date;
+
+        syshal_rtc_get_date_and_time(&current_time);
+
+        log_date.h.id = LOGGING_DATE_TIME;
+        log_date.day = current_time.day;
+        log_date.month = current_time.month;
+        log_date.year = current_time.year;
+        log_date.hours = current_time.hours;
+        log_date.minutes = current_time.minutes;
+        log_date.seconds = current_time.seconds;
+        (void)fs_write(file_handle, &log_date, sizeof(log_date), &bytes_written);
+    }
+
+    log_wdog.h.id = LOGGING_SOFT_WDOG;
+    log_wdog.watchdog_address = lr;
+    (void)fs_write(file_handle, &log_wdog, sizeof(log_wdog), &bytes_written);
+
+    /* Try to clean-up the log file since we are about to reset */
+    (void)fs_close(file_handle);
+
+    /* Execute a software reset */
+    for (;;)
+        syshal_pmu_reset();
+}
 
 static void config_if_send_priv(volatile buffer_t * buffer)
 {
@@ -3409,6 +3451,51 @@ static void handle_config_if_messages(void)
     }
 }
 
+static void log_system_startup_event(void)
+{
+    while (system_startup_log_required)
+    {
+        system_startup_log_required = false;
+
+        // Try to log startup event
+        int ret = fs_open(file_system, &file_handle, FS_FILE_ID_LOG, FS_MODE_WRITEONLY, NULL); // Open the log file
+        if (FS_NO_ERROR != ret)
+        {
+            // Unable to log this entry, so skip
+            file_handle = NULL;
+            break;
+        }
+
+        logging_startup_t log_start;
+        uint32_t bytes_written;
+
+        if (sys_config.sys_config_logging_date_time_stamp_enable.contents.enable)
+        {
+            syshal_rtc_data_and_time_t current_time;
+            logging_date_time_t log_date;
+
+            syshal_rtc_get_date_and_time(&current_time);
+
+            log_date.h.id = LOGGING_DATE_TIME;
+            log_date.day = current_time.day;
+            log_date.month = current_time.month;
+            log_date.year = current_time.year;
+            log_date.hours = current_time.hours;
+            log_date.minutes = current_time.minutes;
+            log_date.seconds = current_time.seconds;
+            (void)fs_write(file_handle, &log_date, sizeof(log_date), &bytes_written);
+        }
+
+        log_start.h.id = LOGGING_STARTUP;
+        log_start.cause = syshal_pmu_get_startup_status();
+        (void)fs_write(file_handle, &log_start, sizeof(log_start), &bytes_written);
+
+        // Always flush this log entry so we can always see when a resets occurs
+        fs_close(file_handle);
+        file_handle = NULL;
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////// STATE EXECUTION CODE /////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -3473,6 +3560,9 @@ static void sm_main_boot(sm_handle_t * state_handle)
     DEBUG_PR_SYS("Version:  %s", GIT_VERSION);
     DEBUG_PR_SYS("Compiled: %s %s With %s", COMPILE_DATE, COMPILE_TIME, COMPILER_NAME);
 
+    // Start the soft watchdog timer
+    syshal_rtc_soft_watchdog_enable(SOFT_WATCHDOG_TIMEOUT_S, soft_watchdog_callback);
+
     // Load the file system
     fs_init(FS_DEVICE);
     fs_mount(FS_DEVICE, &file_system);
@@ -3494,6 +3584,9 @@ static void sm_main_boot(sm_handle_t * state_handle)
 
     if (!(FS_NO_ERROR == ret || FS_ERROR_FILE_NOT_FOUND == ret || FS_ERROR_FILE_VERSION_MISMATCH == ret))
         Throw(EXCEPTION_FS_ERROR);
+
+    // Attempt to log system startup event into the log file
+    log_system_startup_event();
 
     // Delete any firmware images we may have
     fs_delete(file_system, FS_FILE_ID_STM32_IMAGE);
@@ -3529,6 +3622,8 @@ static void sm_main_operational(sm_handle_t * state_handle)
     static uint32_t led_flashing_start_time;
     static uint32_t led_last_flash_time;
 
+    KICK_WATCHDOG();
+
     if (sm_is_first_entry(state_handle))
     {
         DEBUG_PR_INFO("Entered state %s from %s",
@@ -3542,6 +3637,38 @@ static void sm_main_operational(sm_handle_t * state_handle)
             // Fatal error
             file_handle = NULL;
             Throw(EXCEPTION_FS_ERROR);
+        }
+
+        if (system_startup_log_required)
+        {
+            logging_startup_t log_start;
+            uint32_t bytes_written;
+
+            system_startup_log_required = false;
+
+            if (sys_config.sys_config_logging_date_time_stamp_enable.contents.enable)
+            {
+                syshal_rtc_data_and_time_t current_time;
+                logging_date_time_t log_date;
+
+                syshal_rtc_get_date_and_time(&current_time);
+
+                log_date.h.id = LOGGING_DATE_TIME;
+                log_date.day = current_time.day;
+                log_date.month = current_time.month;
+                log_date.year = current_time.year;
+                log_date.hours = current_time.hours;
+                log_date.minutes = current_time.minutes;
+                log_date.seconds = current_time.seconds;
+                (void)fs_write(file_handle, &log_date, sizeof(log_date), &bytes_written);
+            }
+
+            log_start.h.id = LOGGING_STARTUP;
+            log_start.cause = syshal_pmu_get_startup_status();
+            (void)fs_write(file_handle, &log_start, sizeof(log_start), &bytes_written);
+
+            // Always flush this log entry so we can always see when a resets occurs
+            fs_flush(file_handle);
         }
 
         // Clear any current timers
@@ -3811,6 +3938,8 @@ static void sm_main_log_file_full(sm_handle_t * state_handle)
                       sm_main_state_str[sm_get_last_state(state_handle)]);
     }
 
+    KICK_WATCHDOG();
+
     syshal_timer_tick();
 
     manage_ble();
@@ -3838,6 +3967,8 @@ static void sm_main_log_file_full(sm_handle_t * state_handle)
 static void sm_main_battery_charging(sm_handle_t * state_handle)
 {
     static uint32_t usb_enumeration_timeout;
+
+    KICK_WATCHDOG();
 
     if (sm_is_first_entry(state_handle))
     {
@@ -3896,6 +4027,8 @@ static void sm_main_battery_charging(sm_handle_t * state_handle)
 
 static void sm_main_battery_level_low(sm_handle_t * state_handle)
 {
+    KICK_WATCHDOG();
+
     if (sm_is_first_entry(state_handle))
     {
         DEBUG_PR_INFO("Entered state %s from %s",
@@ -3921,6 +4054,8 @@ static void sm_main_battery_level_low(sm_handle_t * state_handle)
 
 static void sm_main_provisioning_needed(sm_handle_t * state_handle)
 {
+    KICK_WATCHDOG();
+
     if (sm_is_first_entry(state_handle))
     {
         DEBUG_PR_INFO("Entered state %s from %s",
@@ -3972,6 +4107,8 @@ static void sm_main_provisioning_needed(sm_handle_t * state_handle)
 
 static void sm_main_provisioning(sm_handle_t * state_handle)
 {
+    KICK_WATCHDOG();
+
     if (sm_is_first_entry(state_handle))
     {
         DEBUG_PR_INFO("Entered state %s from %s",
@@ -4109,4 +4246,9 @@ void sm_main_exception_handler(CEXCEPTION_T e)
             DEBUG_PR_ERROR("Unknown state exception %d", e);
             break;
     }
+}
+
+void syshal_flash_busy_handler(uint32_t drive)
+{
+    KICK_WATCHDOG();
 }

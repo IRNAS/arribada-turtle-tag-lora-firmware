@@ -84,3 +84,10 @@ __RAMFUNC void syshal_pmu_reset(void)
         __NOP();
     }
 }
+
+uint32_t syshal_pmu_get_startup_status(void)
+{
+    uint32_t csr = RCC->CSR;
+    RCC->CSR |= (1<<24);
+    return csr;
+}
