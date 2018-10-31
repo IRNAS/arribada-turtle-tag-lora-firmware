@@ -28,9 +28,11 @@
 static UBX_ACK_t last_ack;
 static UBX_NACK_t last_nack;
 
-const uint32_t supported_baudrates_priv[] = {4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800};
+static const uint32_t supported_baudrates_priv[] = {4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800};
+static uint32_t last_shutdown_request_priv;
 
 #define MAX_BAUD_RATE (460800)
+#define MIN_TIME_BETWEEN_SHUTDOWN_AND_WAKEUP_MS (200)
 
 // Private functions
 static int syshal_gps_parse_rx_buffer_priv(UBX_Packet_t * packet);
@@ -215,7 +217,7 @@ void syshal_gps_shutdown(void)
     // No ACK is expected for this message
     syshal_gps_send_packet_priv(&ubx_packet);
 
-    syshal_time_delay_ms(10); // Wait for shutdown to occur
+    last_shutdown_request_priv = syshal_time_get_ticks_ms();
 }
 
 /**
@@ -224,6 +226,11 @@ void syshal_gps_shutdown(void)
 void syshal_gps_wake_up(void)
 {
     DEBUG_PR_TRACE("Wakeup GPS %s()", __FUNCTION__);
+
+    // Ensure at least 1 second has passed since a shutdown command
+    // This is to ensure the GPS module has had time to shutdown (see JIRA issue AG-170)
+    while (syshal_time_get_ticks_ms() - last_shutdown_request_priv < MIN_TIME_BETWEEN_SHUTDOWN_AND_WAKEUP_MS)
+    {}
 
     // Ensure the device is awake
     while (!syshal_gps_device_responsive_priv()) {}
