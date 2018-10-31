@@ -452,6 +452,8 @@ class Sm_MainTest : public ::testing::Test
         syshal_rtc_init_StubWithCallback(syshal_rtc_init_GTest);
         syshal_rtc_set_date_and_time_StubWithCallback(syshal_rtc_set_date_and_time_GTest);
         syshal_rtc_get_date_and_time_StubWithCallback(syshal_rtc_get_date_and_time_GTest);
+        syshal_rtc_soft_watchdog_enable_IgnoreAndReturn(SYSHAL_RTC_NO_ERROR);
+        syshal_rtc_soft_watchdog_refresh_IgnoreAndReturn(SYSHAL_RTC_NO_ERROR);
 
         // syshal_batt
         Mocksyshal_batt_Init();
@@ -1766,6 +1768,7 @@ TEST_F(Sm_MainTest, OperationalStateGPSScheduledFirstFixHold)
     uint32_t maximum_acquisition = 15;
     uint32_t no_fix_timeout = 0;
     uint32_t very_first_fix_hold_time = 60;
+    syshal_gps_event_t event;
 
     sm_set_current_state(&state_handle, SM_MAIN_BOOT);
 
@@ -1807,24 +1810,27 @@ TEST_F(Sm_MainTest, OperationalStateGPSScheduledFirstFixHold)
     sm_tick(&state_handle);
     EXPECT_TRUE(syshal_gps_on);
 
+    // Generate a GPS not fixed event
+    event.event_id = SYSHAL_GPS_EVENT_STATUS;
+    event.event_data.status.gpsFix = 0;
+
     // Test to see if GPS remains on with no fix
     for (unsigned int i = 0; i < acquisition_interval + maximum_acquisition + very_first_fix_hold_time + 1; ++i)
     {
         IncrementSeconds(1);
+        syshal_gps_callback(event);
         sm_tick(&state_handle);
         ASSERT_TRUE(syshal_gps_on);
     }
 
     // Generate a GPS fixed event
-    syshal_gps_event_t event;
     event.event_id = SYSHAL_GPS_EVENT_STATUS;
     event.event_data.status.gpsFix = 2;
-    syshal_gps_callback(event);
-    sm_tick(&state_handle);
 
     for (unsigned int i = 0; i < very_first_fix_hold_time + 1; ++i)
     {
         IncrementSeconds(1);
+        syshal_gps_callback(event);
         sm_tick(&state_handle);
     }
 
@@ -1833,6 +1839,7 @@ TEST_F(Sm_MainTest, OperationalStateGPSScheduledFirstFixHold)
     for (unsigned int i = 0; i < acquisition_interval+1; ++i)
     {
         IncrementSeconds(1);
+        syshal_gps_callback(event);
         sm_tick(&state_handle);
     }
 
@@ -1841,6 +1848,7 @@ TEST_F(Sm_MainTest, OperationalStateGPSScheduledFirstFixHold)
     for (unsigned int i = 0; i < maximum_acquisition; ++i)
     {
         IncrementSeconds(1);
+        syshal_gps_callback(event);
         sm_tick(&state_handle);
     }
 
@@ -1849,6 +1857,7 @@ TEST_F(Sm_MainTest, OperationalStateGPSScheduledFirstFixHold)
     for (unsigned int i = 0; i < acquisition_interval - maximum_acquisition; ++i)
     {
         IncrementSeconds(1);
+        syshal_gps_callback(event);
         sm_tick(&state_handle);
     }
 
@@ -1857,6 +1866,7 @@ TEST_F(Sm_MainTest, OperationalStateGPSScheduledFirstFixHold)
     for (unsigned int i = 0; i < maximum_acquisition; ++i)
     {
         IncrementSeconds(1);
+        syshal_gps_callback(event);
         sm_tick(&state_handle);
     }
 
@@ -1928,6 +1938,7 @@ TEST_F(Sm_MainTest, OperationalStateGPSScheduledFirstFixHoldLostFix)
     for (unsigned int i = 0; i < (very_first_fix_hold_time / 2) + 1; ++i)
     {
         IncrementSeconds(1);
+        syshal_gps_callback(event);
         sm_tick(&state_handle);
     }
 
@@ -1942,6 +1953,7 @@ TEST_F(Sm_MainTest, OperationalStateGPSScheduledFirstFixHoldLostFix)
     for (unsigned int i = 0; i < (very_first_fix_hold_time); ++i)
     {
         IncrementSeconds(1);
+        syshal_gps_callback(event);
         sm_tick(&state_handle);
     }
 
@@ -1956,6 +1968,7 @@ TEST_F(Sm_MainTest, OperationalStateGPSScheduledFirstFixHoldLostFix)
     for (unsigned int i = 0; i < very_first_fix_hold_time + 1; ++i)
     {
         IncrementSeconds(1);
+        syshal_gps_callback(event);
         sm_tick(&state_handle);
     }
 
