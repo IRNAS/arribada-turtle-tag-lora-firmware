@@ -34,7 +34,7 @@
 #define SYS_CONFIG_TAG_DATA_SIZE(tag_type) (sizeof(((tag_type *)0)->contents)) // Size of data in tag. We exclude the set member
 #define SYS_CONFIG_TAG_MAX_SIZE (SYS_CONFIG_MAX_DATA_SIZE + SYS_CONFIG_TAG_ID_SIZE) // Max size the configuration tag can be
 
-#define SYS_CONFIG_TAG_TOTAL_NUMBER (50) // Number of configuration tags - WARN: This has to be manually updated
+#define SYS_CONFIG_TAG_TOTAL_NUMBER (51) // Number of configuration tags - WARN: This has to be manually updated
 
 #define SYS_CONFIG_GPS_TRIGGER_MODE_SWITCH_TRIGGERED (0)
 #define SYS_CONFIG_GPS_TRIGGER_MODE_SCHEDULED        (1)
@@ -70,7 +70,8 @@ enum
     SYS_CONFIG_TAG_GPS_MAXIMUM_ACQUISITION_TIME,             // Maximum time period, in seconds, to allow for GPS fixes. Setting to zero means no upper limit
     SYS_CONFIG_TAG_GPS_SCHEDULED_ACQUISITION_NO_FIX_TIMEOUT, // When triggered by a scheduled acquisition, this is the timeout period in seconds during acquisition after which to shutdown the GPS if no fix is found
     SYS_CONFIG_TAG_GPS_LAST_KNOWN_POSITION,                  // Shall contain the last fix position before provisioning mode was entered. If no fix was found since powered on, then the field shall be set to all 0x00 bytes
-    SYS_CONFIG_TAG_GPS_VERY_FIRST_FIX_HOLD_TIME,             // The time period to continue logging after the very first GPS fix has been achieved. This is used to ensure an up to date ephemeris is  aquired
+    SYS_CONFIG_TAG_GPS_VERY_FIRST_FIX_HOLD_TIME,             // The time period to continue logging after the very first GPS fix has been achieved. This is used to ensure an up to date ephemeris is aquired
+    SYS_CONFIG_TAG_GPS_DEBUG_LOGGING_ENABLE,                 // Enable logging of the GPS being switched on and off
 
     // Saltwater Switch
     SYS_CONFIG_SALTWATER_SWITCH_LOG_ENABLE = 0x0800, // Controls whether switch change states should be logged
@@ -221,6 +222,15 @@ typedef struct __attribute__((__packed__))
         uint16_t seconds;
     } contents;
 } sys_config_gps_very_first_fix_hold_time_t;
+
+typedef struct __attribute__((__packed__))
+{
+    sys_config_hdr_t hdr;
+    struct __attribute__((__packed__))
+    {
+        uint8_t enable;
+    } contents;
+} sys_config_gps_debug_logging_enable_t;
 
 typedef struct __attribute__((__packed__))
 {
@@ -617,6 +627,7 @@ typedef struct __attribute__((__packed__))
     sys_config_gps_scheduled_acquisition_no_fix_timeout_t       sys_config_gps_scheduled_acquisition_no_fix_timeout;
     sys_config_gps_last_known_position_t                        sys_config_gps_last_known_position;
     sys_config_gps_very_first_fix_hold_time_t                   sys_config_gps_very_first_fix_hold_time;
+    sys_config_gps_debug_logging_enable_t                       sys_config_gps_debug_logging_enable;
     sys_config_saltwater_switch_log_enable_t                    sys_config_saltwater_switch_log_enable;
     sys_config_saltwater_switch_hysteresis_period_t             sys_config_saltwater_switch_hysteresis_period;
     sys_config_rtc_sync_to_gps_enable_t                         sys_config_rtc_sync_to_gps_enable;

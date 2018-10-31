@@ -466,6 +466,7 @@ static bool check_configuration_tags_set(void)
                 SYS_CONFIG_TAG_GPS_MAXIMUM_ACQUISITION_TIME == tag ||
                 SYS_CONFIG_TAG_GPS_SCHEDULED_ACQUISITION_NO_FIX_TIMEOUT == tag ||
                 SYS_CONFIG_TAG_GPS_VERY_FIRST_FIX_HOLD_TIME == tag ||
+                SYS_CONFIG_TAG_GPS_DEBUG_LOGGING_ENABLE == tag ||
                 SYS_CONFIG_SALTWATER_SWITCH_LOG_ENABLE == tag ||
                 SYS_CONFIG_SALTWATER_SWITCH_HYSTERESIS_PERIOD == tag ||
                 SYS_CONFIG_TAG_AXL_LOG_ENABLE == tag ||
@@ -532,6 +533,10 @@ static bool check_configuration_tags_set(void)
 
         // GPS first fix hold time is not required
         if (SYS_CONFIG_TAG_GPS_VERY_FIRST_FIX_HOLD_TIME == tag)
+            continue;
+
+        // GPS debug logging not required
+        if (SYS_CONFIG_TAG_GPS_DEBUG_LOGGING_ENABLE == tag)
             continue;
 
         if (!sys_config.sys_config_temp_sensor_log_enable.contents.enable)
@@ -721,6 +726,30 @@ void logging_add_to_buffer(uint8_t * data, uint32_t size)
     buffer_write_advance(&logging_buffer, length);
 }
 
+// Log a GPS switched on event
+void GPS_on_log(void)
+{
+    if (sys_config.sys_config_gps_debug_logging_enable.hdr.set &&
+        sys_config.sys_config_gps_debug_logging_enable.contents.enable)
+    {
+        logging_log_gps_on_t gps_on_log;
+        LOGGING_SET_HDR(&gps_on_log, LOGGING_GPS_ON);
+        logging_add_to_buffer((uint8_t *) &gps_on_log, sizeof(gps_on_log));
+    }
+}
+
+// Log a GPS switched off event
+void GPS_off_log(void)
+{
+    if (sys_config.sys_config_gps_debug_logging_enable.hdr.set &&
+        sys_config.sys_config_gps_debug_logging_enable.contents.enable)
+    {
+        logging_log_gps_off_t gps_off_log;
+        LOGGING_SET_HDR(&gps_off_log, LOGGING_GPS_OFF);
+        logging_add_to_buffer((uint8_t *) &gps_off_log, sizeof(gps_off_log));
+    }
+}
+
 // Start or stop BLE based on ble_state triggers
 void manage_ble(void)
 {
@@ -780,7 +809,10 @@ static void setup_GPS_based_on_configuration(void)
         {
             // Wake the GPS if it is asleep
             if (SM_GPS_STATE_ASLEEP == sm_gps_state)
+            {
                 syshal_gps_wake_up();
+                GPS_on_log();
+            }
 
             gps_ttff_reading_logged = false;
             sm_gps_state = SM_GPS_STATE_ACQUIRING;
@@ -792,7 +824,10 @@ static void setup_GPS_based_on_configuration(void)
         else
         {
             if (SM_GPS_STATE_ASLEEP != sm_gps_state)
+            {
                 syshal_gps_shutdown();
+                GPS_off_log();
+            }
 
             sm_gps_state = SM_GPS_STATE_ASLEEP;
         }
@@ -805,7 +840,10 @@ static void setup_GPS_based_on_configuration(void)
         {
             // Sleep the GPS if it is awake
             if (SM_GPS_STATE_ASLEEP != sm_gps_state)
+            {
                 syshal_gps_shutdown();
+                GPS_off_log();
+            }
 
             sm_gps_state = SM_GPS_STATE_ASLEEP;
 
@@ -815,7 +853,10 @@ static void setup_GPS_based_on_configuration(void)
         {
             // Wake the GPS if it is asleep
             if (SM_GPS_STATE_ASLEEP == sm_gps_state)
+            {
                 syshal_gps_wake_up();
+                GPS_on_log();
+            }
 
             gps_ttff_reading_logged = false;
             sm_gps_state = SM_GPS_STATE_ACQUIRING;
@@ -833,7 +874,10 @@ static void setup_GPS_based_on_configuration(void)
             {
                 // Wake the GPS if it is asleep
                 if (SM_GPS_STATE_ASLEEP == sm_gps_state)
+                {
                     syshal_gps_wake_up();
+                    GPS_on_log();
+                }
 
                 gps_ttff_reading_logged = false;
                 sm_gps_state = SM_GPS_STATE_ACQUIRING;
@@ -846,7 +890,10 @@ static void setup_GPS_based_on_configuration(void)
             {
                 // Sleep the GPS if it is awake
                 if (SM_GPS_STATE_ASLEEP != sm_gps_state)
+                {
                     syshal_gps_shutdown();
+                    GPS_off_log();
+                }
 
                 sm_gps_state = SM_GPS_STATE_ASLEEP;
             }
@@ -858,7 +905,10 @@ static void setup_GPS_based_on_configuration(void)
         {
             // Wake the GPS if it is asleep
             if (SM_GPS_STATE_ASLEEP == sm_gps_state)
+            {
                 syshal_gps_wake_up();
+                GPS_on_log();
+            }
 
             gps_ttff_reading_logged = false;
             sm_gps_state = SM_GPS_STATE_ACQUIRING;
@@ -1064,6 +1114,7 @@ void syshal_switch_callback(syshal_switch_event_id_t event)
                         sm_gps_state = SM_GPS_STATE_ACQUIRING;
                         gps_ttff_reading_logged = false;
                         syshal_gps_wake_up();
+                        GPS_on_log();
                     }
 
                     // If our maximum acquisition time is not set to forever (0)
@@ -1159,11 +1210,7 @@ static void timer_gps_interval_callback(void)
             sm_gps_state = SM_GPS_STATE_ACQUIRING;
             gps_ttff_reading_logged = false;
             syshal_gps_wake_up();
-
-            // Log the GPS wake-up event
-            logging_log_gps_on_t gps_on_log;
-            LOGGING_SET_HDR(&gps_on_log, LOGGING_GPS_ON);
-            logging_add_to_buffer((uint8_t *) &gps_on_log, sizeof(gps_on_log));
+            GPS_on_log(); // Log the GPS wake-up event
         }
 
         syshal_timer_set(timer_gps_maximum_acquisition, one_shot, sys_config.sys_config_gps_maximum_acquisition_time.contents.seconds);
@@ -1189,10 +1236,7 @@ static void timer_gps_no_fix_callback(void)
             sm_gps_state = SM_GPS_STATE_ASLEEP;
             syshal_gps_shutdown();
 
-            // Log the GPS shutdown event
-            logging_log_gps_off_t gps_off_log;
-            LOGGING_SET_HDR(&gps_off_log, LOGGING_GPS_OFF);
-            logging_add_to_buffer((uint8_t *) &gps_off_log, sizeof(gps_off_log));
+            GPS_off_log(); // Log the GPS wake-up event
         }
     }
 }
@@ -1210,10 +1254,7 @@ static void timer_gps_maximum_acquisition_callback(void)
         sm_gps_state = SM_GPS_STATE_ASLEEP;
         syshal_gps_shutdown();
 
-        // Log the GPS shutdown event
-        logging_log_gps_off_t gps_off_log;
-        LOGGING_SET_HDR(&gps_off_log, LOGGING_GPS_OFF);
-        logging_add_to_buffer((uint8_t *) &gps_off_log, sizeof(gps_off_log));
+        GPS_off_log(); // Log the GPS wake-up event
     }
 }
 
@@ -3703,7 +3744,10 @@ static void sm_main_operational(sm_handle_t * state_handle)
 
                 // Wake the GPS if it is asleep
                 if (SM_GPS_STATE_ASLEEP == sm_gps_state)
+                {
                     syshal_gps_wake_up();
+                    GPS_on_log();
+                }
 
                 sm_gps_state = SM_GPS_STATE_ACQUIRING;
             }
@@ -3716,7 +3760,10 @@ static void sm_main_operational(sm_handle_t * state_handle)
         else
         {
             if (SM_GPS_STATE_ASLEEP != sm_gps_state)
+            {
                 syshal_gps_shutdown();
+                GPS_off_log();
+            }
 
             sm_gps_state = SM_GPS_STATE_ASLEEP;
         }
@@ -3909,6 +3956,7 @@ static void sm_main_operational(sm_handle_t * state_handle)
         {
             sm_gps_state = SM_GPS_STATE_ASLEEP;
             syshal_gps_shutdown();
+            GPS_off_log();
         }
 
         // Turn off the green LED incase we've left it on
@@ -4042,6 +4090,7 @@ static void sm_main_battery_level_low(sm_handle_t * state_handle)
         {
             sm_gps_state = SM_GPS_STATE_ASLEEP;
             syshal_gps_shutdown();
+            GPS_off_log();
         }
     }
 
@@ -4067,6 +4116,7 @@ static void sm_main_provisioning_needed(sm_handle_t * state_handle)
         {
             sm_gps_state = SM_GPS_STATE_ASLEEP;
             syshal_gps_shutdown();
+            GPS_off_log();
         }
     }
 
@@ -4119,6 +4169,7 @@ static void sm_main_provisioning(sm_handle_t * state_handle)
         if (SM_GPS_STATE_ASLEEP == sm_gps_state)
         {
             syshal_gps_wake_up();
+            GPS_on_log();
             sm_gps_state = SM_GPS_STATE_ACQUIRING;
         }
     }
