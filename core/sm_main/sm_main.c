@@ -732,11 +732,11 @@ void logging_add_to_buffer(uint8_t * data, uint32_t size)
 
 void GPS_on(void)
 {
-    if (SM_GPS_STATE_ASLEEP != sm_gps_state)
-        return; // GPS already awake
-
     // Start GPS watchdog
     syshal_timer_set(timer_gps_watchdog, one_shot, GPS_WATCHDOG_TIME_SECONDS);
+
+    if (SM_GPS_STATE_ASLEEP != sm_gps_state)
+        return; // GPS already awake
 
     sm_gps_state = SM_GPS_STATE_ACQUIRING;
     gps_ttff_reading_logged = false;
@@ -1222,8 +1222,11 @@ static void timer_gps_watchdog_callback(void)
 {
     DEBUG_PR_TRACE("%s() called", __FUNCTION__);
 
+    if (!sensor_logging_enabled)
+        return;
+
     // The GPS has been unresponsive for a suspiciously long time. Try waking it up again
-    if (SM_GPS_STATE_ASLEEP != sm_gps_state && !syshal_gps_bridging)
+    if (SM_GPS_STATE_ASLEEP != sm_gps_state)
     {
         // Reset GPS watchdog
         syshal_timer_set(timer_gps_watchdog, one_shot, GPS_WATCHDOG_TIME_SECONDS);
@@ -3685,9 +3688,6 @@ static void sm_main_operational(sm_handle_t * state_handle)
             fs_flush(file_handle);
         }
 
-        // Clear any current timers
-        syshal_timer_cancel_all();
-
         green_led_flashing = true;
         led_last_flash_time = syshal_time_get_ticks_ms();
         led_flashing_start_time = 0;
@@ -3923,6 +3923,7 @@ static void sm_main_operational(sm_handle_t * state_handle)
         syshal_timer_cancel(timer_gps_no_fix);
         syshal_timer_cancel(timer_gps_maximum_acquisition);
         syshal_timer_cancel(timer_gps_very_first_fix_hold_time);
+        syshal_timer_cancel(timer_gps_watchdog);
         syshal_timer_cancel(timer_log_flush);
         syshal_timer_cancel(timer_pressure_interval);
         syshal_timer_cancel(timer_pressure_maximum_acquisition);
