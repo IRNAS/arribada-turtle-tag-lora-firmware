@@ -40,6 +40,7 @@
 #define FS_ERROR_END_OF_FILE           ( -8)
 #define FS_ERROR_BAD_DEVICE            ( -9)
 #define FS_ERROR_FILE_VERSION_MISMATCH (-10)
+#define FS_ERROR_FILESYSTEM_CORRUPTED  (-11)
 
 /* Macros */
 

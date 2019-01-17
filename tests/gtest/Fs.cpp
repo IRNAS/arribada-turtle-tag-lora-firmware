@@ -259,7 +259,10 @@ TEST_F(FsTest, StatExistingFileAttributesArePreserved)
     EXPECT_EQ(wr_user_flags, stat.user_flags);
     EXPECT_FALSE(stat.is_circular);
     EXPECT_FALSE(stat.is_protected);
-    EXPECT_EQ((uint32_t)strlen(test_string[0]), stat.size);
+
+    // Size is the actual size on disk and not the number of user data bytes
+    // This means size in this case = 2 bytes bigger
+    EXPECT_EQ((uint32_t)strlen(test_string[0]) + 2, stat.size);
 }
 
 TEST_F(FsTest, DeletedFileNoLongerExists)
@@ -519,7 +522,7 @@ TEST_F(FsTest, FileCannotExceedFileSystemSize)
     fs_t fs;
     fs_handle_t handle;
     uint32_t wr;
-    char test_string[][256] = {
+    char test_string[][512] = {
             "DEADBEEFFEEDBEEF",
     };
     uint8_t wr_user_flags = 0x7;
@@ -528,31 +531,9 @@ TEST_F(FsTest, FileCannotExceedFileSystemSize)
     EXPECT_EQ(FS_NO_ERROR, fs_mount(0, &fs));
     EXPECT_EQ(FS_NO_ERROR, fs_format(fs));
     EXPECT_EQ(FS_NO_ERROR, fs_open(fs, &handle, 0, FS_MODE_CREATE, &wr_user_flags));
-    for (unsigned int i = 0; i < (FS_PRIV_MAX_SECTORS * FS_PRIV_USABLE_SIZE); i += strlen(test_string[0]))
-        EXPECT_EQ(FS_NO_ERROR, fs_write(handle, test_string[0], strlen(test_string[0]), &wr));
-    EXPECT_EQ(FS_ERROR_FILESYSTEM_FULL, fs_write(handle, test_string[0], strlen(test_string[0]), &wr));
-    EXPECT_EQ(FS_NO_ERROR, fs_close(handle));
-}
-
-TEST_F(FsTest, WriteSmallChunksThatExceedMaxSessions)
-{
-    fs_t fs;
-    fs_handle_t handle;
-    uint32_t wr;
-    char test_string[][256] = {
-            "DEADBEEF",
-    };
-    uint8_t wr_user_flags = 0x7;
-
-    EXPECT_EQ(FS_NO_ERROR, fs_init(0));
-    EXPECT_EQ(FS_NO_ERROR, fs_mount(0, &fs));
-    EXPECT_EQ(FS_NO_ERROR, fs_format(fs));
-    EXPECT_EQ(FS_NO_ERROR, fs_open(fs, &handle, 0, FS_MODE_CREATE, &wr_user_flags));
-    for (unsigned int i = 0; i < (FS_PRIV_MAX_SECTORS * FS_PRIV_NUM_WRITE_SESSIONS); i++)
+    for (unsigned int i = 0; i < FS_PRIV_MAX_SECTORS * (FS_PRIV_PAGES_PER_SECTOR-1); i++)
     {
-        ASSERT_EQ(FS_NO_ERROR, fs_write(handle, test_string[0], strlen(test_string[0]), &wr));
-        EXPECT_EQ(FS_NO_ERROR, fs_close(handle)); /* Force flush and session write */
-        ASSERT_EQ(FS_NO_ERROR, fs_open(fs, &handle, 0, FS_MODE_WRITEONLY, NULL));
+        EXPECT_EQ(FS_NO_ERROR, fs_write(handle, test_string[0], 510, &wr));
     }
     EXPECT_EQ(FS_ERROR_FILESYSTEM_FULL, fs_write(handle, test_string[0], strlen(test_string[0]), &wr));
     EXPECT_EQ(FS_NO_ERROR, fs_close(handle));
@@ -699,27 +680,33 @@ TEST_F(FsTest, LargeFileDataIntegrityCheck)
     EXPECT_EQ(FS_NO_ERROR, fs_mount(0, &fs));
     EXPECT_EQ(FS_NO_ERROR, fs_open(fs, &handle, 0, FS_MODE_CREATE, &wr_user_flags));
     srand(0);
-    for (unsigned int i = 0; i < FS_PRIV_USABLE_SIZE * FS_PRIV_MAX_SECTORS; i++)
+    for (unsigned int i = 0; i < FS_PRIV_MAX_SECTORS * (FS_PRIV_PAGES_PER_SECTOR - 1); i++)
     {
-        char x = (uint8_t)rand();
-        EXPECT_EQ(FS_NO_ERROR, fs_write(handle, &x, 1, &wr));
-        EXPECT_EQ((uint32_t)1, wr);
+        for (unsigned int j = 0; j < FS_PRIV_PAGE_SIZE - 2; j++)
+        {
+            char x = (uint8_t)rand();
+            EXPECT_EQ(FS_NO_ERROR, fs_write(handle, &x, 1, &wr));
+            EXPECT_EQ((uint32_t)1, wr);
+        }
     }
     EXPECT_EQ(FS_NO_ERROR, fs_close(handle));
     EXPECT_EQ(FS_NO_ERROR, fs_open(fs, &handle, 0, FS_MODE_READONLY, NULL));
     srand(0);
-    for (unsigned int i = 0; i < FS_PRIV_USABLE_SIZE * FS_PRIV_MAX_SECTORS; i++)
+    for (unsigned int i = 0; i < FS_PRIV_MAX_SECTORS * (FS_PRIV_PAGES_PER_SECTOR - 1); i++)
     {
-        char x;
-        EXPECT_EQ(FS_NO_ERROR, fs_read(handle, &x, 1, &rd));
-        EXPECT_EQ((uint8_t)x, (uint8_t)rand());
-        EXPECT_EQ((uint32_t)1, rd);
+        for (unsigned int j = 0; j < FS_PRIV_PAGE_SIZE - 2; j++)
+        {
+            char x;
+            EXPECT_EQ(FS_NO_ERROR, fs_read(handle, &x, 1, &rd));
+            EXPECT_EQ((uint8_t)x, (uint8_t)rand());
+            EXPECT_EQ((uint32_t)1, rd);
+        }
     }
     EXPECT_EQ(FS_NO_ERROR, fs_close(handle));
 
     // Check file size is correct
     EXPECT_EQ(FS_NO_ERROR, fs_stat(fs, 0, &stat));
-    EXPECT_EQ((uint32_t)FS_PRIV_USABLE_SIZE * FS_PRIV_MAX_SECTORS, stat.size);
+    EXPECT_EQ((uint32_t)FS_PRIV_MAX_SECTORS * (FS_PRIV_PAGES_PER_SECTOR-1) * FS_PRIV_PAGE_SIZE, stat.size);
 }
 
 TEST_F(FsTest, CircularFileCanOverwriteAndReadBack)
@@ -727,11 +714,11 @@ TEST_F(FsTest, CircularFileCanOverwriteAndReadBack)
     fs_t fs;
     fs_handle_t handle;
     uint32_t wr, rd;
-    char test_string[][256] = {
+    char test_string[][512] = {
             "DEADBEEFFEEDBEEF", /* Even sector */
             "FEEDBEEFDEADBEEF", /* Odd sector */
     };
-    char buf[256];
+    char buf[512];
     uint8_t wr_user_flags = 0x7, rd_user_flags;
 
     EXPECT_EQ(FS_NO_ERROR, fs_init(0));
@@ -740,12 +727,12 @@ TEST_F(FsTest, CircularFileCanOverwriteAndReadBack)
     EXPECT_EQ(FS_NO_ERROR, fs_open(fs, &handle, 0, FS_MODE_CREATE_CIRCULAR, &wr_user_flags));
     /* Fill file system with even/odd sector pattern */
     for (unsigned int i = 0; i < FS_PRIV_MAX_SECTORS; i++)
-        for (unsigned int j = 0; j < FS_PRIV_USABLE_SIZE; j += strlen(test_string[0]))
-            EXPECT_EQ(FS_NO_ERROR, fs_write(handle, test_string[i&1], strlen(test_string[0]), &wr));
+        for (unsigned int j = 0; j < FS_PRIV_PAGES_PER_SECTOR-1; j++)
+            EXPECT_EQ(FS_NO_ERROR, fs_write(handle, test_string[i&1], FS_PRIV_PAGE_SIZE-2, &wr));
     /* Now overwrite previous root sector (even) which means new root sector should be odd */
     for (unsigned int i = 0; i < 1; i++)
-        for (unsigned int j = 0; j < FS_PRIV_USABLE_SIZE; j += strlen(test_string[0]))
-            EXPECT_EQ(FS_NO_ERROR, fs_write(handle, test_string[i&1], strlen(test_string[0]), &wr));
+        for (unsigned int j = 0; j < FS_PRIV_PAGES_PER_SECTOR-1; j++)
+            EXPECT_EQ(FS_NO_ERROR, fs_write(handle, test_string[i&1], FS_PRIV_PAGE_SIZE-2, &wr));
     EXPECT_EQ(FS_NO_ERROR, fs_close(handle));
 
     /* Now open the file as read only */
@@ -754,13 +741,86 @@ TEST_F(FsTest, CircularFileCanOverwriteAndReadBack)
 
     /* First sector should now be odd, 2nd even, etc */
     for (unsigned int i = 0; i < FS_PRIV_MAX_SECTORS; i++)
-        for (unsigned int j = 0; j < FS_PRIV_USABLE_SIZE; j += strlen(test_string[0]))
+        for (unsigned int j = 0; j < FS_PRIV_PAGES_PER_SECTOR-1; j++)
         {
-            EXPECT_EQ(FS_NO_ERROR, fs_read(handle, buf, strlen(test_string[(i+1) & 1]), &rd));
-            EXPECT_EQ(0, strncmp(test_string[(i+1) & 1], buf, strlen(test_string[(i+1) & 1])));
+            EXPECT_EQ(FS_NO_ERROR, fs_read(handle, buf, FS_PRIV_PAGE_SIZE-2, &rd));
+            EXPECT_EQ(0, memcmp(test_string[(i+1) & 1], buf, FS_PRIV_PAGE_SIZE-2));
         }
 
     /* Next read should be EOF, even for circular file type */
     EXPECT_EQ(FS_ERROR_END_OF_FILE, fs_read(handle, buf, sizeof(buf), &rd));
+    EXPECT_EQ(FS_NO_ERROR, fs_close(handle));
+}
+
+TEST_F(FsTest, CorruptedFilesystem)
+{
+    fs_t fs;
+    fs_handle_t handle;
+    uint32_t wr, rd;
+    char test_string[][512] = {
+            "Hello World",
+    };
+    uint8_t buf[512];
+
+    EXPECT_EQ(FS_NO_ERROR, fs_init(0));
+    EXPECT_EQ(FS_NO_ERROR, fs_mount(0, &fs));
+    EXPECT_EQ(FS_NO_ERROR, fs_format(fs));
+    EXPECT_EQ(FS_NO_ERROR, fs_open(fs, &handle, 0, FS_MODE_CREATE, NULL));
+    EXPECT_EQ(FS_NO_ERROR, fs_write(handle, test_string[0], strlen(test_string[0]), &wr));
+    EXPECT_EQ((uint32_t)strlen(test_string[0]), wr);
+    EXPECT_EQ(FS_NO_ERROR, fs_close(handle));
+
+    /* Forcibly corrupt the flash memory at the beginning of the first actual data page */
+    flash_ram[FS_PRIV_PAGE_SIZE] = 0xee;
+    flash_ram[FS_PRIV_PAGE_SIZE+1] = 0xee;
+
+    /* Make sure this error is detected when trying to open the file */
+    EXPECT_EQ(FS_ERROR_FILESYSTEM_CORRUPTED, fs_open(fs, &handle, 0, FS_MODE_READONLY, NULL));
+    EXPECT_EQ(FS_ERROR_FILESYSTEM_CORRUPTED, fs_open(fs, &handle, 0, FS_MODE_WRITEONLY, NULL));
+
+    EXPECT_EQ(FS_NO_ERROR, fs_format(fs));
+    EXPECT_EQ(FS_NO_ERROR, fs_open(fs, &handle, 0, FS_MODE_CREATE, NULL));
+    EXPECT_EQ(FS_NO_ERROR, fs_write(handle, test_string[0], strlen(test_string[0]), &wr));
+    EXPECT_EQ(FS_NO_ERROR, fs_flush(handle));
+    EXPECT_EQ(FS_NO_ERROR, fs_write(handle, test_string[0], strlen(test_string[0]), &wr));
+    EXPECT_EQ(FS_NO_ERROR, fs_flush(handle));
+    EXPECT_EQ(FS_NO_ERROR, fs_write(handle, test_string[0], strlen(test_string[0]), &wr));
+    EXPECT_EQ(FS_NO_ERROR, fs_flush(handle));
+    EXPECT_EQ(FS_NO_ERROR, fs_write(handle, test_string[0], strlen(test_string[0]), &wr));
+    EXPECT_EQ(FS_NO_ERROR, fs_flush(handle));
+    EXPECT_EQ(FS_NO_ERROR, fs_close(handle));
+
+    /* Corrupt again with a plausible header value which causes the headers to become out of sync */
+    flash_ram[FS_PRIV_PAGE_SIZE] = 0x3;
+    flash_ram[FS_PRIV_PAGE_SIZE+1] = 0x0;
+
+    /* Make sure this error is detected when trying to open the file */
+    EXPECT_EQ(FS_ERROR_FILESYSTEM_CORRUPTED, fs_open(fs, &handle, 0, FS_MODE_READONLY, NULL));
+    EXPECT_EQ(FS_ERROR_FILESYSTEM_CORRUPTED, fs_open(fs, &handle, 0, FS_MODE_WRITEONLY, NULL));
+
+    /* Now create a file that spans two sectors and corrupt only the 2nd sector.  This is
+     * not detected during an open (since only 1st sector is scanned) but will be detected
+     * during a read once the corrupted page is reached.
+     */
+    EXPECT_EQ(FS_NO_ERROR, fs_format(fs));
+    EXPECT_EQ(FS_NO_ERROR, fs_open(fs, &handle, 0, FS_MODE_CREATE, NULL));
+    for (unsigned int i = 0; i < 2; i++)
+        for (unsigned int j = 0; j < FS_PRIV_PAGES_PER_SECTOR - 1; j++)
+            EXPECT_EQ(FS_NO_ERROR, fs_write(handle, test_string[0], FS_PRIV_PAGE_SIZE-2, &wr));
+    EXPECT_EQ(FS_NO_ERROR, fs_close(handle));
+
+    /* Corrupt again with a plausible header value which causes the headers to become out of sync */
+    flash_ram[(FS_PRIV_PAGES_PER_SECTOR * FS_PRIV_PAGE_SIZE) + 2 * FS_PRIV_PAGE_SIZE] = 0x3;
+    flash_ram[(FS_PRIV_PAGES_PER_SECTOR * FS_PRIV_PAGE_SIZE) + 2 * FS_PRIV_PAGE_SIZE + 1] = 0x0;
+
+    EXPECT_EQ(FS_NO_ERROR, fs_open(fs, &handle, 0, FS_MODE_READONLY, NULL));
+
+    /* Read first sector fine */
+    for (unsigned int j = 0; j < FS_PRIV_PAGES_PER_SECTOR - 1; j++)
+        EXPECT_EQ(FS_NO_ERROR, fs_read(handle, buf, FS_PRIV_PAGE_SIZE-2, &rd));
+
+    /* Read 2nd sector will fail during end of sector scan */
+    EXPECT_EQ(FS_ERROR_FILESYSTEM_CORRUPTED, fs_read(handle, buf, FS_PRIV_PAGE_SIZE-2, &rd));
+    EXPECT_EQ((uint32_t)0, rd);
     EXPECT_EQ(FS_NO_ERROR, fs_close(handle));
 }

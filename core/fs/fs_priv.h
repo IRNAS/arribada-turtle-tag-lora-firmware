@@ -37,15 +37,23 @@
 #define FS_PRIV_MAX_SECTORS             64
 #endif
 
-#ifndef FS_PRIV_SECTOR_SIZE
-#define FS_PRIV_SECTOR_SIZE             (256 * 1024)
+/* This defines the number of pages in each sector
+ */
+#ifndef FS_PRIV_PAGES_PER_SECTOR
+#define FS_PRIV_PAGES_PER_SECTOR        512
 #endif
 
-#define FS_PRIV_USABLE_SIZE             (FS_PRIV_SECTOR_SIZE - FS_PRIV_ALLOC_UNIT_SIZE)
-
+/* This defines the page size in bytes
+ */
 #ifndef FS_PRIV_PAGE_SIZE
 #define FS_PRIV_PAGE_SIZE               512
 #endif
+
+#ifndef FS_PRIV_SECTOR_SIZE
+#define FS_PRIV_SECTOR_SIZE             (FS_PRIV_PAGES_PER_SECTOR * FS_PRIV_PAGE_SIZE)
+#endif
+
+#define FS_PRIV_USABLE_SIZE             (FS_PRIV_SECTOR_SIZE - FS_PRIV_ALLOC_UNIT_SIZE)
 
 #define FS_PRIV_SECTOR_ADDR(s)          (s * FS_PRIV_SECTOR_SIZE)
 
@@ -97,7 +105,6 @@ typedef struct
 typedef struct
 {
     fs_priv_alloc_unit_header_t header;
-    uint32_t                    write_offset[FS_PRIV_NUM_WRITE_SESSIONS];
 } fs_priv_alloc_unit_t;
 
 typedef struct
@@ -113,11 +120,13 @@ typedef struct
     uint8_t         file_id;              /*!< File identifier for this file */
     uint8_t         root_allocation_unit; /*!< Root sector of file */
     uint8_t         curr_allocation_unit; /*!< Current accessed sector of file */
-    uint8_t         curr_session_offset;  /*!< Session offset to use */
-    uint32_t        curr_session_value;   /*!< Session offset value */
     uint32_t        last_data_offset;     /*!< Read: last readable offset, Write: last flash write position */
     uint32_t        curr_data_offset;     /*!< Current read/write data offset in sector */
-    uint8_t         page_cache[FS_PRIV_PAGE_SIZE]; /*!< Page align cache */
+    union
+    {
+        uint16_t    write_header;
+        uint8_t     page_cache[FS_PRIV_PAGE_SIZE];  
+    };
 } fs_priv_handle_t;
 
 #endif /* _FS_PRIV_H_ */

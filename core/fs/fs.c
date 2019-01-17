@@ -21,6 +21,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdio.h>
 
 #include "fs_priv.h"
 #include "fs.h"
@@ -384,40 +385,55 @@ static int check_file_flags(fs_priv_t *fs_priv, uint8_t root, fs_mode_t mode)
  * \param sector[in] the sector number to check.
  * \param data_offset[out] pointer to data offset relative to start of sector
  *        which shall be used to store the current write offset
- * \return session write offset e.g., 0 means the first session entry.
- * \return \ref FS_PRIV_NOT_ALLOCATED if no session entry is free.
+ * \return \ref FS_NO_ERROR on success.
+ * \return \ref FS_PRIV_NOT_ALLOCATED an integrity error occurred.
  */
-__RAMFUNC static uint8_t find_next_session_offset(fs_priv_t *fs_priv, uint8_t sector, uint32_t *data_offset)
+__RAMFUNC static int find_end_of_sector(fs_priv_t *fs_priv, uint8_t sector, uint32_t *data_offset)
 {
-    uint32_t write_offset = (uint8_t)FS_PRIV_NOT_ALLOCATED;
-    uint32_t write_offsets[FS_PRIV_NUM_WRITE_SESSIONS];
+    uint32_t address = FS_PRIV_SECTOR_ADDR(sector) + FS_PRIV_ALLOC_UNIT_SIZE;
+    uint32_t pages = 0;
+    uint32_t page_offset;
+    uint8_t  page_data[FS_PRIV_PAGE_SIZE];
+    int error = FS_NO_ERROR;
 
-    /* Read all the session offsets from flash */
-    syshal_flash_read(fs_priv->device, (void *)write_offsets,
-            FS_PRIV_SECTOR_ADDR(sector) + FS_PRIV_SESSION_OFFSET,
-            sizeof(write_offsets));
-
-    /* Scan session offsets to find first free entry.  If all entries
-     * are already used then no further writes can be done and
-     * FS_PRIV_NOT_ALLOCATED shall be returned.
-     */
-    for (uint8_t i = 0; i < FS_PRIV_NUM_WRITE_SESSIONS; i++)
+    while (pages++ < (FS_PRIV_PAGES_PER_SECTOR - 1))
     {
-        if ((uint32_t)FS_PRIV_NOT_ALLOCATED == write_offsets[i])
-        {
-            if (i == 0)
-                *data_offset = 0; /* None yet assigned */
+        /* Read page from flash memory */
+        syshal_flash_read(fs_priv->device, page_data, address, FS_PRIV_PAGE_SIZE);
+        page_offset = 0;
 
-            /* Next available write offset has been found */
-            write_offset = i;
-            break;
+        /* Iterate through write segment operations in this page */
+        while (page_offset < (FS_PRIV_PAGE_SIZE - 2))
+        {
+            uint16_t write_header_len = ((uint16_t)page_data[page_offset] |
+                ((uint16_t)page_data[page_offset + 1] << 8));
+
+            /* Write header must be at least 3 bytes */
+            if (write_header_len <= 2)
+                return FS_ERROR_FILESYSTEM_CORRUPTED;
+
+            if (0xFFFF == write_header_len)
+            {
+                /* Last used page in sector found */
+                *data_offset = (address % FS_PRIV_SECTOR_SIZE) + page_offset - FS_PRIV_ALLOC_UNIT_SIZE;
+                return error;
+            }
+            else if ((page_offset + write_header_len) > FS_PRIV_PAGE_SIZE)
+            {
+                /* Write header exceeds the page boundary */
+                return FS_ERROR_FILESYSTEM_CORRUPTED;
+            }
+
+            page_offset = page_offset + write_header_len;
         }
 
-        /* Set last known write offset */
-        *data_offset = write_offsets[i];
+        address = address + FS_PRIV_PAGE_SIZE;
     }
 
-    return write_offset;
+    /* Reached the end of the sector without finding EOF */
+    *data_offset = FS_PRIV_SECTOR_SIZE - FS_PRIV_ALLOC_UNIT_SIZE;
+
+    return error;
 }
 
 /*! \brief Find the last allocation unit in the chain of sectors
@@ -448,7 +464,7 @@ static uint8_t find_last_allocation_unit(fs_priv_t *fs_priv, uint8_t root)
 /*! \brief Find the last allocation unit and also the last known
  * write position in that allocation unit.
  *
- * See \ref find_last_allocation_unit and \ref find_next_session_offset.
+ * See \ref find_last_allocation_unit and \ref find_end_of_sector.
  *
  * \param fs_priv[in] a pointer to the private file system structure.
  * \param root[in] the root sector number to start from.
@@ -459,10 +475,10 @@ static uint8_t find_last_allocation_unit(fs_priv_t *fs_priv, uint8_t root)
  * \return session write offset e.g., 0 means the first session entry.
  * \return \ref FS_PRIV_NOT_ALLOCATED if no session entry is free.
  */
-static uint8_t find_eof(fs_priv_t *fs_priv, uint8_t root, uint8_t *last_alloc_unit, uint32_t *data_offset)
+static int find_eof(fs_priv_t *fs_priv, uint8_t root, uint8_t *last_alloc_unit, uint32_t *data_offset)
 {
     *last_alloc_unit = find_last_allocation_unit(fs_priv, root);
-    return find_next_session_offset(fs_priv, *last_alloc_unit, data_offset);
+    return find_end_of_sector(fs_priv, *last_alloc_unit, data_offset);
 }
 
 /*! \brief Determines if a handle is in the end of a file condition.
@@ -556,45 +572,6 @@ static int flush_page_cache(fs_priv_handle_t *fs_priv_handle)
     return FS_NO_ERROR;
 }
 
-/*! \brief Write current session write offset to flash memory.
- *
- * \param fs_priv_handle[in] pointer to private flash handle.
- * \return \ref FS_NO_ERROR on success.
- * \return \ref FS_ERROR_FLASH_MEDIA if a flash write failed.
- */
-static int update_session_offset(fs_priv_handle_t *fs_priv_handle)
-{
-    uint32_t address;
-
-    /* Check to see if the session offset needs updating */
-    if (fs_priv_handle->last_data_offset == fs_priv_handle->curr_session_value)
-        return FS_NO_ERROR;
-
-    /* Compute physical address for next write offset */
-    address = FS_PRIV_SECTOR_ADDR(fs_priv_handle->curr_allocation_unit) +
-            FS_PRIV_SESSION_OFFSET +
-            (sizeof(uint32_t) * fs_priv_handle->curr_session_offset);
-
-    /* Write the new offset into the allocation unit */
-    if (syshal_flash_write(fs_priv_handle->fs_priv->device,
-            &fs_priv_handle->last_data_offset,
-            address, sizeof(uint32_t)))
-        return FS_ERROR_FLASH_MEDIA;
-
-    /* Update session write pointer */
-    fs_priv_handle->curr_session_value = fs_priv_handle->last_data_offset;
-
-    /* Set next available write offset */
-    fs_priv_handle->curr_session_offset++;
-    if (fs_priv_handle->curr_session_offset >= FS_PRIV_NUM_WRITE_SESSIONS)
-    {
-        /* No further sessions free */
-        fs_priv_handle->curr_session_offset = (uint8_t)FS_PRIV_NOT_ALLOCATED;
-    }
-
-    return FS_NO_ERROR;
-}
-
 /*! \brief Flush file handle.
  *
  * Forces the writing of any cached data and the session write
@@ -603,23 +580,11 @@ static int update_session_offset(fs_priv_handle_t *fs_priv_handle)
  * \param fs_priv_handle[in] pointer to private flash handle.
  * \return \ref FS_NO_ERROR on success.
  * \return \ref FS_ERROR_FLASH_MEDIA if a flash write failed.
- * \return \ref FS_ERROR_FILESYSTEM_FULL if no session is free.
  */
 static int flush_handle(fs_priv_handle_t *fs_priv_handle)
 {
-    int ret;
-
-    /* Don't allow flush if a session write offset is not available */
-    if ((uint8_t)FS_PRIV_NOT_ALLOCATED == fs_priv_handle->curr_session_offset)
-        return FS_ERROR_FILESYSTEM_FULL;
-
     /* Flush any bytes in the page cache */
-    ret = flush_page_cache(fs_priv_handle);
-    if (ret)
-        return ret;
-
-    /* Set new write offset */
-    return update_session_offset(fs_priv_handle);
+    return flush_page_cache(fs_priv_handle);
 }
 
 /*! \brief Allocate new sector to a file.
@@ -705,8 +670,6 @@ static int allocate_new_sector_to_file(fs_priv_handle_t *fs_priv_handle)
     fs_priv_handle->curr_allocation_unit = sector;
     fs_priv_handle->last_data_offset = 0;
     fs_priv_handle->curr_data_offset = 0;
-    fs_priv_handle->curr_session_offset = 0;
-    fs_priv_handle->curr_session_value = 0;
 
     /* Write file information header contents to flash for new sector */
     if (syshal_flash_write(fs_priv->device, &fs_priv->alloc_unit_list[sector],
@@ -720,16 +683,14 @@ static int allocate_new_sector_to_file(fs_priv_handle_t *fs_priv_handle)
 /*! \brief Ascertain if the allocation unit is full.
  *
  * A sector is considered full if all usable bytes have been
- * written in the sector or the maximum number of write sessions
- * has been filled in the allocation unit.
+ * written in the sector.
  *
  * \param fs_priv_handle[in] pointer to private flash handle.
  * \return true if full, false if not full.
  */
 static inline bool is_full(fs_priv_handle_t *fs_priv_handle)
 {
-    return (fs_priv_handle->curr_session_offset == (uint8_t)FS_PRIV_NOT_ALLOCATED ||
-            fs_priv_handle->curr_data_offset >= FS_PRIV_USABLE_SIZE);
+    return (fs_priv_handle->curr_data_offset >= FS_PRIV_USABLE_SIZE);
 }
 
  /*! \brief Write data to a file handle through its cache.
@@ -749,45 +710,93 @@ static inline bool is_full(fs_priv_handle_t *fs_priv_handle)
 static int write_through_cache(fs_priv_handle_t *fs_priv_handle, const void *src, uint16_t size, uint16_t *written)
 {
     uint16_t cached, page_boundary, sz;
+    int ret;
+
+    /* Check if the current sector is full */
+    if (is_full(fs_priv_handle))
+    {
+        /* Flush file to clear cache */
+        flush_handle(fs_priv_handle);
+
+        /* Allocate new sector to file chain */
+        ret = allocate_new_sector_to_file(fs_priv_handle);
+        if (ret) return ret;
+    }
 
     /* Cache operation
      *
-     * Rule 1: Write the cache only when there are at least page_boundary bytes in it.
+     * Rule 1: Write the cache to flash only when there are at least "page_boundary" bytes in it.
      * Rule 2: Keep caching data until Rule 1 applies.
      *
-     * cache = { 0 ... 512 } => number of bytes in the cache
-     * page_boundary = { 0 ... 512 } => number of bytes until the next flash page boundary
-     * 0 <= (page_boundary - cache) <= 512 => cache may never exceed page_boundary
+     * cache = { 0 ... 512 } => number of bytes in the cache (including 2 byte write header)
+     * page_boundary = { 0 ... 512 } => number of bytes until the next page boundary
+     * 0 <= (page_boundary - cache) <= 512 => cache occupancy may never exceed page_boundary
      *
-     * Example:
+     * The page cache in RAM will always look like this:
      *
-     * start => page_boundary = 512, cache = 0
-     * write(4) => page_boundary = 512, cache = 4
-     * flush() => page_boundary = 508, cache = 0
-     * write(56) => page_boundary = 508, cache = 56
-     * write(3) => page_boundary = 508, cache = 59
-     * write(512) => page_boundary = 512, cache = 63
-     * flush() => page_boundary = 449, cache = 0
-     * write(512) => page_boundary = 512, cache =  63
-     * etc
+     *   0   1                                       i            511
+     * +-------------------------------------------------------------+
+     * |   |   |                                   |   |     |   |   |
+     * | i | i |  ..Data...                    .   |FF | ... |FF |FF |
+     * |   |   |                                   |   |     |   |   |
+     * +-------------------------------------------------------------+
+     *
+     * In the above case it contains 'i' bytes with i-2 user data bytes.  The remainder
+     * of the cache is filled with FF.
+     *
+     * Note that since the page cache can be independently flushed we may end up
+     * with pages that looks something like this inside the flash memory:
+     *
+     *                    Flush                  Flush(EOF)
+     *                      |                      |
+     *                      V                      V
+     *   0   1                i  i+1                i+j           511
+     * +-------------------------------------------------------------+
+     * |   |   |            |   |   |              |   |     |   |   |
+     * | i | i |  ..Data... | j | j | ...Data...   |FF | ... |FF |FF |
+     * |   |   |            |   |   |              |   |     |   |   |
+     * +-----------------------------------------------------------+
+     *
+     * In certain situations a flush may happen when there are only 1 or 2 bytes
+     * remaining in the page.  The last 1 or 2 bytes are not used in these cases,
+     * since we need to least 3 bytes to store any user data.
      */
     cached = cached_bytes(fs_priv_handle);
+
+    /* Check if we need to reset the cache state */
+    if (0 == cached)
+    {
+        /* Check if the sector can store any more data */
+        if (remaining_bytes(fs_priv_handle) <= 2)
+        {
+            /* Allocate new sector to file chain */
+            ret = allocate_new_sector_to_file(fs_priv_handle);
+            if (ret) return ret;
+        }
+
+        /* Reset page cache to prepare next flash write operation */
+        memset(fs_priv_handle->page_cache, 0xFF, FS_PRIV_PAGE_SIZE);
+        cached = 2;
+        fs_priv_handle->write_header = 2;
+        fs_priv_handle->curr_data_offset += 2;
+    }
+
     page_boundary = FS_PRIV_PAGE_SIZE - (fs_priv_handle->last_data_offset & (FS_PRIV_PAGE_SIZE - 1));
+    assert(cached <= page_boundary);
     *written = 0;
 
-    assert(cached <= page_boundary);
 
     /* Append to the cache up to the limit of the next page boundary */
     sz = MIN((page_boundary - cached), size);
     if (sz > 0)
     {
-        /* The size is guaranteed to be non-zero */
         memcpy(&fs_priv_handle->page_cache[cached], src, sz);
         src += sz;
         size -= sz;
         cached += sz;
         *written += sz;
         fs_priv_handle->curr_data_offset += sz;
+        fs_priv_handle->write_header += sz;
     }
 
     /* Cache can never exceed page boundary but we should
@@ -807,14 +816,6 @@ static int write_through_cache(fs_priv_handle_t *fs_priv_handle, const void *src
 
         /* Advance last write position to the next page boundary */
         fs_priv_handle->last_data_offset += page_boundary;
-    }
-
-    if (size > 0)
-    {
-        /* Cache is guaranteed to be empty */
-        memcpy(&fs_priv_handle->page_cache, src, size);
-        *written += size;
-        fs_priv_handle->curr_data_offset += size;
     }
 
     return FS_NO_ERROR;
@@ -997,18 +998,25 @@ int fs_open(fs_t fs, fs_handle_t *handle, uint8_t file_id, fs_mode_t mode, uint8
             /* Find the last known write position in this sector so we
              * can check for when to advance to next sector or catch EOF
              */
-            find_next_session_offset(fs_priv, root,
+            ret = find_end_of_sector(fs_priv, root,
                     &fs_priv_handle->last_data_offset);
+            if (ret)
+            {
+                free_handle(fs_priv_handle);
+                return ret;
+            }
         }
         else
         {
             /* Write only: find end of file for appending new data */
-            fs_priv_handle->curr_session_offset = find_eof(fs_priv, root,
-                    &fs_priv_handle->curr_allocation_unit,
-                    &fs_priv_handle->curr_data_offset);
-
-            /* Reset session pointer value */
-            fs_priv_handle->curr_session_value = fs_priv_handle->curr_data_offset;
+            ret = find_eof(fs_priv, root,
+                &fs_priv_handle->curr_allocation_unit,
+                &fs_priv_handle->curr_data_offset);
+            if (ret)
+            {
+                free_handle(fs_priv_handle);
+                return ret;
+            }
 
             /* Page write cache should be marked empty */
             fs_priv_handle->last_data_offset = fs_priv_handle->curr_data_offset;
@@ -1081,7 +1089,6 @@ int fs_write(fs_handle_t handle, const void *src, uint32_t size, uint32_t *writt
 {
     int ret = FS_NO_ERROR;
     fs_priv_handle_t *fs_priv_handle = (fs_priv_handle_t *)handle;
-    uint16_t write_size, actual_write;
 
     /* Reset counter */
     *written = 0;
@@ -1092,32 +1099,14 @@ int fs_write(fs_handle_t handle, const void *src, uint32_t size, uint32_t *writt
 
     while (size > 0 && !ret)
     {
-        /* Check if the current sector is full */
-        if (is_full(fs_priv_handle))
-        {
-            /* Flush file to clear cache and update session write offset */
-            flush_handle(fs_priv_handle);
-
-            /* Allocate new sector to file chain */
-            ret = allocate_new_sector_to_file(fs_priv_handle);
-            if (ret) return ret;
-        }
-
-        /* The permitted write size is limited by the page size and also the
-         * number of free bytes remaining in this sector i.e., we don't
-         * permit the cache to fill above the sector size since we might not
-         * be able to allocate a new sector for the file if no sectors
-         * are free i.e., no hidden data loss allowed.
-         */
-        write_size = MIN(FS_PRIV_PAGE_SIZE, size);
-        write_size = MIN(remaining_bytes(fs_priv_handle), write_size);
+        uint16_t actual_write = 0;
 
         /* Write data through the cache.  Note that the actual write size
-         * could be less than requested if a flash media error occurred i.e.,
-         * we won't try to fill the cache on a flash media error to prevent
-         * hidden data loss.
+         * could be less than requested so we should keep looping.
+         * The 'write_through_cache' function will handle reaching
+         * the end of the current sector and allocating a new sector.
          */
-        ret = write_through_cache(fs_priv_handle, src, write_size, &actual_write);
+        ret = write_through_cache(fs_priv_handle, src, size, &actual_write);
         src += actual_write;
         size -= actual_write;
         *written += actual_write;
@@ -1144,6 +1133,7 @@ int fs_write(fs_handle_t handle, const void *src, uint32_t size, uint32_t *writt
  */
 __RAMFUNC int fs_read(fs_handle_t handle, void *dest, uint32_t size, uint32_t *read)
 {
+    int ret;
     fs_priv_handle_t *fs_priv_handle = (fs_priv_handle_t *)handle;
     fs_priv_t *fs_priv = fs_priv_handle->fs_priv;
 
@@ -1173,26 +1163,94 @@ __RAMFUNC int fs_read(fs_handle_t handle, void *dest, uint32_t size, uint32_t *r
             /* Find the last known write position in this sector so we
              * can check for when to advance to next sector or catch EOF
              */
-            find_next_session_offset(fs_priv, sector, &fs_priv_handle->last_data_offset);
+            ret = find_end_of_sector(fs_priv, sector, &fs_priv_handle->last_data_offset);
+            if (ret) return ret;
 
             /* Reset data offset pointer */
             fs_priv_handle->curr_allocation_unit = sector;
             fs_priv_handle->curr_data_offset = 0;
         }
 
-        /* Read as many bytes as possible from this sector */
-        uint32_t read_size = MIN(size, (fs_priv_handle->last_data_offset - fs_priv_handle->curr_data_offset));
+        /* Read current page into working buffer */
         uint32_t address = FS_PRIV_SECTOR_ADDR(fs_priv_handle->curr_allocation_unit) +
-                FS_PRIV_FILE_DATA_REL_ADDRESS +
-                fs_priv_handle->curr_data_offset;
+            FS_PRIV_FILE_DATA_REL_ADDRESS + (fs_priv_handle->curr_data_offset & ~(FS_PRIV_PAGE_SIZE-1));
         if (syshal_flash_read(fs_priv->device,
-                dest,
+                fs_priv_handle->page_cache,
                 address,
-                read_size))
+                FS_PRIV_PAGE_SIZE))
             return FS_ERROR_FLASH_MEDIA;
-        *read += read_size;
-        size -= read_size;
-        fs_priv_handle->curr_data_offset += read_size;
+        uint16_t read_offset = 0;
+        uint16_t write_offset = fs_priv_handle->curr_data_offset % FS_PRIV_PAGE_SIZE;
+
+        /* Iterate through the page's stored write operations -- each page will typically
+         * look something like this:
+         *
+         *   0   1                i  i+1               i+j            511
+         * +-------------------------------------------------------------+
+         * |   |   |            |   |   |              |   |     |   |   |
+         * | i | i |  ..Data... | j | j | ...Data...   |FF | ... |FF |FF |
+         * |   |   |            |   |   |              |   |     |   |   |
+         * +-------------------------------------------------------------+
+         *
+         * This page contains two write operations of length i and j respectively.
+         * Two bytes are used to store the write operation length (which includes
+         * the header itself).
+         */
+        while (read_offset < (FS_PRIV_PAGE_SIZE - 2) && size)
+        {
+            /* The read_offset should be aligned to the next operation in the page */
+            uint16_t header_len = ((uint16_t)fs_priv_handle->page_cache[read_offset] |
+                ((uint16_t)fs_priv_handle->page_cache[read_offset + 1] << 8));
+
+            /* If the header length is FFFF then we assume we reached EOF */
+            if (0xFFFF == header_len)
+            {
+                /* Assume we reached EOF */
+                break;
+            }
+
+            /* Make sure the header field is within acceptable bounds */
+            if (header_len <= 2 ||
+                (read_offset + header_len) > FS_PRIV_PAGE_SIZE ||
+                header_len > FS_PRIV_PAGE_SIZE
+                )
+            {
+                printf("read_offset = %02x header = %02x\n", read_offset, header_len);
+                return FS_ERROR_FILESYSTEM_CORRUPTED;
+            }
+
+            /* Check to see if we already read these bytes from the page */
+            if ((read_offset + header_len) > write_offset)
+            {
+                /* We didn't read at least some of these bytes, so compute
+                 * how many bytes to read.
+                 */
+                uint16_t available = (read_offset + header_len) - write_offset;
+
+                /* If this is the first read for this header, then we must skip
+                 * over the header bytes which are not part of the user data.
+                 */
+                if (write_offset == read_offset)
+                {
+                    /* Skip header bytes */
+                    available -= 2;
+                    write_offset += 2;
+                    fs_priv_handle->curr_data_offset += 2;
+                }
+
+                /* Copy into user data buffer from page buffer */
+                uint16_t sz = MIN(size, available);
+                memcpy(dest, &fs_priv_handle->page_cache[write_offset], sz);
+                size -= sz;
+                *read += sz;
+                dest += sz;
+                write_offset += sz;
+                fs_priv_handle->curr_data_offset += sz;
+            }
+
+            /* Skip to next header in this page (if any) */
+            read_offset += header_len;
+        }
     }
 
     return FS_NO_ERROR;
@@ -1389,10 +1447,11 @@ int fs_stat(fs_t fs, uint8_t file_id, fs_stat_t *stat)
                  * been used and deduct this from the sector size.
                  */
                 uint32_t data_offset;
-                if (find_next_session_offset(fs_priv, sector, &data_offset) !=
-                        (uint8_t)FS_PRIV_NOT_ALLOCATED)
+                if (find_end_of_sector(fs_priv, sector, &data_offset) == FS_NO_ERROR)
                     stat->size += ((FS_PRIV_SECTOR_SIZE - FS_PRIV_ALLOC_UNIT_SIZE) -
                             data_offset);
+                else
+                    return FS_ERROR_FILESYSTEM_CORRUPTED;
             }
         }
     }
@@ -1416,8 +1475,10 @@ int fs_stat(fs_t fs, uint8_t file_id, fs_stat_t *stat)
         while ((uint8_t)FS_PRIV_NOT_ALLOCATED != root)
         {
             uint32_t data_offset;
-            find_next_session_offset(fs_priv, root, &data_offset);
-            stat->size += data_offset;
+            if (find_end_of_sector(fs_priv, root, &data_offset) == FS_NO_ERROR)
+                stat->size += data_offset;
+            else
+                return FS_ERROR_FILESYSTEM_CORRUPTED;
             root = next_allocation_unit(fs_priv, root);
         }
     }
