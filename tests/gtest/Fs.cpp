@@ -262,7 +262,7 @@ TEST_F(FsTest, StatExistingFileAttributesArePreserved)
 
     // Size is the actual size on disk and not the number of user data bytes
     // This means size in this case = 2 bytes bigger
-    EXPECT_EQ((uint32_t)strlen(test_string[0]) + 2, stat.size);
+    EXPECT_EQ((uint32_t)strlen(test_string[0]), stat.size);
 }
 
 TEST_F(FsTest, DeletedFileNoLongerExists)
@@ -706,7 +706,7 @@ TEST_F(FsTest, LargeFileDataIntegrityCheck)
 
     // Check file size is correct
     EXPECT_EQ(FS_NO_ERROR, fs_stat(fs, 0, &stat));
-    EXPECT_EQ((uint32_t)FS_PRIV_MAX_SECTORS * (FS_PRIV_PAGES_PER_SECTOR-1) * FS_PRIV_PAGE_SIZE, stat.size);
+    EXPECT_EQ((uint32_t)FS_PRIV_MAX_SECTORS * (FS_PRIV_PAGES_PER_SECTOR-1) * (FS_PRIV_PAGE_SIZE - 2), stat.size);
 }
 
 TEST_F(FsTest, CircularFileCanOverwriteAndReadBack)

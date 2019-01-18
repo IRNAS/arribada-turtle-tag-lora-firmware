@@ -385,11 +385,16 @@ static int check_file_flags(fs_priv_t *fs_priv, uint8_t root, fs_mode_t mode)
  * \param sector[in] the sector number to check.
  * \param data_offset[out] pointer to data offset relative to start of sector
  *        which shall be used to store the current write offset
+ * \param sector_size[out] pointer to sector size which will be used to
+ *        store the number of user data bytes stored in the sector
+ *        This parameter is optional and may be set to NULL.
  * \return \ref FS_NO_ERROR on success.
  * \return \ref FS_PRIV_NOT_ALLOCATED an integrity error occurred.
  */
-__RAMFUNC static int find_end_of_sector(fs_priv_t *fs_priv, uint8_t sector, uint32_t *data_offset)
+__RAMFUNC static int find_end_of_sector(fs_priv_t *fs_priv, uint8_t sector, uint32_t *data_offset,
+    uint32_t *sector_size)
 {
+    uint32_t sector_bytes = 0;
     uint32_t address = FS_PRIV_SECTOR_ADDR(sector) + FS_PRIV_ALLOC_UNIT_SIZE;
     uint32_t pages = 0;
     uint32_t page_offset;
@@ -410,21 +415,30 @@ __RAMFUNC static int find_end_of_sector(fs_priv_t *fs_priv, uint8_t sector, uint
 
             /* Write header must be at least 3 bytes */
             if (write_header_len <= 2)
+            {
+                if (NULL != sector_size)
+                    *sector_size = sector_bytes;
                 return FS_ERROR_FILESYSTEM_CORRUPTED;
+            }
 
             if (0xFFFF == write_header_len)
             {
                 /* Last used page in sector found */
                 *data_offset = (address % FS_PRIV_SECTOR_SIZE) + page_offset - FS_PRIV_ALLOC_UNIT_SIZE;
+                if (NULL != sector_size)
+                    *sector_size = sector_bytes;
                 return error;
             }
             else if ((page_offset + write_header_len) > FS_PRIV_PAGE_SIZE)
             {
+                if (NULL != sector_size)
+                    *sector_size = sector_bytes;
                 /* Write header exceeds the page boundary */
                 return FS_ERROR_FILESYSTEM_CORRUPTED;
             }
 
             page_offset = page_offset + write_header_len;
+            sector_bytes = sector_bytes + write_header_len - 2;
         }
 
         address = address + FS_PRIV_PAGE_SIZE;
@@ -432,6 +446,8 @@ __RAMFUNC static int find_end_of_sector(fs_priv_t *fs_priv, uint8_t sector, uint
 
     /* Reached the end of the sector without finding EOF */
     *data_offset = FS_PRIV_SECTOR_SIZE - FS_PRIV_ALLOC_UNIT_SIZE;
+    if (NULL != sector_size)
+        *sector_size = sector_bytes;
 
     return error;
 }
@@ -478,7 +494,7 @@ static uint8_t find_last_allocation_unit(fs_priv_t *fs_priv, uint8_t root)
 static int find_eof(fs_priv_t *fs_priv, uint8_t root, uint8_t *last_alloc_unit, uint32_t *data_offset)
 {
     *last_alloc_unit = find_last_allocation_unit(fs_priv, root);
-    return find_end_of_sector(fs_priv, *last_alloc_unit, data_offset);
+    return find_end_of_sector(fs_priv, *last_alloc_unit, data_offset, NULL);
 }
 
 /*! \brief Determines if a handle is in the end of a file condition.
@@ -999,7 +1015,7 @@ int fs_open(fs_t fs, fs_handle_t *handle, uint8_t file_id, fs_mode_t mode, uint8
              * can check for when to advance to next sector or catch EOF
              */
             ret = find_end_of_sector(fs_priv, root,
-                    &fs_priv_handle->last_data_offset);
+                    &fs_priv_handle->last_data_offset, NULL);
             if (ret)
             {
                 free_handle(fs_priv_handle);
@@ -1163,7 +1179,7 @@ __RAMFUNC int fs_read(fs_handle_t handle, void *dest, uint32_t size, uint32_t *r
             /* Find the last known write position in this sector so we
              * can check for when to advance to next sector or catch EOF
              */
-            ret = find_end_of_sector(fs_priv, sector, &fs_priv_handle->last_data_offset);
+            ret = find_end_of_sector(fs_priv, sector, &fs_priv_handle->last_data_offset, NULL);
             if (ret) return ret;
 
             /* Reset data offset pointer */
@@ -1447,7 +1463,7 @@ int fs_stat(fs_t fs, uint8_t file_id, fs_stat_t *stat)
                  * been used and deduct this from the sector size.
                  */
                 uint32_t data_offset;
-                if (find_end_of_sector(fs_priv, sector, &data_offset) == FS_NO_ERROR)
+                if (find_end_of_sector(fs_priv, sector, &data_offset, NULL) == FS_NO_ERROR)
                     stat->size += ((FS_PRIV_SECTOR_SIZE - FS_PRIV_ALLOC_UNIT_SIZE) -
                             data_offset);
                 else
@@ -1474,9 +1490,10 @@ int fs_stat(fs_t fs, uint8_t file_id, fs_stat_t *stat)
 
         while ((uint8_t)FS_PRIV_NOT_ALLOCATED != root)
         {
+            uint32_t sector_size;
             uint32_t data_offset;
-            if (find_end_of_sector(fs_priv, root, &data_offset) == FS_NO_ERROR)
-                stat->size += data_offset;
+            if (find_end_of_sector(fs_priv, root, &data_offset, &sector_size) == FS_NO_ERROR)
+                stat->size += sector_size;
             else
                 return FS_ERROR_FILESYSTEM_CORRUPTED;
             root = next_allocation_unit(fs_priv, root);
