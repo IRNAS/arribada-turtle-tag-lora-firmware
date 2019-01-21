@@ -92,7 +92,7 @@ uint32_t syshal_pmu_get_startup_status(void)
     return csr;
 }
 
-void syshal_pmu_kick_watchdog(void)
+__RAMFUNC void syshal_pmu_kick_watchdog(void)
 {
     __HAL_IWDG_RELOAD_COUNTER((IWDG_HandleTypeDef *)&IWDG_Init);
 }
