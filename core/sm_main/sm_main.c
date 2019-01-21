@@ -180,7 +180,7 @@ static volatile sm_gps_state_t sm_gps_state; // The current operating state of t
 ////////////////////////////////// GLOBALS /////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-#define LOG_FILE_FLUSH_PERIOD_SECONDS ( (24 * 60 * 60) - 60 ) // Period in seconds in which to flush the log file to FLASH
+#define LOG_FILE_FLUSH_PERIOD_SECONDS ( (1 * 60 * 60) - 60 ) // Period in seconds in which to flush the log file to FLASH
 
 // Size of logging buffer that is used to store sensor data before it it written to FLASH
 #define LOGGING_BUFFER_SIZE (32)
@@ -2622,6 +2622,7 @@ __RAMFUNC void execute_stm32_firmware_upgrade(void)
     {
         ret = fs_read(file_handle, &read_buffer, sizeof(read_buffer), &bytes_actually_read);
         syshal_firmware_write(read_buffer, bytes_actually_read);
+        syshal_pmu_kick_watchdog();
     }
     while (FS_ERROR_END_OF_FILE != ret);
 
@@ -4243,5 +4244,9 @@ void sm_main_exception_handler(CEXCEPTION_T e)
 
 void syshal_flash_busy_handler(uint32_t drive)
 {
+    /* Kick the software watchdog */
     KICK_WATCHDOG();
+
+    /* We must also kick the hardware watchdog here */
+    syshal_pmu_kick_watchdog();
 }

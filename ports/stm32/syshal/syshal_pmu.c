@@ -91,3 +91,8 @@ uint32_t syshal_pmu_get_startup_status(void)
     RCC->CSR |= (1<<24);
     return csr;
 }
+
+void syshal_pmu_kick_watchdog(void)
+{
+    __HAL_IWDG_RELOAD_COUNTER((IWDG_HandleTypeDef *)&IWDG_Init);
+}

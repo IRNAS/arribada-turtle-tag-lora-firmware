@@ -1231,7 +1231,6 @@ __RAMFUNC int fs_read(fs_handle_t handle, void *dest, uint32_t size, uint32_t *r
                 header_len > FS_PRIV_PAGE_SIZE
                 )
             {
-                printf("read_offset = %02x header = %02x\n", read_offset, header_len);
                 return FS_ERROR_FILESYSTEM_CORRUPTED;
             }
 
@@ -1256,7 +1255,9 @@ __RAMFUNC int fs_read(fs_handle_t handle, void *dest, uint32_t size, uint32_t *r
 
                 /* Copy into user data buffer from page buffer */
                 uint16_t sz = MIN(size, available);
-                memcpy(dest, &fs_priv_handle->page_cache[write_offset], sz);
+                //memcpy(dest, &fs_priv_handle->page_cache[write_offset], sz);
+                for (unsigned int i = 0; i < sz; i++)
+                    ((char *)dest)[i] = fs_priv_handle->page_cache[write_offset+i];
                 size -= sz;
                 *read += sz;
                 dest += sz;

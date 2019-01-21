@@ -94,7 +94,9 @@ const UART_InitTypeDefAndInst_t UART_Inits[UART_TOTAL_NUMBER] =
 };
 
 ///////////////////////////////// IWDG definitions ////////////////////////////////
-const IWDG_HandleTypeDef IWDG_Init =
+
+// NOTE: This can't be const since it must be accessed from RAM during FW update procedure
+IWDG_HandleTypeDef IWDG_Init =
 {
     IWDG,
     {
