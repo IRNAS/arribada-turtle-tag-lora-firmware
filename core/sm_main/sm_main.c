@@ -180,10 +180,8 @@ static volatile sm_gps_state_t sm_gps_state; // The current operating state of t
 ////////////////////////////////// GLOBALS /////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-#define LOG_FILE_FLUSH_PERIOD_SECONDS ( (1 * 60 * 60) - 60 ) // Period in seconds in which to flush the log file to FLASH
-
 // Size of logging buffer that is used to store sensor data before it it written to FLASH
-#define LOGGING_BUFFER_SIZE (32)
+#define LOGGING_BUFFER_SIZE (32)  // WARNING: this must be at least the size of the largest possible single log entry
 #define LOGGING_FIFO_DEPTH  (8) // Maximum number of readings that can be stored before a write to the FLASH log must be done
 
 #define USB_ENUMERATION_TIMEOUT_MS (10000) // Time in ms to try for a USB connection interface when VUSB is connected
@@ -235,7 +233,6 @@ static timer_handle_t timer_gps_no_fix;
 static timer_handle_t timer_gps_maximum_acquisition;
 static timer_handle_t timer_gps_very_first_fix_hold_time;
 static timer_handle_t timer_gps_watchdog;
-static timer_handle_t timer_log_flush;
 static timer_handle_t timer_saltwater_switch_hysteresis;
 static timer_handle_t timer_reed_switch_hysteresis;
 static timer_handle_t timer_pressure_interval;
@@ -252,7 +249,6 @@ static void timer_gps_no_fix_callback(void);
 static void timer_gps_maximum_acquisition_callback(void);
 static void timer_gps_very_first_fix_hold_time_callback(void);
 static void timer_gps_watchdog_callback(void);
-static void timer_log_flush_callback(void);
 static void timer_saltwater_switch_hysteresis_callback(void);
 static void timer_reed_switch_hysteresis_callback(void);
 static void timer_pressure_interval_callback(void);
@@ -1246,15 +1242,6 @@ static void timer_gps_watchdog_callback(void)
         }
 
     }
-}
-
-static void timer_log_flush_callback(void)
-{
-    DEBUG_PR_TRACE("%s() called", __FUNCTION__);
-
-    // Flush and log data to the FLASH
-    if (file_handle)
-        fs_flush(file_handle);
 }
 
 static void timer_saltwater_switch_hysteresis_callback(void)
@@ -3548,7 +3535,6 @@ static void sm_main_boot(sm_handle_t * state_handle)
     syshal_timer_init(&timer_gps_maximum_acquisition, timer_gps_maximum_acquisition_callback);
     syshal_timer_init(&timer_gps_very_first_fix_hold_time, timer_gps_very_first_fix_hold_time_callback);
     syshal_timer_init(&timer_gps_watchdog, timer_gps_watchdog_callback);
-    syshal_timer_init(&timer_log_flush, timer_log_flush_callback);
     syshal_timer_init(&timer_saltwater_switch_hysteresis, timer_saltwater_switch_hysteresis_callback);
     syshal_timer_init(&timer_reed_switch_hysteresis, timer_reed_switch_hysteresis_callback);
     syshal_timer_init(&timer_pressure_interval, timer_pressure_interval_callback);
@@ -3692,9 +3678,6 @@ static void sm_main_operational(sm_handle_t * state_handle)
         green_led_flashing = true;
         led_last_flash_time = syshal_time_get_ticks_ms();
         led_flashing_start_time = 0;
-
-        // Start the log file flushing timer
-        syshal_timer_set(timer_log_flush, periodic, LOG_FILE_FLUSH_PERIOD_SECONDS);
 
         gps_ttff_reading_logged = false; // Make sure we read/log the first TTFF reading
         last_battery_reading = 0xFF; // Ensure the first battery reading is logged
@@ -3884,6 +3867,11 @@ static void sm_main_operational(sm_handle_t * state_handle)
 
             length = buffer_read(&logging_buffer, (uintptr_t *)&read_buffer);
         }
+
+        // The new file system allows for flushing more often so we take advantage
+        // of this by flushing per iterations of the operational state.  This
+        // reduces the risk of data loss.
+        fs_flush(file_handle);
     }
 
     syshal_timer_tick();
@@ -3925,7 +3913,6 @@ static void sm_main_operational(sm_handle_t * state_handle)
         syshal_timer_cancel(timer_gps_maximum_acquisition);
         syshal_timer_cancel(timer_gps_very_first_fix_hold_time);
         syshal_timer_cancel(timer_gps_watchdog);
-        syshal_timer_cancel(timer_log_flush);
         syshal_timer_cancel(timer_pressure_interval);
         syshal_timer_cancel(timer_pressure_maximum_acquisition);
         syshal_timer_cancel(timer_axl_interval);
