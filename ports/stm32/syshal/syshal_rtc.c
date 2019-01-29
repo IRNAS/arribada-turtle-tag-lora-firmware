@@ -27,7 +27,7 @@ static void (*soft_watchdog_callback)(unsigned int) = NULL; // User callback
 static int soft_watchdog_now = -1;  // Current timer -1=>not started
 static int soft_watchdog_init = -1; // Init timer    -1=>not started
 
-RTC_HandleTypeDef rtc_handle;
+static RTC_HandleTypeDef rtc_handle;
 
 // HAL to SYSHAL error code mapping table
 static int hal_error_map[] =

@@ -654,7 +654,7 @@ static bool check_configuration_tags_set(void)
         if (SYS_CONFIG_ERROR_TAG_NOT_SET == ret)
         {
             tag_not_set = true;
-            DEBUG_PR_WARN("Configuration tag 0x%04X not set", tag);
+            //DEBUG_PR_WARN("Configuration tag 0x%04X not set", tag);
         }
     }
 
@@ -2500,6 +2500,8 @@ static void fw_send_image_req(cmd_t * req, uint32_t size)
     sm_context.fw_send_image.crc32_supplied = req->p.cmd_fw_send_image_req.CRC32;
     sm_context.fw_send_image.crc32_calculated = 0;
 
+    DEBUG_PR_TRACE("Supplied CRC32 = %08x", (unsigned int)sm_context.fw_send_image.crc32_supplied);
+
     // Check the image type is correct
     sm_context.fw_send_image.image_type = req->p.cmd_fw_send_image_req.image_type;
 
@@ -2704,9 +2706,11 @@ static void fw_apply_image_req(cmd_t * req, uint32_t size)
 
                         fs_stat(file_system, FS_FILE_ID_BLE_IMAGE, &stat);
 
+                        // TODO: The CRC is passed as zero since there is no CRC check on
+                        // the nRF52 side
                         syshal_ble_config_fw_upgrade(stat.size, 0);
 
-                        uint32_t toggleLedTime = syshal_time_get_ticks_ms();
+                        uint32_t toggleLedTime = syshal_time_get_ticks_ms(), crc = 0;
                         const uint32_t ledTogglePeriodMs = 200;
 
                         do
@@ -2722,9 +2726,23 @@ static void fw_apply_image_req(cmd_t * req, uint32_t size)
                             uint8_t read_buffer[50];
                             uint32_t bytes_actually_read;
                             ret = fs_read(file_handle, &read_buffer, sizeof(read_buffer), &bytes_actually_read);
-                            syshal_ble_fw_send(read_buffer, bytes_actually_read);
+                            if (bytes_actually_read)
+                            {
+                                crc = crc32(crc, read_buffer, bytes_actually_read);
+                                syshal_ble_fw_send(read_buffer, bytes_actually_read);
+                            }
+
+                            KICK_WATCHDOG();
+                            syshal_pmu_kick_watchdog();
                         }
                         while (FS_ERROR_END_OF_FILE != ret);
+
+                        if (crc != sm_context.fw_send_image.crc32_supplied)
+                        {
+                            DEBUG_PR_ERROR("Computed CRC (%x) does not match expected CRC (%x)",
+                                (unsigned int)crc,
+                                (unsigned int)sm_context.fw_send_image.crc32_supplied);
+                        }
 
                         fs_close(file_handle); // Close the file
 
@@ -3715,7 +3733,8 @@ static void sm_main_operational(sm_handle_t * state_handle)
             // situation when we have just finished provisioning.
             if (sys_config.sys_config_gps_very_first_fix_hold_time.hdr.set &&
                 sys_config.sys_config_gps_very_first_fix_hold_time.contents.seconds &&
-                sm_get_last_state(state_handle) == SM_MAIN_PROVISIONING)
+                (sm_get_last_state(state_handle) == SM_MAIN_PROVISIONING ||
+                    sm_get_last_state(state_handle) == SM_MAIN_BATTERY_CHARGING))
             {
                 // A very first fix timeout is present so we need to attempt to achieve a fix now
                 gps_waiting_for_first_fix = true;

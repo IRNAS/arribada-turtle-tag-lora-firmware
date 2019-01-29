@@ -525,7 +525,7 @@ typedef struct
     /* Payload must be 32-bit aligned */
     union
     {
-        uint8_t             payloadAndCrc[1018];  /* CRC is appended to payload */
+        uint8_t             payloadAndCrc[256];  /* CRC is appended to payload */
         UBX_ACK_t           UBX_ACK;
         UBX_NACK_t          UBX_NACK;
         UBX_CFG_CFG_t       UBX_CFG_CFG;
