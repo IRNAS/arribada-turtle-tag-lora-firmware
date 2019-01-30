@@ -2723,13 +2723,19 @@ static void fw_apply_image_req(cmd_t * req, uint32_t size)
                                 toggleLedTime = syshal_time_get_ticks_ms();
                             }
 
-                            uint8_t read_buffer[50];
+                            uint8_t read_buffer[128];
                             uint32_t bytes_actually_read;
                             ret = fs_read(file_handle, &read_buffer, sizeof(read_buffer), &bytes_actually_read);
                             if (bytes_actually_read)
                             {
                                 crc = crc32(crc, read_buffer, bytes_actually_read);
                                 syshal_ble_fw_send(read_buffer, bytes_actually_read);
+                                // WARNING: this busy wait delay is required to avoid doing
+                                // the next SPI write during the nRF52 flash page programming
+                                // operation.  Don't remove it without understanding the timing
+                                // of the nRF52 page programming first!
+                                for (volatile unsigned int j = 0; j < 10000; j++)
+                                    ;
                             }
 
                             KICK_WATCHDOG();
