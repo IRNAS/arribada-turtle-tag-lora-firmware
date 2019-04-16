@@ -1,4 +1,4 @@
-/* Copyright 2018 Arribada
+/* Copyright 2019 Arribada
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ static int hal_error_map[] =
 };
 
 // Private variables
-static UART_HandleTypeDef huart[UART_TOTAL_NUMBER];
+static UART_HandleTypeDef huart_handles[UART_TOTAL_NUMBER];
 
 // Internal variables
 static ring_buffer_t rx_buffer[UART_TOTAL_NUMBER];
@@ -55,8 +55,8 @@ int syshal_uart_init(uint32_t instance)
         return SYSHAL_UART_ERROR_INVALID_INSTANCE;
 
     // Populate internal handlers from bsp
-    huart[instance].Instance = UART_Inits[instance].Instance;
-    huart[instance].Init = UART_Inits[instance].Init;
+    huart_handles[instance].Instance = UART_Inits[instance].Instance;
+    huart_handles[instance].Init = UART_Inits[instance].Init;
 
     // Setup rx buffer
     rb_init(&rx_buffer[instance], UART_RX_BUF_SIZE, &rx_data[instance][0]);
@@ -73,7 +73,7 @@ int syshal_uart_init(uint32_t instance)
 #endif
 #endif
 
-    status = HAL_UART_Init(&huart[instance]);
+    status = HAL_UART_Init(&huart_handles[instance]);
 
     return hal_error_map[status];
 }
@@ -99,11 +99,11 @@ int syshal_uart_change_baud(uint32_t instance, uint32_t baudrate)
     HAL_StatusTypeDef status;
 
     // Populate internal handlers from bsp
-    huart[instance].Instance = UART_Inits[instance].Instance;
-    huart[instance].Init = UART_Inits[instance].Init;
-    huart[instance].Init.BaudRate = baudrate;
+    huart_handles[instance].Instance = UART_Inits[instance].Instance;
+    huart_handles[instance].Init = UART_Inits[instance].Init;
+    huart_handles[instance].Init.BaudRate = baudrate;
 
-    status = HAL_UART_Init(&huart[instance]);
+    status = HAL_UART_Init(&huart_handles[instance]);
 
     return hal_error_map[status];
 }
@@ -125,7 +125,7 @@ int syshal_uart_term(uint32_t instance)
     if (instance >= UART_TOTAL_NUMBER)
         return SYSHAL_UART_ERROR_INVALID_INSTANCE;
 
-    status = HAL_UART_DeInit(&huart[instance]);
+    status = HAL_UART_DeInit(&huart_handles[instance]);
 
     return hal_error_map[status];
 }
@@ -198,10 +198,10 @@ int syshal_uart_send(uint32_t instance, uint8_t * data, uint32_t size)
     HAL_StatusTypeDef status;
 
     // Wait for UART to be free
-    if (UART_WaitOnFlagUntilTimeout(&huart[instance], UART_FLAG_TXE, RESET, HAL_GetTick(), UART_TIMEOUT) != HAL_OK)
+    if (UART_WaitOnFlagUntilTimeout(&huart_handles[instance], UART_FLAG_TXE, RESET, HAL_GetTick(), UART_TIMEOUT) != HAL_OK)
         return SYSHAL_UART_ERROR_TIMEOUT;
 
-    status = HAL_UART_Transmit(&huart[instance], data, size, UART_TIMEOUT);
+    status = HAL_UART_Transmit(&huart_handles[instance], data, size, UART_TIMEOUT);
 
     return hal_error_map[status];
 }
@@ -209,7 +209,6 @@ int syshal_uart_send(uint32_t instance, uint8_t * data, uint32_t size)
 // Implement MSP hooks that are called by stm32f0xx_hal_uart
 void HAL_UART_MspInit(UART_HandleTypeDef * huart)
 {
-
     if (huart->Instance == USART1)
     {
         // Peripheral clock disable
@@ -220,7 +219,7 @@ void HAL_UART_MspInit(UART_HandleTypeDef * huart)
         syshal_gpio_init(GPIO_UART1_RX);
 
         // USART1 interrupt Init
-        __HAL_UART_ENABLE_IT(&huart[UART_1], UART_IT_RXNE); // Enable the UART Data Register not empty Interrupt
+        __HAL_UART_ENABLE_IT(huart, UART_IT_RXNE); // Enable the UART Data Register not empty Interrupt
 
         HAL_NVIC_SetPriority(USART1_IRQn, 0, 0);
         HAL_NVIC_EnableIRQ(USART1_IRQn);
@@ -239,7 +238,7 @@ void HAL_UART_MspInit(UART_HandleTypeDef * huart)
         //syshal_gpio_init(GPIO_UART2_RX);
 
         // USART2 interrupt Init
-        //__HAL_UART_ENABLE_IT(&huart[UART_2], UART_IT_RXNE);
+        //__HAL_UART_ENABLE_IT(huart, UART_IT_RXNE);
 
         //HAL_NVIC_SetPriority(USART2_IRQn, 0, 0);
         //HAL_NVIC_EnableIRQ(USART2_IRQn);
@@ -257,7 +256,7 @@ void HAL_UART_MspInit(UART_HandleTypeDef * huart)
         syshal_gpio_init(GPIO_UART3_CTS);
 
         // USART3 interrupt Init
-        __HAL_UART_ENABLE_IT(&huart[UART_3], UART_IT_RXNE);
+        __HAL_UART_ENABLE_IT(huart, UART_IT_RXNE);
 
         HAL_NVIC_SetPriority(USART3_4_IRQn, 0, 0);
         HAL_NVIC_EnableIRQ(USART3_4_IRQn);
@@ -273,12 +272,11 @@ void HAL_UART_MspInit(UART_HandleTypeDef * huart)
 //        syshal_gpio_init(GPIO_UART4_RX);
 //
 //        // USART4 interrupt Init
-//        __HAL_UART_ENABLE_IT(&huart[UART_4], UART_IT_RXNE);
+//        __HAL_UART_ENABLE_IT(huart, UART_IT_RXNE);
 //
 //        HAL_NVIC_SetPriority(USART3_4_IRQn, 0, 0);
 //        HAL_NVIC_EnableIRQ(USART3_4_IRQn);
 //    }
-
 }
 
 void HAL_UART_MspDeInit(UART_HandleTypeDef * huart)
@@ -340,11 +338,11 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef * huart)
 void USART1_IRQHandler(void)
 {
     // Did we receive data ?
-    if (__HAL_UART_GET_IT(&huart[UART_1], UART_IT_RXNE))
+    if (__HAL_UART_GET_IT(&huart_handles[UART_1], UART_IT_RXNE))
     {
         uint16_t byte; // Ensure correct alignment
 
-        byte = huart[UART_1].Instance->RDR;
+        byte = huart_handles[UART_1].Instance->RDR;
 
         uint8_t rxBuffer = (uint8_t)byte;
 #ifdef UART_1_SAFE_INSERT
@@ -364,11 +362,11 @@ void USART1_IRQHandler(void)
 void USART2_IRQHandler(void)
 {
     // Did we receive data ?
-    if (__HAL_UART_GET_IT(&huart[UART_2], UART_IT_RXNE))
+    if (__HAL_UART_GET_IT(&huart_handles[UART_2], UART_IT_RXNE))
     {
         uint16_t byte; // Ensure correct alignment
 
-        byte = huart[UART_2].Instance->RDR;
+        byte = huart_handles[UART_2].Instance->RDR;
 
         uint8_t rxBuffer = (uint8_t)byte;
 #ifdef UART_2_SAFE_INSERT
@@ -388,11 +386,11 @@ void USART2_IRQHandler(void)
 void USART3_4_IRQHandler(void)
 {
     // Did we receive data ?
-    if (__HAL_UART_GET_IT(&huart[UART_3], UART_IT_RXNE))
+    if (__HAL_UART_GET_IT(&huart_handles[UART_3], UART_IT_RXNE))
     {
         uint16_t byte; // Ensure correct alignment
 
-        byte = huart[UART_3].Instance->RDR;
+        byte = huart_handles[UART_3].Instance->RDR;
 
         uint8_t rxBuffer = (uint8_t)byte;
 #ifdef UART_3_SAFE_INSERT
@@ -418,10 +416,10 @@ int _write(int file, char * data, int len)
     }
 
     // Wait for UART to be free
-    if (UART_WaitOnFlagUntilTimeout(&huart[PRINTF_UART], UART_FLAG_TXE, RESET, HAL_GetTick(), UART_TIMEOUT) != HAL_OK)
+    if (UART_WaitOnFlagUntilTimeout(&huart_handles[PRINTF_UART], UART_FLAG_TXE, RESET, HAL_GetTick(), UART_TIMEOUT) != HAL_OK)
         return 0;
 
-    HAL_StatusTypeDef status = HAL_UART_Transmit(&huart[PRINTF_UART], (uint8_t *)data, len, UART_TIMEOUT);
+    HAL_StatusTypeDef status = HAL_UART_Transmit(&huart_handles[PRINTF_UART], (uint8_t *)data, len, UART_TIMEOUT);
 
     // return # of bytes written - as best we can tell
     return (status == HAL_OK ? len : 0);
