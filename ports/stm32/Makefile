@@ -48,6 +48,7 @@ $(DEVICE_DIR)/gps/M8N/M8N.c \
 $(DEVICE_DIR)/flash/S25FL128/S25FL128.c \
 $(DEVICE_DIR)/pressure/MS5837_xBA/MS5837_xBA.c \
 $(DEVICE_DIR)/pressure/MS5837_xBA/MS5837_30BA/MS5837_30BA.c \
+$(DEVICE_DIR)/lora/irnas/irnas.c \
 $(STMHAL_DIR)/Src/stm32f0xx_hal.c \
 $(STMHAL_DIR)/Src/stm32f0xx_hal_cortex.c \
 $(STMHAL_DIR)/Src/stm32f0xx_hal_dma.c \
@@ -102,11 +103,11 @@ startup_stm32f072xb.s
 #######################################
 # binaries
 #######################################
-OPENOCD = "../../../Toolchain/OpenOCD-20170821/bin/openocd"
-OPENOCDSCRIPTS = "/../../../Toolchain/OpenOCD-20170821/share/openocd/scripts"
+OPENOCD = "/usr/bin/openocd"
+OPENOCDSCRIPTS = "/usr/share/openocd/scripts"
 
 # Allow BINPATH to be passed in to make if not set
-BINPATH ?= "../../../Toolchain/gcc-arm-none-eabi-7-2018-q2-update-win32/bin/"
+BINPATH ?= ""
 
 JLINK = "JLink"
 PREFIX = arm-none-eabi-
@@ -131,18 +132,18 @@ MCU = $(CPU) -mthumb $(FPU) $(FLOAT-ABI)
 
 # macros for gcc
 # AS defines
-AS_DEFS = 
+AS_DEFS =
 
 # C defines
 C_DEFS =  \
 -DUSE_HAL_DRIVER \
 -DSTM32F072xB \
 -DDEBUG_COLOR \
--DGIT_VERSION=\"$(G_VERSION)\" \
--DDEBUG_DISABLED
+-DGIT_VERSION=\"$(G_VERSION)\"
+#-DDEBUG_DISABLED
 
 # AS includes
-AS_INCLUDES = 
+AS_INCLUDES =
 
 # C includes
 C_INCLUDES =  \
@@ -166,6 +167,7 @@ C_INCLUDES =  \
 -I$(DEVICE_DIR)/gps/M8N/ \
 -I$(DEVICE_DIR)/flash/S25FL128/ \
 -I$(DEVICE_DIR)/pressure/MS5837_xBA/ \
+-I$(DEVICE_DIR)/lora/irnas/ \
 -I$(STMHAL_DIR)/Inc \
 -I$(STMHAL_DIR)/Inc/Legacy \
 -I$(USB_DIR)/Core/Inc \
@@ -193,8 +195,8 @@ CFLAGS += -MMD -MP
 LDSCRIPT = STM32F072RBTx_FLASH.ld
 
 # libraries
-LIBS = -lc -lm -lnosys 
-LIBDIR = 
+LIBS = -lc -lm -lnosys
+LIBDIR =
 LDFLAGS = $(MCU) -specs=nano.specs -T$(LDSCRIPT) $(LIBDIR) $(LIBS) -Wl,-Map=$(BUILD_DIR)/$(TARGET).map,--cref -Wl,--gc-sections
 
 # default action: build all
@@ -210,22 +212,22 @@ vpath %.c $(sort $(dir $(C_SOURCES)))
 OBJECTS += $(addprefix $(BUILD_DIR)/,$(notdir $(ASM_SOURCES:.s=.o)))
 vpath %.s $(sort $(dir $(ASM_SOURCES)))
 
-$(BUILD_DIR)/%.o: %.c Makefile | $(BUILD_DIR) 
+$(BUILD_DIR)/%.o: %.c Makefile | $(BUILD_DIR)
 	$(CC) -c $(CFLAGS) -Wa,-a,-ad,-alms=$(BUILD_DIR)/$(notdir $(<:.c=.lst)) $< -o $@
 
 $(BUILD_DIR)/%.o: %.s Makefile | $(BUILD_DIR)
 	$(AS) -c $(CFLAGS) $< -o $@
 
-$(BUILD_DIR)/$(TARGET).elf: $(OBJECTS) $(LDSCRIPT) Makefile 
+$(BUILD_DIR)/$(TARGET).elf: $(OBJECTS) $(LDSCRIPT) Makefile
 	$(CC) $(OBJECTS) $(LDFLAGS) -o $@
 	$(SZ) $@
 
 $(BUILD_DIR)/%.hex: $(BUILD_DIR)/%.elf | $(BUILD_DIR)
 	$(HEX) $< $@
-	
+
 $(BUILD_DIR)/%.bin: $(BUILD_DIR)/%.elf | $(BUILD_DIR)
-	$(BIN) $< $@	
-	
+	$(BIN) $< $@
+
 $(BUILD_DIR):
 	mkdir $@
 
@@ -242,8 +244,8 @@ flash:
 #######################################
 clean:
 	-rm -fR $(BUILD_DIR)
-  
+
 #######################################
 # dependencies
 #######################################
--include $(wildcard $(BUILD_DIR)/*.d) 
+-include $(wildcard $(BUILD_DIR)/*.d)

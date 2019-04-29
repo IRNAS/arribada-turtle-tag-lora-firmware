@@ -46,6 +46,7 @@
 #include "syshal_uart.h"
 #include "syshal_usb.h"
 #include "syshal_ble.h"
+#include "syshal_lora.h"
 #include "version.h"
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1052,6 +1053,17 @@ void syshal_gps_callback(syshal_gps_event_t event)
                 position.vAcc = event.event_data.location.vAcc;
 
                 logging_add_to_buffer((uint8_t *) &position, sizeof(position));
+
+                // Notify LoRA.
+                syshal_lora_position l_position;
+                l_position.iTOW = event.event_data.location.iTOW;
+                l_position.lon = event.event_data.location.lon;
+                l_position.lat = event.event_data.location.lat;
+                l_position.hMSL = event.event_data.location.hMSL;
+                l_position.hAcc = event.event_data.location.hAcc;
+                l_position.vAcc = event.event_data.location.vAcc;
+
+                syshal_lora_send_position(&l_position);
             }
             break;
 
@@ -3564,7 +3576,7 @@ static void sm_main_boot(sm_handle_t * state_handle)
 
     syshal_uart_init(UART_1);
     syshal_uart_init(UART_2);
-//    syshal_uart_init(UART_3);
+    syshal_uart_init(UART_3);
 
     // Init timers
     syshal_timer_init(&timer_gps_interval, timer_gps_interval_callback);
@@ -3641,6 +3653,8 @@ static void sm_main_boot(sm_handle_t * state_handle)
 
     syshal_switch_init();
     tracker_above_water = !syshal_switch_get();
+
+    syshal_lora_init();
 
     if (syshal_gpio_get_input(GPIO_VUSB))
     {
