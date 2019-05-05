@@ -7,7 +7,7 @@ TARGET = ArribadaSTM32
 # building variables
 ######################################
 # debug build?
-DEBUG = 1
+DEBUG ?= 0
 # optimization
 OPT = -O2
 
@@ -140,7 +140,10 @@ C_DEFS =  \
 -DSTM32F072xB \
 -DDEBUG_COLOR \
 -DGIT_VERSION=\"$(G_VERSION)\"
-#-DDEBUG_DISABLED
+
+ifeq ($(DEBUG), 0)
+C_DEFS += -DDEBUG_DISABLED
+endif
 
 # AS includes
 AS_INCLUDES =

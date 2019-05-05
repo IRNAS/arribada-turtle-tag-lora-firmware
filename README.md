@@ -20,6 +20,17 @@ Prerequisites:
 To build the firmware, move into `ports/stm32` and call `make`. The build
 firmware will be placed into `ports/stm32/build` under the name `ArribadaSTM32.bin`.
 
+### Building in debug mode
+
+The default makefile builds in release mode (no debugging symbols, debug output
+on USART1 disabled). If you want to build in debug mode, you must run `make` as
+follows:
+```
+make DEBUG=1
+```
+
+If you have built the firmware before make sure to run `make clean` first.
+
 ## Flashing
 
 You can use the `dfu-util` utility to flash the firmware onto the tracker once
