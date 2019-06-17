@@ -49,6 +49,8 @@ $(DEVICE_DIR)/flash/S25FL128/S25FL128.c \
 $(DEVICE_DIR)/pressure/MS5837_xBA/MS5837_xBA.c \
 $(DEVICE_DIR)/pressure/MS5837_xBA/MS5837_30BA/MS5837_30BA.c \
 $(DEVICE_DIR)/lora/irnas/irnas.c \
+$(DEVICE_DIR)/lora/irnas/message.c \
+$(DEVICE_DIR)/lora/irnas/frame.c \
 $(STMHAL_DIR)/Src/stm32f0xx_hal.c \
 $(STMHAL_DIR)/Src/stm32f0xx_hal_cortex.c \
 $(STMHAL_DIR)/Src/stm32f0xx_hal_dma.c \

@@ -1,25 +1,48 @@
 #include <string.h>
 
-#include "irnas.h"
 #include "syshal_uart.h"
 #include "syshal_lora.h"
 
+#include "irnas.h"
+#include "message.h"
+#include "frame.h"
+
 void syshal_lora_init(void) {
-    // TODO: Define message format.
-    syshal_uart_send(UART_3, (uint8_t*) "init\n\r", 6);
+    // Create initialization message.
+    message_t msg;
+    message_init(&msg);
+    message_tlv_add(&msg, TLV_INIT, 0, NULL);
+
+    uint8_t frame[16];
+    ssize_t size = frame_message(frame, sizeof(frame), &msg);
+    if (size < 0) {
+        // TODO: Handle errors.
+        return;
+    }
+
+    syshal_uart_send(UART_3, frame, size);
 }
 
 void syshal_lora_send_position(syshal_lora_position *position) {
-    // TODO: Define message format.
-    char buffer[128];
-    snprintf(buffer, sizeof(buffer), "gps.location %d,%d,%d,%d,%d,%d\n\r",
-        (int) position->iTOW,
-        (int) position->lon,
-        (int) position->lat,
-        (int) position->hMSL,
-        (int) position->hAcc,
-        (int) position->vAcc
-    );
+    // Create gps position message.
+    message_t msg;
+    message_init(&msg);
 
-    syshal_uart_send(UART_3, (uint8_t*) buffer, strlen(buffer));
+    tlv_gps_location_t loc;
+    loc.itow = position->iTOW;
+    loc.lon = position->lon;
+    loc.lat = position->lat;
+    loc.h_msl = position->hMSL;
+    loc.h_acc = position->hAcc;
+    loc.v_acc = position->vAcc;
+    message_tlv_add_gps_location(&msg, &loc);
+
+    uint8_t frame[64];
+    ssize_t size = frame_message(frame, sizeof(frame), &msg);
+    if (size < 0) {
+        // TODO: Handle errors.
+        return;
+    }
+
+    syshal_uart_send(UART_3, frame, size);
 }
