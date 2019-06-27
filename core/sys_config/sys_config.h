@@ -166,6 +166,7 @@ enum
     SYS_CONFIG_TAG_IOT_CELLULAR_APN,                 // Celluar APN settings
     SYS_CONFIG_TAG_IOT_SATELLITE_SETTINGS = 0x0A10,  // Satellite general settings
     SYS_CONFIG_TAG_IOT_SATELLITE_ARTIC_SETTINGS,     // Artic satellite settings
+    SYS_CONFIG_TAG_IOT_LORA_SETTINGS = 0x0A20,       // LORA general settings
 
     // Battery
     SYS_CONFIG_TAG_BATTERY_LOG_ENABLE = 0x0900, // The battery charge state shall be enabled for logging.
@@ -753,6 +754,16 @@ typedef struct __attribute__((__packed__))
     struct __attribute__((__packed__))
     {
         uint8_t enable;
+        uint32_t interval;
+    } contents;
+} sys_config_iot_lora_settings_t;
+
+typedef struct __attribute__((__packed__))
+{
+    sys_config_hdr_t hdr;
+    struct __attribute__((__packed__))
+    {
+        uint8_t enable;
     } contents;
 } sys_config_battery_log_enable_t;
 
@@ -826,6 +837,7 @@ typedef struct __attribute__((__packed__))
     sys_config_iot_cellular_apn_t                               iot_cellular_apn;
     sys_config_iot_sat_settings_t                               iot_sat_settings;
     sys_config_iot_sat_artic_settings_t                         iot_sat_artic_settings;
+    sys_config_iot_lora_settings_t                              iot_lora_settings;
     sys_config_battery_log_enable_t                             battery_log_enable;
     sys_config_battery_low_threshold_t                          battery_low_threshold;
 } sys_config_t;

@@ -92,6 +92,7 @@ static const sys_config_lookup_table_t sys_config_lookup_table[] =
     SYS_CONFIG_TAG(SYS_CONFIG_TAG_IOT_CELLULAR_APN,                          sys_config.iot_cellular_apn,                             false),
     SYS_CONFIG_TAG(SYS_CONFIG_TAG_IOT_SATELLITE_SETTINGS,                    sys_config.iot_sat_settings,                             false),
     SYS_CONFIG_TAG(SYS_CONFIG_TAG_IOT_SATELLITE_ARTIC_SETTINGS,              sys_config.iot_sat_artic_settings,                       false),
+    SYS_CONFIG_TAG(SYS_CONFIG_TAG_IOT_LORA_SETTINGS,                         sys_config.iot_lora_settings,                            false),
     SYS_CONFIG_TAG(SYS_CONFIG_TAG_BATTERY_LOG_ENABLE,                        sys_config.battery_log_enable,                           false),
     SYS_CONFIG_TAG(SYS_CONFIG_TAG_BATTERY_LOW_THRESHOLD,                     sys_config.battery_low_threshold,                        false),
 };

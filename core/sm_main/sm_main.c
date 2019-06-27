@@ -3626,6 +3626,7 @@ static void sm_main_operational(sm_handle_t * state_handle)
         config.iot_init.iot_cellular_aws_config = &sys_config.iot_cellular_aws_settings;
         config.iot_init.iot_sat_config = &sys_config.iot_sat_settings;
         config.iot_init.iot_sat_artic_config = &sys_config.iot_sat_artic_settings;
+        config.iot_init.iot_lora_config = &sys_config.iot_lora_settings;
         config.iot_init.system_device_identifier = &sys_config.system_device_identifier;
         config.gps_last_known_position = &sys_config.gps_last_known_position;
         sm_iot_init(config);

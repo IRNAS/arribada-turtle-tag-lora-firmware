@@ -32,6 +32,7 @@
 #define UART_DEBUG            UART_0
 #define UART_GPS              UART_0
 #define UART_CELLULAR         UART_1
+#define UART_LORA             UART_1
 #define I2C_AXL               I2C_1
 #define I2C_BATTERY           I2C_1
 #define I2C_PRESSURE          I2C_1
