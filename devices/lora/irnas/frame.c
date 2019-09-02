@@ -105,6 +105,9 @@ ssize_t frame_message(uint8_t *frame, size_t length, const message_t *message)
 
     // Frame the message, inserting escape markers when needed.
     size_t index = 0;
+    // Send two stop markers as sync header to wake up the peripheral
+    frame[index++] = FRAME_MARKER_END;
+    frame[index++] = FRAME_MARKER_END;
     frame[index++] = FRAME_MARKER_START;
     for (size_t i = 0; i < buffer_size; i++) {
         if (index >= length) {
