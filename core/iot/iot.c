@@ -394,6 +394,11 @@ int iot_send_device_status(uint32_t timeout_ms, const iot_device_status_t * devi
                 syshal_lora_position pos;
                 pos.lon = (uint32_t) ((int) device_status->last_gps_location.longitude);
                 pos.lat = (uint32_t) ((int) device_status->last_gps_location.latitude);
+                pos.timestamp = device_status->last_gps_location.timestamp;
+                pos.itow = device_status->last_gps_location.itow;
+                pos.h_msl = device_status->last_gps_location.h_msl;
+                pos.h_acc = device_status->last_gps_location.h_acc;
+                pos.v_acc = device_status->last_gps_location.v_acc;
                 return_code = syshal_lora_send_position(&pos);
                 if (return_code) {
                     return lora_error_mapping(return_code);

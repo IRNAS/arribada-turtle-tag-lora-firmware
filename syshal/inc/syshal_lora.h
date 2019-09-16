@@ -17,12 +17,13 @@
 
 typedef struct
 {
-    uint32_t iTOW;   // GPS time of week of the navigation epoch
-    int32_t  lon;    // Longitude
-    int32_t  lat;    // Latitude
-    int32_t  hMSL;   // Height above mean sea level
-    uint32_t hAcc;   // Horizontal accuracy estimate
-    uint32_t vAcc;   // Vertical accuracy estimate
+    uint32_t itow;      // GPS time of week of the navigation epoch
+    int32_t  lon;       // Longitude
+    int32_t  lat;       // Latitude
+    int32_t  h_msl;     // Height above mean sea level
+    uint32_t h_acc;     // Horizontal accuracy estimate
+    uint32_t v_acc;     // Vertical accuracy estimate
+    uint32_t timestamp; // Last fix timestamp
 } syshal_lora_position;
 
 

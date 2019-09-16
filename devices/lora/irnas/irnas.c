@@ -45,12 +45,13 @@ int syshal_lora_send_position(syshal_lora_position *position)
     message_init(&msg);
 
     tlv_gps_location_t loc;
-    loc.itow = position->iTOW;
+    loc.itow = position->itow;
     loc.lon = position->lon;
     loc.lat = position->lat;
-    loc.h_msl = position->hMSL;
-    loc.h_acc = position->hAcc;
-    loc.v_acc = position->vAcc;
+    loc.h_msl = position->h_msl;
+    loc.h_acc = position->h_acc;
+    loc.v_acc = position->v_acc;
+    loc.timestamp = position->timestamp;
     message_tlv_add_gps_location(&msg, &loc);
 
     uint8_t frame[64];

@@ -93,6 +93,10 @@ typedef struct
     float longitude;
     float latitude;
     uint32_t timestamp;
+    uint32_t itow;
+    int32_t  h_msl;
+    uint32_t h_acc;
+    uint32_t v_acc;
 } iot_last_gps_location_t;
 
 typedef struct

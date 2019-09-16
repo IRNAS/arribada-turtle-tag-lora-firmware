@@ -114,6 +114,10 @@ static void populate_device_status(iot_device_status_t * status)
             {
                 status->last_gps_location.longitude = config.gps_last_known_position->contents.lon;
                 status->last_gps_location.latitude =  config.gps_last_known_position->contents.lat;
+                status->last_gps_location.itow = config.gps_last_known_position->contents.iTOW;
+                status->last_gps_location.h_msl = config.gps_last_known_position->contents.height;
+                status->last_gps_location.h_acc = config.gps_last_known_position->contents.hAcc;
+                status->last_gps_location.v_acc = config.gps_last_known_position->contents.vAcc;
                 status->presence_flags |= IOT_LAST_GPS_LOCATION_BITMASK;
             }
         }
