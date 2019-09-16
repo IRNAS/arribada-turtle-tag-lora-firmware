@@ -64,6 +64,7 @@ typedef struct
     sys_config_iot_cellular_apn_t * iot_cellular_apn;                   // IoT cellular AWS configuration parameters
     sys_config_iot_sat_settings_t * iot_sat_config;                     // IoT satellite configuration parameters
     sys_config_iot_sat_artic_settings_t * iot_sat_artic_config;         // IoT satellite Artic configuration parameters
+    sys_config_iot_lora_settings_t * iot_lora_config;                   // IoT LoRA configuration parameters
     sys_config_system_device_identifier_t * system_device_identifier;
 } iot_init_t;
 
@@ -92,6 +93,10 @@ typedef struct
     float longitude;
     float latitude;
     uint32_t timestamp;
+    uint32_t itow;
+    int32_t  h_msl;
+    uint32_t h_acc;
+    uint32_t v_acc;
 } iot_last_gps_location_t;
 
 typedef struct
@@ -122,7 +127,8 @@ typedef struct
 typedef enum
 {
     IOT_RADIO_CELLULAR,
-    IOT_RADIO_SATELLITE
+    IOT_RADIO_SATELLITE,
+    IOT_RADIO_LORA
 } iot_radio_type_t;
 
 typedef uint8_t iot_imsi_t[64];

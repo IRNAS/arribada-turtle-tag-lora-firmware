@@ -67,6 +67,9 @@ SRC_FILES += \
   $(DEVICE_DIR)/flash/IS25LP128F/IS25LP128F_SPI.c \
   $(DEVICE_DIR)/pressure/MS5837_xBA/MS5837_xBA.c \
   $(DEVICE_DIR)/pressure/MS5837_xBA/MS5837_30BA/MS5837_30BA.c \
+  $(DEVICE_DIR)/lora/irnas/irnas.c \
+  $(DEVICE_DIR)/lora/irnas/message.c \
+  $(DEVICE_DIR)/lora/irnas/frame.c \
   $(SDK_ROOT)/components/drivers_nrf/usbd/nrf_drv_usbd.c \
   $(SDK_ROOT)/components/ble/ble_db_discovery/ble_db_discovery.c \
   $(SDK_ROOT)/components/ble/common/ble_advdata.c \
@@ -171,6 +174,7 @@ INC_FOLDERS += \
   $(DEVICE_DIR)/flash/IS25LP128F/ \
   $(DEVICE_DIR)/cellular/SARAU270/ \
   $(DEVICE_DIR)/pressure/MS5837_xBA/ \
+  $(DEVICE_DIR)/lora/irnas/ \
   $(SYSHAL_DIR)/inc \
   $(SDK_ROOT)/components \
   $(SDK_ROOT)/components/ble/ble_advertising \
@@ -343,7 +347,7 @@ endif
 # Warnings
 CFLAGS += -Wall
 CFLAGS += -Wextra
-CFLAGS += -Werror 
+CFLAGS += -Werror
 CFLAGS += -Wduplicated-cond
 CFLAGS += -Wduplicated-branches
 CFLAGS += -Wlogical-op

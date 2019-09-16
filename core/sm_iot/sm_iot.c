@@ -25,6 +25,7 @@
 #include "syshal_timer.h"
 #include "syshal_rtc.h"
 #include "syshal_firmware.h"
+#include "syshal_led.h"
 #include "sm_main.h"
 #include "sm_iot.h"
 
@@ -37,6 +38,7 @@ static bool cellular_enabled;
 static bool cellular_pending;
 static bool cellular_max_backoff_reached;
 static bool satellite_enabled;
+static bool lora_enabled;
 static uint32_t last_successful_cellular_connection = 0;
 static uint32_t cellular_backoff_time;
 
@@ -44,6 +46,7 @@ static uint32_t cellular_backoff_time;
 static timer_handle_t timer_cellular_max_interval;
 static timer_handle_t timer_cellular_min_interval;
 static timer_handle_t timer_cellular_retry;
+static timer_handle_t timer_lora;
 
 static int iot_error_mapping(int error_code)
 {
@@ -56,6 +59,23 @@ static void generate_event(sm_iot_event_id_t id, int code)
     event.id = id;
     event.code = code;
     sm_iot_callback(&event);
+}
+
+static bool is_status_filter(uint32_t mask)
+{
+    if (cellular_enabled) {
+        // For cellular we have a status filter in the config.
+        return config.iot_init.iot_cellular_config->contents.status_filter & mask;
+    } else if (lora_enabled) {
+        // For LoRa we have a predefined set of things we want to push.
+        // TODO: Make this configurable similar to cellular.
+        switch (mask) {
+            case IOT_LAST_GPS_LOCATION_BITMASK: {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 /**
@@ -74,7 +94,7 @@ static void populate_device_status(iot_device_status_t * status)
 
     status->presence_flags = 0;
 
-    if (config.iot_init.iot_cellular_config->contents.status_filter & IOT_LAST_GPS_LOCATION_BITMASK &&
+    if (is_status_filter(IOT_LAST_GPS_LOCATION_BITMASK) &&
         config.gps_last_known_position)
     {
         if (config.gps_last_known_position->hdr.set)
@@ -94,15 +114,19 @@ static void populate_device_status(iot_device_status_t * status)
             {
                 status->last_gps_location.longitude = config.gps_last_known_position->contents.lon;
                 status->last_gps_location.latitude =  config.gps_last_known_position->contents.lat;
+                status->last_gps_location.itow = config.gps_last_known_position->contents.iTOW;
+                status->last_gps_location.h_msl = config.gps_last_known_position->contents.height;
+                status->last_gps_location.h_acc = config.gps_last_known_position->contents.hAcc;
+                status->last_gps_location.v_acc = config.gps_last_known_position->contents.vAcc;
                 status->presence_flags |= IOT_LAST_GPS_LOCATION_BITMASK;
             }
         }
     }
 
-    if (config.iot_init.iot_cellular_config->contents.status_filter & IOT_LAST_LOG_FILE_READ_POS_BITMASK)
+    if (is_status_filter(IOT_LAST_LOG_FILE_READ_POS_BITMASK))
         status->presence_flags |= IOT_LAST_LOG_FILE_READ_POS_BITMASK;
 
-    if (config.iot_init.iot_cellular_config->contents.status_filter & IOT_BATTERY_LEVEL_BITMASK)
+    if (is_status_filter(IOT_BATTERY_LEVEL_BITMASK))
     {
         ret = syshal_batt_level(&status->battery_level);
         while (ret == SYSHAL_BATT_ERROR_BUSY)
@@ -111,14 +135,14 @@ static void populate_device_status(iot_device_status_t * status)
             status->presence_flags |= IOT_BATTERY_LEVEL_BITMASK;
     }
 
-    if (config.iot_init.iot_cellular_config->contents.status_filter & IOT_BATTERY_VOLTAGE_BITMASK)
+    if (is_status_filter(IOT_BATTERY_VOLTAGE_BITMASK))
     {
         ret = syshal_batt_voltage(&status->battery_voltage);
         if (!ret)
             status->presence_flags |= IOT_BATTERY_VOLTAGE_BITMASK;
     }
 
-    if (config.iot_init.iot_cellular_config->contents.status_filter & IOT_LAST_CELLULAR_CONNECTED_TIMESTAMP_BITMASK &&
+    if (is_status_filter(IOT_LAST_CELLULAR_CONNECTED_TIMESTAMP_BITMASK) &&
         last_successful_cellular_connection)
     {
         status->last_cellular_connected_timestamp = last_successful_cellular_connection;
@@ -131,7 +155,7 @@ static void populate_device_status(iot_device_status_t * status)
     if (!ret)
     {
         status->configuration_version = conf_version->contents.version;
-        if (config.iot_init.iot_cellular_config->contents.status_filter & IOT_CONFIGURATION_VERSION_BITMASK)
+        if (is_status_filter(IOT_CONFIGURATION_VERSION_BITMASK))
             status->presence_flags |= IOT_CONFIGURATION_VERSION_BITMASK;
     }
     else
@@ -141,8 +165,43 @@ static void populate_device_status(iot_device_status_t * status)
 
     // Fetch our current firmware version
     status->firmware_version = APP_FIRMWARE_VERSION;
-    if (config.iot_init.iot_cellular_config->contents.status_filter & IOT_FIRMWARE_VERSION_BITMASK)
+    if (is_status_filter(IOT_FIRMWARE_VERSION_BITMASK))
         status->presence_flags |= IOT_FIRMWARE_VERSION_BITMASK;
+}
+
+static int run_lora(void)
+{
+    int ret;
+
+    // Power on LORA.
+    ret = iot_power_on(IOT_RADIO_LORA);
+    generate_event(SM_IOT_LORA_POWER_ON, ret);
+    if (ret && ret != IOT_ERROR_RADIO_ALREADY_ON) {
+        return SM_IOT_CONNECTION_FAILED;
+    }
+
+    // Connect.
+    ret = iot_connect(0);
+    generate_event(SM_IOT_LORA_CONNECT, ret);
+    if (ret) {
+        return SM_IOT_CONNECTION_FAILED;
+    }
+
+    // Send status.
+    iot_device_status_t device_status;
+    populate_device_status(&device_status);
+    ret = iot_send_device_status(0, &device_status);
+    generate_event(SM_IOT_LORA_SEND_DEVICE_STATUS, ret);
+    if (ret) {
+        return SM_IOT_CONNECTION_FAILED;
+    }
+
+    return SM_IOT_NO_ERROR;
+}
+
+static void lora_timer_callback(void)
+{
+    run_lora();
 }
 
 static int run_cellular(void)
@@ -316,6 +375,7 @@ int sm_iot_init(sm_iot_init_t init)
 
     cellular_enabled = false;
     satellite_enabled = false;
+    lora_enabled = false;
 
     // Back out if the IOT layer is not enabled
     if (!config.iot_init.iot_config->contents.enable || !config.iot_init.iot_config->hdr.set)
@@ -328,15 +388,20 @@ int sm_iot_init(sm_iot_init_t init)
     if (config.iot_init.iot_sat_config->contents.enable && config.iot_init.iot_sat_config->hdr.set)
         satellite_enabled = true;
 
+    if (config.iot_init.iot_lora_config->contents.enable && config.iot_init.iot_lora_config->hdr.set)
+        lora_enabled = true;
+
     // Back out if no IOT backend is enabled
-    if (!cellular_enabled && !satellite_enabled)
+    if (!cellular_enabled && !satellite_enabled && !lora_enabled) {
         return SM_IOT_NO_ERROR;
+    }
 
     // Initialise the IOT subsystem
     ret = iot_init(config.iot_init);
 
-    if (ret)
+    if (ret) {
         return iot_error_mapping(ret);
+    }
 
     cellular_backoff_time = CELLULAR_START_BACKOFF_TIME;
     cellular_max_backoff_reached = false;
@@ -346,10 +411,15 @@ int sm_iot_init(sm_iot_init_t init)
     syshal_timer_init(&timer_cellular_min_interval, cellular_timer_callback);
     syshal_timer_init(&timer_cellular_max_interval, cellular_timer_callback);
     syshal_timer_init(&timer_cellular_retry, cellular_timer_callback);
+    syshal_timer_init(&timer_lora, lora_timer_callback);
 
     // Set up cellular timer
     if (cellular_enabled && config.iot_init.iot_cellular_config->contents.max_interval)
         syshal_timer_set(timer_cellular_max_interval, one_shot, config.iot_init.iot_cellular_config->contents.max_interval);
+
+    // Set up LoRa timer.
+    if (lora_enabled && config.iot_init.iot_lora_config->contents.interval)
+        syshal_timer_set(timer_lora, periodic, config.iot_init.iot_lora_config->contents.interval);
 
     return SM_IOT_NO_ERROR;
 }
@@ -359,6 +429,7 @@ int sm_iot_term(void)
     syshal_timer_term(timer_cellular_min_interval);
     syshal_timer_term(timer_cellular_max_interval);
     syshal_timer_term(timer_cellular_retry);
+    syshal_timer_term(timer_lora);
     return SM_IOT_NO_ERROR;
 }
 
@@ -390,6 +461,9 @@ int sm_iot_trigger(iot_radio_type_t radio_type)
             return SM_IOT_INVALID_PARAM; // TODO: TO BE IMPLEMENTED
             break;
 
+        case IOT_RADIO_LORA:
+            break;
+
         default:
             return SM_IOT_INVALID_PARAM;
             break;
@@ -408,6 +482,10 @@ int sm_iot_trigger_force(iot_radio_type_t radio_type)
 
         case IOT_RADIO_SATELLITE:
             return SM_IOT_INVALID_PARAM; // TODO: TO BE IMPLEMENTED
+            break;
+
+        case IOT_RADIO_LORA:
+            return run_lora();
             break;
 
         default:

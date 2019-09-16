@@ -19,6 +19,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include "syshal_cellular.h"
+#include "syshal_lora.h"
 #include "syshal_pmu.h"
 #include "logging.h"
 #include "aws.h"
@@ -53,6 +54,11 @@ static int cellular_error_mapping(int error_code)
         default:
             return IOT_ERROR_BACKEND;
     }
+}
+
+static int lora_error_mapping(int error_code)
+{
+    return IOT_ERROR_BACKEND;
 }
 
 static int fs_error_mapping(int error_code)
@@ -168,7 +174,7 @@ int iot_power_on(iot_radio_type_t radio_type)
             DEBUG_PR_TRACE("Powering cellular on");
             if (syshal_cellular_power_on())
                 return IOT_ERROR_BACKEND;
-            
+
             DEBUG_PR_TRACE("Syncing cellular comms");
             if (syshal_cellular_sync_comms())
                 return IOT_ERROR_BACKEND;
@@ -197,6 +203,17 @@ int iot_power_on(iot_radio_type_t radio_type)
             internal_status.radio_on = true;
             break;
 
+        case IOT_RADIO_LORA:
+            if (!config.iot_lora_config->hdr.set || !config.iot_lora_config->contents.enable)
+                return IOT_ERROR_NOT_ENABLED;
+
+            DEBUG_PR_TRACE("Initializing LoRa");
+            if (syshal_lora_init())
+                return IOT_ERROR_BACKEND;
+            internal_status.radio_type = radio_type;
+            internal_status.radio_on = true;
+            break;
+
         default:
             return IOT_INVALID_PARAM;
             break;
@@ -216,6 +233,8 @@ int iot_power_off(void)
             break;
         case IOT_RADIO_SATELLITE:
             DEBUG_PR_ERROR("IOT_RADIO_SATELLITE not implemented!");
+            break;
+        case IOT_RADIO_LORA:
             break;
         default:
             return IOT_INVALID_PARAM; // Shouldn't be possible
@@ -261,6 +280,8 @@ int iot_connect(uint32_t timeout_ms)
             break;
         case IOT_RADIO_SATELLITE:
             DEBUG_PR_ERROR("IOT_RADIO_SATELLITE not implemented!");
+            break;
+        case IOT_RADIO_LORA:
             break;
         default:
             return IOT_INVALID_PARAM; // Shouldn't be possible
@@ -347,21 +368,47 @@ int iot_send_device_status(uint32_t timeout_ms, const iot_device_status_t * devi
 
     uint8_t file_working_buffer[JSON_WORKING_BUF_SIZE] = {0};
 
-    DEBUG_PR_TRACE("Sending device status to: %s:%u%s", config.iot_cellular_aws_config->contents.arn, config.iot_cellular_aws_config->contents.port, device_shadow_path_full);
+    switch (internal_status.radio_type)
+    {
+        case IOT_RADIO_CELLULAR:
+            DEBUG_PR_TRACE("Sending device status to: %s:%u%s", config.iot_cellular_aws_config->contents.arn, config.iot_cellular_aws_config->contents.port, device_shadow_path_full);
 
-    json_length = aws_json_dumps_device_status(device_status, (char *) file_working_buffer, sizeof(file_working_buffer));
-    if (json_length < 0)
-        return IOT_ERROR_BACKEND;
+            json_length = aws_json_dumps_device_status(device_status, (char *) file_working_buffer, sizeof(file_working_buffer));
+            if (json_length < 0)
+                return IOT_ERROR_BACKEND;
 
-    DEBUG_PR_TRACE("Device status: %.*s", JSON_WORKING_BUF_SIZE, file_working_buffer);
+            DEBUG_PR_TRACE("Device status: %.*s", JSON_WORKING_BUF_SIZE, file_working_buffer);
 
-    return_code = syshal_cellular_write_from_buffer_to_file(file_working_buffer, json_length);
-    if (return_code)
-        return cellular_error_mapping(return_code);
+            return_code = syshal_cellular_write_from_buffer_to_file(file_working_buffer, json_length);
+            if (return_code)
+                return cellular_error_mapping(return_code);
 
-    return_code = syshal_cellular_https_post(timeout_ms, config.iot_cellular_aws_config->contents.arn, config.iot_cellular_aws_config->contents.port, device_shadow_path_full);
-    if (return_code)
-        return cellular_error_mapping(return_code);
+            return_code = syshal_cellular_https_post(timeout_ms, config.iot_cellular_aws_config->contents.arn, config.iot_cellular_aws_config->contents.port, device_shadow_path_full);
+            if (return_code)
+                return cellular_error_mapping(return_code);
+            break;
+
+        case IOT_RADIO_LORA:
+            // Send position if present.
+            if (device_status->presence_flags & IOT_LAST_GPS_LOCATION_BITMASK) {
+                syshal_lora_position pos;
+                pos.lon = (uint32_t) ((int) device_status->last_gps_location.longitude);
+                pos.lat = (uint32_t) ((int) device_status->last_gps_location.latitude);
+                pos.timestamp = device_status->last_gps_location.timestamp;
+                pos.itow = device_status->last_gps_location.itow;
+                pos.h_msl = device_status->last_gps_location.h_msl;
+                pos.h_acc = device_status->last_gps_location.h_acc;
+                pos.v_acc = device_status->last_gps_location.v_acc;
+                return_code = syshal_lora_send_position(&pos);
+                if (return_code) {
+                    return lora_error_mapping(return_code);
+                }
+            }
+            break;
+
+        default:
+            return IOT_ERROR_NOT_SUPPORTED;
+    }
 
     return IOT_NO_ERROR;
 }
